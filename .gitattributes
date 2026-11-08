@@ -1,0 +1,12 @@
+# 统一换行符，避免 Windows 上的 CRLF 转换在每次提交时制造全文件 diff。
+# 源码与文档一律 LF；字体等二进制文件不做任何转换。
+* text=auto eol=lf
+
+*.ttf binary
+*.otf binary
+*.ttc binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.db binary
+*.g.dart linguist-generated=true

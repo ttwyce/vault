@@ -1,0 +1,32 @@
+内置字体许可声明
+================
+
+本应用随包内置以下三款字体，全部采用 SIL Open Font License 1.1。
+该许可允许商用、允许随应用分发、允许修改，条件是保留本声明且不得单独售卖字体本身。
+
+全文：https://scripts.sil.org/OFL
+
+
+1. 霞鹜文楷 Lite（LXGW WenKai Lite）
+   文件：assets/fonts/LXGWWenKaiLite-Regular.ttf
+   作者：LXGW（落霞孤鹜）https://github.com/lxgw/LxgwWenKai-Lite
+   基于：Fontworks Inc. 的 Klee One
+   许可：SIL Open Font License 1.1
+
+2. Caveat
+   文件：assets/fonts/Caveat-Variable.ttf
+   作者：Impallari Type / Pablo Impallari
+   来源：Google Fonts https://fonts.google.com/specimen/Caveat
+   许可：SIL Open Font License 1.1
+
+3. JetBrains Mono
+   文件：assets/fonts/JetBrainsMono-Regular.ttf
+   作者：JetBrains s.r.o.
+   来源：https://www.jetbrains.com/lp/mono/
+   许可：SIL Open Font License 1.1
+
+
+用户导入的字体
+--------------
+用户通过「设置 · 字体」导入的字体文件存放在应用私有目录，不参与同步、
+不上传、不外发。其授权由用户自行确认，本应用不代为分发。

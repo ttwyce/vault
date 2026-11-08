@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="paper">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拾遗 · 全部页面设计稿</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/instrument-serif@5.0.8/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/newsreader@5.0.9/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.0.8/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.0.8/500.css">
+<style>
+:root{
+  --paper:#F2EDE3; --paper-hi:#FAF7F0; --ink:#17150F; --ink-2:#4A463A; --ink-3:#8B8474;
+  --rule:#D8D0BF; --rule-soft:#E6DFD1; --accent:#B23A20; --accent-soft:#F0DDD4;
+  --machine:#14181A; --machine-2:#1B2123; --machine-rule:#2A3134;
+  --m-text:#E9E3D5; --m-dim:#8B9189; --m-accent:#E8623C;
+  --board:#E8E3D8; --board-ink:#6B6455;
+  --serif:'Newsreader',Georgia,'Songti SC','Noto Serif CJK SC',serif;
+  --display:'Instrument Serif','Newsreader',Georgia,'Songti SC',serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --s:1; --sm:.75;
+}
+[data-theme="ink"]{
+  --paper:#12100C; --paper-hi:#1A1712; --ink:#EFE8D8; --ink-2:#B5AC98; --ink-3:#7C7466;
+  --rule:#2C2820; --rule-soft:#221E18; --accent:#E8623C; --accent-soft:#2A1A14;
+  --machine:#1B1915; --machine-2:#241F19; --machine-rule:#332D25;
+  --m-text:#EFE8D8; --m-dim:#8B8474; --m-accent:#F0744E;
+  --board:#0A0906; --board-ink:#6E6758;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{background:var(--board);color:var(--ink);font-family:var(--serif);transition:background .45s ease;padding:0 0 80px}
+
+.board-head{
+  padding:34px clamp(20px,4vw,56px) 22px;border-bottom:1px solid rgba(128,120,100,.28);
+  display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+}
+.board-head h1{font-family:var(--display);font-size:30px;font-weight:400;color:var(--ink);letter-spacing:-.01em}
+.board-head p{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--board-ink);margin-top:6px}
+.board-actions{display:flex;gap:10px;align-items:center}
+.tbtn{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  background:none;border:1px solid var(--board-ink);color:var(--board-ink);padding:7px 13px;cursor:pointer;transition:.2s}
+.tbtn:hover{border-color:var(--accent);color:var(--accent)}
+
+.group{padding:40px clamp(20px,4vw,56px) 0}
+.ghead{display:flex;align-items:baseline;gap:14px;margin-bottom:20px}
+.ghead h2{font-family:var(--display);font-size:20px;font-weight:400;color:var(--ink)}
+.ghead .mono{color:var(--board-ink)}
+
+.shots{display:flex;flex-direction:column;gap:36px}
+.shot{display:flex;flex-direction:column;gap:10px}
+.shot figcaption{display:flex;align-items:baseline;gap:10px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--board-ink)}
+.shot figcaption b{color:var(--accent);font-weight:400}
+
+.wrap{width:calc(1120px * var(--s));height:calc(700px * var(--s));overflow:hidden}
+.wrap.sm{width:calc(390px * var(--sm));height:calc(844px * var(--sm))}
+.screen{width:1120px;height:700px;transform:scale(var(--s));transform-origin:0 0;
+  background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:13px;line-height:1.62;
+  display:flex;overflow:hidden;position:relative;border:1px solid rgba(128,120,100,.3)}
+.phone{width:390px;height:844px;transform:scale(var(--sm));transform-origin:0 0;
+  background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:14px;line-height:1.6;
+  display:flex;flex-direction:column;overflow:hidden;position:relative;border-radius:26px;
+  border:1px solid rgba(128,120,100,.35)}
+
+.mono{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.label{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+.hr{height:1px;background:var(--rule-soft)}
+.dim{color:var(--ink-2)}
+.tag{font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--ink-2);border:1px solid var(--rule);padding:1px 5px}
+.badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:1px 5px;border:1px solid var(--rule);color:var(--ink-3)}
+.badge.on{color:var(--accent);border-color:var(--accent)}
+.badge.dead{border-style:dashed}
+.dot{width:4px;height:4px;background:var(--accent);border-radius:50%;display:inline-block}
+
+/* 通用三栏骨架 */
+.rail{width:56px;flex:none;border-right:1px solid var(--rule);display:flex;flex-direction:column;
+  align-items:center;padding:16px 0 14px;background:var(--paper)}
+.rail .mark{width:22px;height:22px;border:1px solid var(--ink);display:grid;place-items:center;
+  font-family:var(--display);font-size:13px;margin-bottom:22px}
+.rail nav{display:flex;flex-direction:column;gap:20px;align-items:center;flex:1}
+.rail .it{writing-mode:vertical-rl;font-size:12px;letter-spacing:.2em;color:var(--ink-3);cursor:pointer;position:relative}
+.rail .it.on{color:var(--ink)}
+.rail .it.on::before{content:'';position:absolute;right:-11px;top:0;bottom:0;width:2px;background:var(--accent)}
+.rail .foot{writing-mode:vertical-rl;font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:var(--ink-3);opacity:.7}
+
+.machine{width:330px;flex:none;background:var(--machine);color:var(--m-text);display:flex;flex-direction:column;
+  border-left:1px solid var(--machine-rule)}
+.mhead{padding:14px 16px;border-bottom:1px solid var(--machine-rule);display:flex;align-items:center;justify-content:space-between}
+.mbrand{display:flex;align-items:center;gap:7px}
+.mbrand .g{width:16px;height:16px;border:1px solid var(--m-accent);display:grid;place-items:center}
+.mbrand .g::before{content:'';width:5px;height:5px;background:var(--m-accent)}
+.mbrand span{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--m-text)}
+.mstate{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--m-dim);display:flex;align-items:center;gap:5px}
+.mstate .d{width:4px;height:4px;border-radius:50%;background:var(--m-accent)}
+.mblock{padding:14px 16px;border-bottom:1px solid var(--machine-rule)}
+.mlab{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--m-dim);margin-bottom:9px}
+.mtext{font-size:12.5px;line-height:1.6;color:var(--m-text)}
+.mtext em{font-style:italic;color:var(--m-accent)}
+.mquote{font-size:12px;line-height:1.75;color:var(--m-text);border-left:2px solid var(--m-accent);padding-left:10px}
+.mquote .src{display:block;margin-top:7px;font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--m-dim)}
+.mref{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--machine-rule);font-size:11.5px;color:var(--m-text)}
+.mref .meta{font-family:var(--mono);font-size:8px;color:var(--m-dim);flex:none}
+.steps{list-style:none;display:flex;flex-direction:column;gap:8px}
+.steps li{display:grid;grid-template-columns:13px 1fr auto;gap:8px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.03em;color:var(--m-dim);opacity:.4}
+.steps li.done,.steps li.active{opacity:1;color:var(--m-text)}
+.steps li.done .mk,.steps li.active .mk{color:var(--m-accent)}
+.steps li .res{font-size:8px;color:var(--m-dim)}
+.minput{border-top:1px solid var(--machine-rule);padding:11px 14px;display:flex;align-items:center;gap:8px;margin-top:auto}
+.minput span{flex:1;font-size:11.5px;color:var(--m-dim);font-style:italic}
+.minput .k{width:24px;height:24px;border:1px solid var(--machine-rule);display:grid;place-items:center;
+  font-family:var(--mono);font-size:10px;color:var(--m-text)}
+
+/* 列表 */
+.list{width:296px;flex:none;border-right:1px solid var(--rule);display:flex;flex-direction:column;background:var(--paper)}
+.lsearch{padding:11px 12px;border-bottom:1px solid var(--rule)}
+.lsearch div{height:26px;border:1px solid var(--rule);display:flex;align-items:center;padding:0 8px;
+  font-size:11px;color:var(--ink-3);font-style:italic;background:var(--paper-hi)}
+.li{padding:11px 12px 11px 14px;border-bottom:1px solid var(--rule-soft);cursor:pointer;position:relative}
+.li.on{background:var(--accent-soft)}
+.li.on::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.li h4{font-size:13.5px;font-weight:500;line-height:1.4;color:var(--ink)}
+.li p{font-size:11.5px;color:var(--ink-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .m{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;color:var(--ink-3);margin-top:5px}
+
+.detail{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--paper)}
+.topbar{height:44px;flex:none;border-bottom:1px solid var(--rule);display:flex;align-items:center;
+  justify-content:space-between;padding:0 18px}
+.seg{display:flex;border:1px solid var(--rule)}
+.seg span{font-family:var(--mono);font-size:9px;letter-spacing:.1em;padding:4px 9px;color:var(--ink-3);cursor:pointer}
+.seg span.on{background:var(--ink);color:var(--paper)}
+
+/* 媒体占位 */
+.ph{background:var(--rule-soft);position:relative;overflow:hidden}
+.ph::after{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(128,120,100,.12) 6px 7px)}
+
+@media (max-width:1240px){:root{--s:.88}}
+@media (max-width:1080px){:root{--s:.72;--sm:.62}}
+@media (max-width:860px){:root{--s:.55;--sm:.5}}
+@media (max-width:640px){:root{--s:.4;--sm:.42}}
+@media (max-width:460px){:root{--s:.32;--sm:.36}}
+</style>
+</head>
+<body>
+
+<div class="board-head">
+  <div>
+    <h1>拾遗 · 页面设计稿</h1>
+    <p>11 screens · desktop 1120×700 · mobile 390×844</p>
+  </div>
+  <div class="board-actions">
+    <button class="tbtn" id="themeBtn">纸 / 墨</button>
+  </div>
+</div>
+
+<!-- ============================ 桌面端 ============================ -->
+<section class="group">
+  <div class="ghead"><h2>桌面端</h2><span class="mono">7 screens</span></div>
+  <div class="shots">
+
+    <!-- ---------- 01 收件台 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav>
+            <div class="it on">记录</div><div class="it">归档</div><div class="it">密码</div><div class="it">助手</div>
+          </nav>
+          <div class="foot">134</div>
+        </aside>
+
+        <main style="flex:1;min-width:0;padding:0 40px;display:flex;flex-direction:column;overflow:hidden">
+          <header style="display:flex;align-items:flex-end;justify-content:space-between;
+            padding:22px 0 12px;border-bottom:1px solid var(--ink)">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <span style="font-family:var(--display);font-size:30px;line-height:1">拾遗</span>
+              <span class="mono" style="padding-bottom:3px">VOL. 03</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding-bottom:2px">
+              <span class="mono">2026 · 11 · 08</span>
+              <span style="width:1px;height:10px;background:var(--rule)"></span>
+              <span style="display:flex;align-items:center;gap:6px"><span class="dot"></span><span class="mono">已同步 14:08</span></span>
+            </div>
+          </header>
+
+          <section style="padding:22px 0 18px;border-bottom:1px solid var(--rule)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <span style="font-family:var(--display);font-size:11px;color:var(--accent)">01</span>
+              <span class="mono">收件台</span>
+            </div>
+            <div style="font-family:var(--serif);font-size:23px;line-height:1.4;color:var(--ink-3);font-style:italic">
+              把链接、一段文字、一张截图丢进来 —— AI 替你整理
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;
+              padding-top:12px;border-top:1px solid var(--rule-soft)">
+              <div style="display:flex;gap:16px">
+                <span class="mono" style="color:var(--ink);border-bottom:1px solid var(--accent);padding-bottom:2px">粘贴</span>
+                <span class="mono">网页</span><span class="mono">图片</span><span class="mono">语音</span>
+                <span class="mono" style="opacity:.55;margin-left:6px">⌘V 即分析</span>
+              </div>
+              <div style="background:var(--accent);color:#fff;font-family:var(--mono);font-size:9.5px;
+                letter-spacing:.16em;padding:8px 15px">交给 AI →</div>
+            </div>
+          </section>
+
+          <div style="display:flex;align-items:center;gap:12px;padding:20px 0 2px">
+            <span class="mono">11月8日 · 周六</span>
+            <span style="flex:1;height:1px;background:var(--rule-soft)"></span>
+            <span class="mono">4 条</span>
+          </div>
+
+          <div style="overflow:hidden">
+            <article style="display:grid;grid-template-columns:44px 1fr;gap:0 14px;padding:14px 0;border-bottom:1px solid var(--rule-soft);position:relative">
+              <div class="mono" style="padding-top:4px">14:02</div>
+              <div>
+                <h3 style="font-size:16.5px;font-weight:500;line-height:1.45">WebDAV 限流的退避策略</h3>
+                <p style="font-size:13px;color:var(--ink-2);margin-top:4px;line-height:1.65">
+                  不该只看 HTTP 状态码，还要看本地队列积压量。积压多的时候应该更激进地降频。</p>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:8px">
+                  <span class="dot"></span><span class="mono">AI 归类为 <b style="color:var(--accent);font-weight:500">想法</b></span>
+                  <span class="tag">#webdav</span><span class="tag">#退避</span><span class="mono">关联 3 条</span>
+                </div>
+              </div>
+            </article>
+
+            <article style="display:grid;grid-template-columns:44px 1fr;gap:0 14px;padding:14px 0;border-bottom:1px solid var(--rule-soft)">
+              <div class="mono" style="padding-top:4px">11:46</div>
+              <div>
+                <h3 style="font-size:16.5px;font-weight:500;line-height:1.45">RFC 6578：增量同步的正确用法</h3>
+                <p style="font-size:13px;color:var(--ink-2);margin-top:4px;line-height:1.65">
+                  sync-collection REPORT 一次就能拿到全部增量和删除列表，但坚果云不支持。</p>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:8px">
+                  <span class="dot"></span><span class="mono">AI 归档 <b style="color:var(--accent);font-weight:500">网页</b></span>
+                  <span class="tag">#同步</span><span class="badge on">有快照</span>
+                </div>
+              </div>
+            </article>
+
+            <article style="display:grid;grid-template-columns:44px 1fr;gap:0 14px;padding:14px 0">
+              <div class="mono" style="padding-top:4px">09:20</div>
+              <div>
+                <h3 style="font-size:16.5px;font-weight:500;line-height:1.45">一篇讲 CRDT 的长文</h3>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:8px">
+                  <span class="dot"></span><span class="mono">AI 检测到 <b style="color:var(--accent);font-weight:500">死链</b></span>
+                  <span class="badge dead">原站已失效</span><span class="badge on">已回退到快照</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </main>
+
+        <aside class="machine">
+          <div class="mhead">
+            <div class="mbrand"><div class="g"></div><span>SKAI</span></div>
+            <div class="mstate"><span class="d"></span>端侧模型 · 就绪</div>
+          </div>
+          <div class="mblock">
+            <div class="mlab">当前任务</div>
+            <div class="mtext" style="margin-bottom:11px">正在分析你刚丢进来的链接</div>
+            <ol class="steps">
+              <li class="done"><span class="mk">✓</span><span>抓取正文</span><span class="res">2.1s · 4,182 字</span></li>
+              <li class="done"><span class="mk">✓</span><span>判定类型</span><span class="res">笔记</span></li>
+              <li class="done"><span class="mk">✓</span><span>提取要点</span><span class="res">3 条</span></li>
+              <li class="done"><span class="mk">✓</span><span>生成标签</span><span class="res">#webdav</span></li>
+              <li class="done"><span class="mk">✓</span><span>关联旧条目</span><span class="res">3 条</span></li>
+              <li class="active"><span class="mk">◐</span><span>归档快照</span><span class="res">PDF…</span></li>
+            </ol>
+          </div>
+          <div class="mblock">
+            <div class="mlab">今天</div>
+            <p class="mquote">「你今天主要在跟 WebDAV 的限流较劲。三条记录指向同一个结论 —— 退避不该只看状态码。」
+              <span class="src">14:02 · 引用 3 条</span></p>
+            <div style="margin-top:10px">
+              <div class="mref"><span>WebDAV 限流的退避策略</span><span class="meta">14:02</span></div>
+              <div class="mref"><span>RFC 6578 增量同步</span><span class="meta">11:46</span></div>
+            </div>
+          </div>
+          <div class="minput"><span>问点什么，或者再丢一条进来</span><div class="k">↵</div></div>
+        </aside>
+      </div></div>
+      <figcaption><b>01</b> 收件台 · 首页 —— 主入口，右侧墨栏常驻</figcaption>
+    </figure>
+
+    <!-- ---------- 02 笔记编辑 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav><div class="it on">记录</div><div class="it">归档</div><div class="it">密码</div><div class="it">助手</div></nav>
+          <div class="foot">134</div>
+        </aside>
+
+        <div class="list">
+          <div class="lsearch"><div>搜索…</div></div>
+          <div class="li on">
+            <h4>多端同步的冲突处理方案</h4>
+            <p>base / local / remote 三份数据…</p>
+            <div class="m">08-12 · 笔记 · 编辑中</div>
+          </div>
+          <div class="li"><h4>WebDAV 限流的退避策略</h4><p>不该只看状态码…</p><div class="m">08-12 · 想法</div></div>
+          <div class="li"><h4>RFC 6578 增量同步</h4><p>sync-collection 的用法…</p><div class="m">08-11 · 归档</div></div>
+          <div class="li"><h4>密码库迁移清单</h4><p>17 条待核对…</p><div class="m">08-10 · 密码</div></div>
+        </div>
+
+        <div class="detail">
+          <div class="topbar">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="mono">←</span><span class="mono">笔记</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="mono" style="opacity:.7">已保存 · 刚刚</span>
+              <span class="mono">⋯</span>
+            </div>
+          </div>
+
+          <div style="padding:34px 56px 0;overflow:hidden">
+            <h1 style="font-size:29px;font-weight:500;line-height:1.35;letter-spacing:-.01em">
+              多端同步的冲突处理方案</h1>
+            <div style="display:flex;gap:12px;margin-top:9px">
+              <span class="mono">2026 · 08 · 12</span><span class="mono">1,240 字</span><span class="mono">#同步</span>
+            </div>
+            <div style="height:1px;background:var(--rule);margin:18px 0 20px"></div>
+
+            <p style="font-size:14.5px;line-height:1.85;color:var(--ink)">
+              base / local / remote 三份数据缺一不可。没有 base 就无法判断「谁改了哪一段」，只能退化为整条替换 —— 这是最粗暴、也最容易丢数据的做法。</p>
+            <p style="font-size:14.5px;line-height:1.85;color:var(--ink);margin-top:14px">
+              删除永远不能覆盖一次未同步的编辑。宁可复活一条用户以为删掉的内容，也不能吞掉一次修改。
+              <span style="background:var(--accent-soft);border-bottom:1px solid var(--accent);padding:0 2px">编辑优先，条目复活</span>，
+              这条规则写在冲突矩阵的第 8、9 行。</p>
+
+            <div style="border-left:2px solid var(--accent);padding-left:14px;margin-top:18px">
+              <p style="font-size:14px;line-height:1.8;color:var(--ink-2);font-style:italic">
+                冲突副本的命名要带设备名和时间，用户才知道该留哪一个。</p>
+            </div>
+
+            <div style="margin-top:22px;border:1px solid var(--rule);background:var(--paper-hi);padding:12px 14px;display:flex;gap:10px">
+              <span class="mono" style="color:var(--accent)">/</span>
+              <div>
+                <div style="font-size:13px;color:var(--ink)">插入…</div>
+                <div class="mono" style="margin-top:6px;opacity:.75">待办 · 引用 · 附件 · 关联条目 · 问 AI</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="machine" style="width:290px">
+          <div class="mhead">
+            <div class="mbrand"><div class="g"></div><span>这篇</span></div>
+            <div class="mstate"><span class="d"></span>已分析</div>
+          </div>
+          <div class="mblock">
+            <div class="mlab">摘要</div>
+            <p class="mtext">提出用三方合并替代整条替换，并给出「编辑优先」的冲突规则，用来避免删除操作吞掉未同步的修改。</p>
+          </div>
+          <div class="mblock">
+            <div class="mlab">标签</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <span class="tag" style="border-color:var(--m-accent);color:var(--m-accent)">#同步</span>
+              <span class="tag" style="border-color:var(--machine-rule);color:var(--m-text)">#冲突</span>
+              <span class="tag" style="border-color:var(--machine-rule);color:var(--m-text)">#三方合并</span>
+            </div>
+          </div>
+          <div class="mblock">
+            <div class="mlab">提取到的待办</div>
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <span style="width:9px;height:9px;border:1px solid var(--m-dim);flex:none;margin-top:4px"></span>
+              <span class="mtext" style="font-size:11.5px">补上冲突副本的 UI 设计</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-top:8px">
+              <span style="width:9px;height:9px;border:1px solid var(--m-dim);flex:none;margin-top:4px"></span>
+              <span class="mtext" style="font-size:11.5px">写 20 个同步回归用例</span>
+            </div>
+          </div>
+          <div class="mblock" style="border-bottom:none">
+            <div class="mlab">关联</div>
+            <div class="mref"><span>CRDT 的取舍</span><span class="meta">08-10</span></div>
+            <div class="mref"><span>墓碑与回收站</span><span class="meta">08-09</span></div>
+          </div>
+          <div class="minput"><span>就这篇问点什么</span><div class="k">↵</div></div>
+        </aside>
+      </div></div>
+      <figcaption><b>02</b> 笔记编辑 —— 编辑区无边框，AI 侧栏跟随当前条目</figcaption>
+    </figure>
+
+    <!-- ---------- 03 归档阅读器 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav><div class="it">记录</div><div class="it on">归档</div><div class="it">密码</div><div class="it">助手</div></nav>
+          <div class="foot">88</div>
+        </aside>
+
+        <div class="detail">
+          <div class="topbar">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="mono">←</span>
+              <span class="mono" style="text-transform:none;letter-spacing:.04em">example.com/post/rfc-6578</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div class="seg"><span class="on">纯净</span><span>原貌</span><span>对比</span></div>
+              <span class="badge on">已归档</span>
+            </div>
+          </div>
+
+          <div style="display:flex;flex:1;min-height:0">
+            <div style="flex:1;min-width:0;padding:34px 46px 0;overflow:hidden">
+              <div class="mono" style="margin-bottom:10px">WEB · 2026-08-11 归档 · 阅读 8 分钟</div>
+              <h1 style="font-family:var(--serif);font-size:27px;font-weight:500;line-height:1.4;letter-spacing:-.01em">
+                RFC 6578：WebDAV 的增量同步机制</h1>
+              <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+                <span class="badge">原站存活</span><span class="badge on">本地快照 412 KB</span>
+                <span class="mono">抓取于 11:46</span>
+              </div>
+              <div style="height:1px;background:var(--rule);margin:18px 0 20px"></div>
+
+              <p style="font-size:15px;line-height:1.9;color:var(--ink)">
+                sync-collection 报告允许客户端只请求自某个同步令牌以来发生的变更，包括新增、修改和删除。
+                这比每次全量 PROPFIND 便宜一个数量级 —— 前提是服务端支持。</p>
+              <p style="font-size:15px;line-height:1.9;color:var(--ink);margin-top:14px">
+                现实是大部分网盘并不支持。坚果云、Apache mod_dav 都会忽略 REPORT，只能退回按目录分批列举。</p>
+              <div class="ph" style="height:120px;margin-top:18px;border:1px solid var(--rule)"></div>
+              <div class="mono" style="margin-top:7px;opacity:.7">图 1 · 增量同步与全量列举的请求数对比</div>
+              <p style="font-size:15px;line-height:1.9;color:var(--ink);margin-top:16px">
+                因此同步引擎必须做能力探测，而不是假定某种行为。</p>
+            </div>
+
+            <aside style="width:286px;flex:none;border-left:1px solid var(--rule);padding:22px 20px;overflow:hidden">
+              <div class="mlab" style="color:var(--ink-3)">AI 摘要</div>
+              <p style="font-size:12.5px;line-height:1.75;color:var(--ink-2);margin-top:8px">
+                讲 RFC 6578 的 sync-collection 机制，指出它比全量列举便宜一个数量级，但主流网盘多不支持，需降级。</p>
+              <div style="height:1px;background:var(--rule);margin:18px 0"></div>
+              <div class="mlab" style="color:var(--ink-3)">归档信息</div>
+              <div style="margin-top:10px;display:flex;flex-direction:column;gap:9px">
+                <div style="display:flex;justify-content:space-between"><span class="mono">正文</span><span class="mono" style="color:var(--ink-2)">4,182 字</span></div>
+                <div style="display:flex;justify-content:space-between"><span class="mono">快照</span><span class="mono" style="color:var(--ink-2)">PDF 412 KB</span></div>
+                <div style="display:flex;justify-content:space-between"><span class="mono">图片</span><span class="mono" style="color:var(--ink-2)">3 张 · 已本地化</span></div>
+                <div style="display:flex;justify-content:space-between"><span class="mono">最后检查</span><span class="mono" style="color:var(--ink-2)">11:46 · 200</span></div>
+              </div>
+              <div style="height:1px;background:var(--rule);margin:18px 0"></div>
+              <div class="mlab" style="color:var(--ink-3)">相关</div>
+              <div style="margin-top:8px">
+                <div style="padding:7px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px">增量同步的请求预算</div>
+                <div style="padding:7px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px">坚果云限流实测</div>
+                <div style="padding:7px 0;font-size:12.5px">能力探测的降级路径</div>
+              </div>
+              <div style="margin-top:18px;border-top:1px solid var(--rule);padding-top:14px;display:flex;gap:6px;flex-wrap:wrap">
+                <span class="tag">#webdav</span><span class="tag">#同步</span><span class="tag">#rfc</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>03</b> 归档阅读器 —— 纯净 / 原貌 / 对比三模式，右栏是归档事实</figcaption>
+    </figure>
+
+    <!-- ---------- 04 密码库 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav><div class="it">记录</div><div class="it">归档</div><div class="it on">密码</div><div class="it">助手</div></nav>
+          <div class="foot">42</div>
+        </aside>
+
+        <div class="list">
+          <div class="lsearch"><div>搜索密码…</div></div>
+          <div style="padding:10px 12px;border-bottom:1px solid var(--rule);background:var(--accent-soft)">
+            <div style="display:flex;gap:7px;align-items:center">
+              <span class="dot"></span>
+              <span style="font-size:11.5px;color:var(--ink-2)">2 个密码重复、1 个已泄露</span>
+            </div>
+          </div>
+          <div class="li on"><h4>GitHub</h4><p>user@example.com</p><div class="m">TOTP · 30 天前</div></div>
+          <div class="li"><h4>Notion</h4><p>user@example.com</p><div class="m">30 天前</div></div>
+          <div class="li"><h4>Cloudflare</h4><p>admin@example.com</p><div class="m">TOTP · 已泄露</div></div>
+          <div class="li"><h4>阿里云</h4><p>admin@example.com</p><div class="m">TOTP · 重复</div></div>
+        </div>
+
+        <div class="detail">
+          <div class="topbar">
+            <div style="display:flex;align-items:center;gap:10px"><span class="mono">←</span><span class="mono">凭据</span></div>
+            <div style="display:flex;gap:14px"><span class="mono">编辑</span><span class="mono" style="color:var(--accent)">删除</span></div>
+          </div>
+
+          <div style="padding:30px 44px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:40px;height:40px;border:1px solid var(--ink);display:grid;place-items:center;
+                font-family:var(--display);font-size:19px">G</div>
+              <div>
+                <h1 style="font-size:24px;font-weight:500;line-height:1.2">GitHub</h1>
+                <div class="mono" style="margin-top:4px">github.com · 个人账号</div>
+              </div>
+            </div>
+
+            <div style="margin-top:26px;border-top:1px solid var(--rule)">
+              <div style="display:grid;grid-template-columns:96px 1fr auto;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft)">
+                <span class="mono">用户名</span>
+                <span style="font-size:14px">user@example.com</span>
+                <span class="mono" style="color:var(--accent)">复制</span>
+              </div>
+              <div style="display:grid;grid-template-columns:96px 1fr auto;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft)">
+                <span class="mono">密码</span>
+                <span style="font-family:var(--mono);font-size:15px;letter-spacing:.18em">••••••••••••</span>
+                <span class="mono" style="color:var(--accent)">显示 · 复制</span>
+              </div>
+              <div style="display:grid;grid-template-columns:96px 1fr auto;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft)">
+                <span class="mono">一次性密码</span>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-family:var(--mono);font-size:19px;letter-spacing:.16em">418 902</span>
+                  <span class="mono" style="opacity:.7">剩 18s</span>
+                </div>
+                <span class="mono" style="color:var(--accent)">复制</span>
+              </div>
+              <div style="display:grid;grid-template-columns:96px 1fr auto;gap:14px;align-items:center;padding:13px 0">
+                <span class="mono">网址</span>
+                <span style="font-size:14px;color:var(--ink-2)">https://github.com</span>
+                <span class="mono" style="color:var(--accent)">打开</span>
+              </div>
+            </div>
+
+            <div style="margin-top:22px;display:flex;gap:10px">
+              <div style="border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);
+                font-size:9.5px;letter-spacing:.14em;padding:8px 14px">复制密码</div>
+              <div style="border:1px solid var(--rule);color:var(--ink-2);font-family:var(--mono);
+                font-size:9.5px;letter-spacing:.14em;padding:8px 14px">生成新密码</div>
+            </div>
+            <p class="mono" style="margin-top:12px;opacity:.65;text-transform:none;letter-spacing:.02em">
+              复制后 30 秒自动清除剪贴板 · 密码不会离开本机</p>
+          </div>
+        </div>
+
+        <aside style="width:270px;flex:none;border-left:1px solid var(--rule);padding:22px 18px">
+          <div class="mlab" style="color:var(--ink-3)">安全检查 · 全本地</div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span style="font-size:12.5px">重复使用</span>
+              <span style="font-family:var(--display);font-size:19px;color:var(--accent)">2</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span style="font-size:12.5px">已泄露</span>
+              <span style="font-family:var(--display);font-size:19px;color:var(--accent)">1</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span style="font-size:12.5px">超过 180 天</span>
+              <span style="font-family:var(--display);font-size:19px">7</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span style="font-size:12.5px">弱密码</span>
+              <span style="font-family:var(--display);font-size:19px">0</span>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--rule);margin:18px 0"></div>
+          <p style="font-size:11.5px;line-height:1.7;color:var(--ink-3)">
+            泄露检测只发送密码哈希的前 5 位，服务端无法还原原文。AI 永远不读取密码明文。</p>
+        </aside>
+      </div></div>
+      <figcaption><b>04</b> 密码库 —— 字段行式布局，无卡片；右侧安全报告全部本地计算</figcaption>
+    </figure>
+
+    <!-- ---------- 05 AI 助手 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav><div class="it">记录</div><div class="it">归档</div><div class="it">密码</div><div class="it on">助手</div></nav>
+          <div class="foot">42</div>
+        </aside>
+
+        <div class="detail">
+          <div class="topbar">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-family:var(--display);font-size:15px">SKAI</span>
+              <span class="mono" style="opacity:.7">端侧 · 未出设备</span>
+            </div>
+            <span class="mono">清空</span>
+          </div>
+
+          <div style="padding:26px 48px;overflow:hidden;flex:1">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
+              <div style="max-width:66%;background:var(--paper-hi);border:1px solid var(--rule);padding:11px 14px;
+                font-size:13.5px;line-height:1.7">我上个月记过关于同步冲突的内容吗？</div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-bottom:14px">
+              <span style="width:18px;height:18px;border:1px solid var(--accent);display:grid;place-items:center;flex:none;margin-top:2px">
+                <span style="width:5px;height:5px;background:var(--accent);display:block"></span></span>
+              <div style="flex:1">
+                <div style="border:1px solid var(--rule);padding:8px 11px;display:flex;align-items:center;justify-content:space-between">
+                  <span class="mono" style="text-transform:none;letter-spacing:.03em">▸ 检索了 3 条笔记 · 1 个网页</span>
+                  <span class="mono">展开</span>
+                </div>
+                <p style="font-size:14px;line-height:1.85;margin-top:14px">
+                  记过，8 月 12 日那条讲得最完整 —— 提出用三方合并替代整条替换，并且给出了「编辑优先」的冲突规则。</p>
+
+                <div style="margin-top:14px;border:1px solid var(--accent);background:var(--accent-soft);padding:10px 12px;cursor:pointer">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                    <span style="font-size:13.5px;font-weight:500">多端同步的冲突处理方案</span>
+                    <span class="mono" style="color:var(--accent)">打开 →</span>
+                  </div>
+                  <div class="mono" style="margin-top:4px">2026 · 08 · 12 · 笔记</div>
+                </div>
+
+                <div style="margin-top:10px;border:1px solid var(--rule);padding:10px 12px;cursor:pointer">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                    <span style="font-size:13.5px">CRDT 的取舍</span>
+                    <span class="mono">打开 →</span>
+                  </div>
+                  <div class="mono" style="margin-top:4px">2026 · 08 · 10 · 想法</div>
+                </div>
+
+                <p style="font-size:14px;line-height:1.85;margin-top:16px;color:var(--ink-2)">
+                  另外你 8 月 9 日写过墓碑与回收站的设计，跟这条是同一套思路的下游。</p>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;margin-top:20px">
+              <div style="max-width:66%;background:var(--paper-hi);border:1px solid var(--rule);padding:11px 14px;
+                font-size:13.5px;line-height:1.7">那就把这两条合成一篇整理稿</div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--rule);padding:14px 48px;display:flex;align-items:center;gap:12px">
+            <div style="flex:1;border-bottom:1px solid var(--rule);padding-bottom:8px;
+              font-size:13.5px;color:var(--ink-3);font-style:italic">继续问，或者让它动手…</div>
+            <div style="border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);
+              font-size:9px;letter-spacing:.14em;padding:7px 12px">发送</div>
+          </div>
+        </div>
+
+        <aside style="width:280px;flex:none;border-left:1px solid var(--rule);padding:22px 18px">
+          <div class="mlab" style="color:var(--ink-3)">本次引用</div>
+          <div style="margin-top:10px">
+            <div style="padding:8px 0;border-bottom:1px solid var(--rule-soft);font-size:12px">冲突处理方案<span class="mono" style="display:block;margin-top:2px">08-12 · 笔记</span></div>
+            <div style="padding:8px 0;border-bottom:1px solid var(--rule-soft);font-size:12px">CRDT 的取舍<span class="mono" style="display:block;margin-top:2px">08-10 · 想法</span></div>
+            <div style="padding:8px 0;font-size:12px">墓碑与回收站<span class="mono" style="display:block;margin-top:2px">08-09 · 笔记</span></div>
+          </div>
+          <div style="height:1px;background:var(--rule);margin:18px 0"></div>
+          <div class="mlab" style="color:var(--ink-3)">模型</div>
+          <div style="margin-top:10px;font-size:12.5px;display:flex;justify-content:space-between">
+            <span>端侧 · EmbeddingGemma</span><span class="mono" style="color:var(--accent)">切换</span></div>
+          <p style="font-size:11px;line-height:1.65;color:var(--ink-3);margin-top:10px">
+            日记与密码走端侧模型，内容不出设备。笔记问答可切云端，发送前会提示字数。</p>
+        </aside>
+      </div></div>
+      <figcaption><b>05</b> AI 助手 —— 引用是卡片不是文字，每条都能点开原文</figcaption>
+    </figure>
+
+    <!-- ---------- 06 搜索 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav><div class="it on">记录</div><div class="it">归档</div><div class="it">密码</div><div class="it">助手</div></nav>
+          <div class="foot">134</div>
+        </aside>
+
+        <div class="list" style="filter:blur(.6px);opacity:.55">
+          <div class="lsearch"><div>搜索…</div></div>
+          <div class="li"><h4>多端同步的冲突处理方案</h4><p>base / local / remote…</p><div class="m">08-12 · 笔记</div></div>
+          <div class="li"><h4>WebDAV 限流的退避策略</h4><p>不该只看状态码…</p><div class="m">08-12 · 想法</div></div>
+          <div class="li"><h4>RFC 6578 增量同步</h4><p>sync-collection…</p><div class="m">08-11 · 归档</div></div>
+        </div>
+
+        <div class="detail" style="position:relative">
+          <div style="padding:26px 48px;filter:blur(.6px);opacity:.5">
+            <h1 style="font-size:27px;font-weight:500">多端同步的冲突处理方案</h1>
+            <div style="height:1px;background:var(--rule);margin:16px 0"></div>
+            <p style="font-size:14px;line-height:1.85">base / local / remote 三份数据缺一不可……</p>
+          </div>
+
+          <div style="position:absolute;inset:0;background:rgba(20,18,14,.28);display:flex;align-items:flex-start;justify-content:center;padding-top:70px">
+            <div style="width:560px;background:var(--paper);border:1px solid var(--ink);box-shadow:0 24px 60px rgba(20,18,14,.22)">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--rule)">
+                <span class="mono" style="color:var(--accent)">⌕</span>
+                <span style="font-size:15px;flex:1">上个月那篇讲同步冲突的<span style="color:var(--accent)">|</span></span>
+                <span class="mono" style="opacity:.6">ESC</span>
+              </div>
+
+              <div style="padding:12px 16px 4px">
+                <div class="label">条目 · 3</div>
+                <div style="margin-top:8px">
+                  <div style="padding:8px 8px 8px 10px;background:var(--accent-soft);border-left:2px solid var(--accent);display:flex;justify-content:space-between;gap:12px">
+                    <div>
+                      <div style="font-size:13.5px;font-weight:500">多端同步的冲突处理方案</div>
+                      <div class="mono" style="margin-top:3px">08-12 · 笔记 · 语义 + 关键词</div>
+                    </div>
+                    <span class="mono" style="color:var(--accent)">↵</span>
+                  </div>
+                  <div style="padding:8px 8px 8px 10px;display:flex;justify-content:space-between;gap:12px">
+                    <div><div style="font-size:13.5px">CRDT 的取舍</div><div class="mono" style="margin-top:3px">08-10 · 想法 · 语义</div></div>
+                    <span class="mono" style="opacity:.4">↵</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding:12px 16px 4px;border-top:1px solid var(--rule-soft);margin-top:8px">
+                <div class="label">归档 · 1</div>
+                <div style="padding:8px 8px 8px 10px;margin-top:6px;display:flex;justify-content:space-between;gap:12px">
+                  <div><div style="font-size:13.5px">RFC 6578：WebDAV 的增量同步机制</div>
+                    <div class="mono" style="margin-top:3px">08-11 · 归档 · 有快照</div></div>
+                  <span class="mono" style="opacity:.4">↵</span>
+                </div>
+              </div>
+
+              <div style="padding:12px 16px 14px;border-top:1px solid var(--rule-soft);margin-top:8px">
+                <div class="label">命令</div>
+                <div style="display:flex;gap:16px;margin-top:8px">
+                  <span style="font-size:12.5px;color:var(--ink-2)">问 AI：这两条能合并吗</span>
+                  <span class="mono" style="opacity:.5">⌘K</span>
+                </div>
+              </div>
+
+              <div style="border-top:1px solid var(--rule);padding:9px 16px;display:flex;gap:16px">
+                <span class="mono" style="opacity:.6">↑↓ 选择</span>
+                <span class="mono" style="opacity:.6">↵ 打开</span>
+                <span class="mono" style="opacity:.6">⇥ 用 AI 回答</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>06</b> 搜索 —— 命令面板形态，结果按类型分组，底部可升级为问 AI</figcaption>
+    </figure>
+
+    <!-- ---------- 07 冲突处理 ---------- -->
+    <figure class="shot">
+      <div class="wrap"><div class="screen">
+        <aside class="rail">
+          <div class="mark">拾</div>
+          <nav><div class="it on">记录</div><div class="it">归档</div><div class="it">密码</div><div class="it">助手</div></nav>
+          <div class="foot">!</div>
+        </aside>
+
+        <div class="detail">
+          <div class="topbar">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="mono">←</span><span class="mono">冲突处理</span>
+            </div>
+            <span class="mono" style="color:var(--accent)">1 / 1</span>
+          </div>
+
+          <div style="padding:22px 40px 0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="dot"></span>
+              <h1 style="font-size:20px;font-weight:500">这条笔记在两台设备上都被改过</h1>
+            </div>
+            <p style="font-size:13px;line-height:1.7;color:var(--ink-2);margin-top:7px">
+              下面已自动合并无冲突的部分，只有标红的一段需要你决定。两边的内容都不会丢。</p>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:20px;flex:1;border-top:1px solid var(--rule)">
+            <div style="border-right:1px solid var(--rule);padding:16px 24px">
+              <div class="label">本地 · Windows · 13:20</div>
+              <p style="font-size:13px;line-height:1.8;margin-top:10px;color:var(--ink-2)">
+                base / local / remote 三份数据缺一不可。</p>
+              <div style="margin-top:12px;background:var(--accent-soft);border-left:2px solid var(--accent);padding:10px 12px">
+                <p style="font-size:13px;line-height:1.8">冲突副本按「标题 + 设备名 + 时间」命名，用户才知道该留哪个。</p>
+              </div>
+              <div style="margin-top:12px;border:1px solid var(--accent);color:var(--accent);text-align:center;
+                font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:8px">保留这段</div>
+            </div>
+
+            <div style="padding:16px 24px">
+              <div class="label">云端 · Android · 13:25</div>
+              <p style="font-size:13px;line-height:1.8;margin-top:10px;color:var(--ink-2)">
+                base / local / remote 三份数据缺一不可。</p>
+              <div style="margin-top:12px;background:var(--accent-soft);border-left:2px solid var(--accent);padding:10px 12px">
+                <p style="font-size:13px;line-height:1.8">冲突副本直接丢进回收站，30 天后自动清理，不打扰用户。</p>
+              </div>
+              <div style="margin-top:12px;border:1px solid var(--accent);color:var(--accent);text-align:center;
+                font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:8px">保留这段</div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--rule);padding:14px 40px;display:flex;justify-content:space-between;align-items:center">
+            <span class="mono" style="opacity:.65">两段都保留也可以，会写成两段并列</span>
+            <div style="display:flex;gap:10px">
+              <div style="border:1px solid var(--rule);color:var(--ink-2);font-family:var(--mono);
+                font-size:9px;letter-spacing:.14em;padding:8px 14px">两段都留</div>
+              <div style="background:var(--ink);color:var(--paper);font-family:var(--mono);
+                font-size:9px;letter-spacing:.14em;padding:8px 14px">接受合并</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>07</b> 冲突处理 —— 只把冲突段摆出来，其余已自动合并</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ============================ 移动端 ============================ -->
+<section class="group">
+  <div class="ghead"><h2>移动端</h2><span class="mono">4 screens</span></div>
+  <div style="display:flex;gap:28px;flex-wrap:wrap">
+
+    <figure class="shot" style="width:auto">
+      <div class="wrap sm"><div class="phone">
+        <div style="display:flex;justify-content:space-between;padding:14px 18px 6px">
+          <span class="mono" style="font-size:8.5px">9:41</span><span class="mono" style="font-size:8.5px">▮▮▮</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:4px 18px 12px;border-bottom:1px solid var(--ink)">
+          <span style="font-family:var(--display);font-size:24px;line-height:1">拾遗</span>
+          <span class="mono" style="font-size:8.5px">134 条</span>
+        </div>
+
+        <div style="padding:14px 18px;border-bottom:1px solid var(--rule)">
+          <div style="font-family:var(--serif);font-size:16px;line-height:1.5;color:var(--ink-3);font-style:italic">
+            把东西丢进来 —— AI 替你整理</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+            <div style="display:flex;gap:12px">
+              <span class="mono" style="color:var(--ink);border-bottom:1px solid var(--accent);padding-bottom:2px;font-size:8.5px">粘贴</span>
+              <span class="mono" style="font-size:8.5px">网页</span><span class="mono" style="font-size:8.5px">图片</span>
+            </div>
+            <div style="background:var(--accent);color:#fff;font-family:var(--mono);font-size:8px;
+              letter-spacing:.14em;padding:6px 11px">交给 AI →</div>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow:hidden;padding:0 18px">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 0 2px">
+            <span class="mono" style="font-size:8.5px">今天</span><span style="flex:1;height:1px;background:var(--rule-soft)"></span>
+          </div>
+          <article style="padding:12px 0;border-bottom:1px solid var(--rule-soft)">
+            <h3 style="font-size:15px;font-weight:500;line-height:1.4">WebDAV 限流的退避策略</h3>
+            <p style="font-size:12px;color:var(--ink-2);margin-top:4px;line-height:1.6">不该只看状态码，还要看本地队列积压量。</p>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
+              <span class="dot"></span><span class="mono" style="font-size:8px">AI · 想法</span>
+              <span class="tag" style="font-size:8px">#webdav</span>
+            </div>
+          </article>
+          <article style="padding:12px 0;border-bottom:1px solid var(--rule-soft)">
+            <h3 style="font-size:15px;font-weight:500;line-height:1.4">RFC 6578 增量同步</h3>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
+              <span class="dot"></span><span class="mono" style="font-size:8px">AI · 网页</span>
+              <span class="badge on" style="font-size:8px">有快照</span>
+            </div>
+          </article>
+          <article style="padding:12px 0">
+            <h3 style="font-size:15px;font-weight:500;line-height:1.4">一篇讲 CRDT 的长文</h3>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
+              <span class="dot"></span><span class="badge dead" style="font-size:8px">原站已失效</span>
+              <span class="badge on" style="font-size:8px">回退快照</span>
+            </div>
+          </article>
+        </div>
+
+        <div style="display:flex;justify-content:space-around;align-items:center;padding:12px 0 22px;border-top:1px solid var(--rule)">
+          <span class="mono" style="font-size:8.5px;color:var(--accent)">记录</span>
+          <span class="mono" style="font-size:8.5px">归档</span>
+          <span class="mono" style="font-size:8.5px">密码</span>
+          <span class="mono" style="font-size:8.5px">助手</span>
+        </div>
+      </div></div>
+      <figcaption><b>M1</b> 首页流</figcaption>
+    </figure>
+
+    <figure class="shot" style="width:auto">
+      <div class="wrap sm"><div class="phone">
+        <div style="display:flex;justify-content:space-between;padding:14px 18px 6px">
+          <span class="mono" style="font-size:8.5px">9:41</span><span class="mono" style="font-size:8.5px">▮▮▮</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 18px 12px">
+          <span class="mono" style="font-size:8.5px">←</span>
+          <span style="font-family:var(--display);font-size:15px">SKAI</span>
+          <span class="mono" style="font-size:8.5px">端侧</span>
+        </div>
+
+        <div style="padding:6px 18px 16px;border-bottom:1px solid var(--rule)">
+          <div class="label" style="font-size:8px">你丢进来的</div>
+          <div style="margin-top:8px;border:1px solid var(--rule);background:var(--paper-hi);padding:10px 12px">
+            <div style="font-size:11.5px;line-height:1.6;color:var(--ink-2)">
+              https://example.com/post/rfc-6578-sync-collection</div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:16px 18px;overflow:hidden">
+          <div class="label" style="font-size:8px">正在处理</div>
+          <ol style="list-style:none;display:flex;flex-direction:column;gap:11px;margin-top:12px">
+            <li style="display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:baseline;font-size:11px">
+              <span style="font-family:var(--mono);font-size:9px;color:var(--accent)">✓</span>
+              <span>抓取正文</span><span class="mono" style="font-size:8px">4,182 字</span></li>
+            <li style="display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:baseline;font-size:11px">
+              <span style="font-family:var(--mono);font-size:9px;color:var(--accent)">✓</span>
+              <span>判定类型</span><span class="mono" style="font-size:8px">笔记</span></li>
+            <li style="display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:baseline;font-size:11px">
+              <span style="font-family:var(--mono);font-size:9px;color:var(--accent)">✓</span>
+              <span>提取要点</span><span class="mono" style="font-size:8px">3 条</span></li>
+            <li style="display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:baseline;font-size:11px;color:var(--ink-3)">
+              <span style="font-family:var(--mono);font-size:9px">○</span>
+              <span>生成标签</span><span class="mono" style="font-size:8px">—</span></li>
+            <li style="display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:baseline;font-size:11px;color:var(--ink-3)">
+              <span style="font-family:var(--mono);font-size:9px">○</span>
+              <span>关联旧条目</span><span class="mono" style="font-size:8px">—</span></li>
+          </ol>
+
+          <div style="margin-top:22px;border-top:1px solid var(--rule);padding-top:14px">
+            <div class="label" style="font-size:8px">已找到 2 条相关</div>
+            <div style="margin-top:8px">
+              <div style="padding:8px 0;border-bottom:1px solid var(--rule-soft);font-size:12px">RFC 6578 增量同步<span class="mono" style="display:block;margin-top:2px;font-size:8px">08-11 · 归档</span></div>
+              <div style="padding:8px 0;font-size:12px">增量同步的请求预算<span class="mono" style="display:block;margin-top:2px;font-size:8px">08-10 · 笔记</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:12px 18px 22px;border-top:1px solid var(--rule)">
+          <div style="background:var(--accent);color:#fff;text-align:center;font-family:var(--mono);
+            font-size:8.5px;letter-spacing:.14em;padding:11px">完成，收进知识库</div>
+        </div>
+      </div></div>
+      <figcaption><b>M2</b> AI 处理中</figcaption>
+    </figure>
+
+    <figure class="shot" style="width:auto">
+      <div class="wrap sm"><div class="phone">
+        <div style="display:flex;justify-content:space-between;padding:14px 18px 6px">
+          <span class="mono" style="font-size:8.5px">9:41</span><span class="mono" style="font-size:8.5px">▮▮▮</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 18px 10px;border-bottom:1px solid var(--rule)">
+          <span class="mono" style="font-size:8.5px">←</span>
+          <span class="mono" style="font-size:8.5px;text-transform:none;letter-spacing:.02em">example.com</span>
+          <span class="mono" style="font-size:8.5px">⋯</span>
+        </div>
+
+        <div style="padding:16px 20px 0;flex:1;overflow:hidden">
+          <div class="mono" style="font-size:8px">08-11 归档 · 阅读 8 分钟</div>
+          <h1 style="font-size:20px;font-weight:500;line-height:1.4;margin-top:6px">RFC 6578：WebDAV 的增量同步机制</h1>
+          <div style="display:flex;gap:6px;margin-top:9px">
+            <span class="badge" style="font-size:8px">原站存活</span>
+            <span class="badge on" style="font-size:8px">本地快照</span>
+          </div>
+          <div style="height:1px;background:var(--rule);margin:14px 0"></div>
+          <p style="font-size:14px;line-height:1.95">
+            sync-collection 报告允许客户端只请求自某个同步令牌以来发生的变更，包括新增、修改和删除。这比每次全量 PROPFIND 便宜一个数量级。</p>
+          <p style="font-size:14px;line-height:1.95;margin-top:12px">
+            现实是大部分网盘并不支持。坚果云、Apache mod_dav 都会忽略 REPORT。</p>
+          <div class="ph" style="height:86px;margin-top:14px;border:1px solid var(--rule)"></div>
+        </div>
+
+        <div style="display:flex;border-top:1px solid var(--rule);padding:12px 18px 22px;gap:8px">
+          <div style="flex:1;border:1px solid var(--rule);text-align:center;font-family:var(--mono);
+            font-size:8px;letter-spacing:.12em;padding:9px;color:var(--ink-2)">原貌</div>
+          <div style="flex:1;border:1px solid var(--accent);color:var(--accent);text-align:center;
+            font-family:var(--mono);font-size:8px;letter-spacing:.12em;padding:9px">问 AI</div>
+        </div>
+      </div></div>
+      <figcaption><b>M3</b> 归档阅读</figcaption>
+    </figure>
+
+    <figure class="shot" style="width:auto">
+      <div class="wrap sm"><div class="phone">
+        <div style="display:flex;justify-content:space-between;padding:14px 18px 6px">
+          <span class="mono" style="font-size:8.5px">9:41</span><span class="mono" style="font-size:8.5px">▮▮▮</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 18px 12px;border-bottom:1px solid var(--rule)">
+          <span class="mono" style="font-size:8.5px">←</span><span class="mono" style="font-size:8.5px">凭据</span><span class="mono" style="font-size:8.5px">编辑</span>
+        </div>
+
+        <div style="padding:20px 20px 0;flex:1">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;border:1px solid var(--ink);display:grid;place-items:center;
+              font-family:var(--display);font-size:16px">G</div>
+            <div>
+              <div style="font-size:19px;font-weight:500">GitHub</div>
+              <div class="mono" style="font-size:8px;margin-top:2px">github.com</div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;border-top:1px solid var(--rule)">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft)">
+              <div><div class="mono" style="font-size:8px">用户名</div>
+                <div style="font-size:12.5px;margin-top:3px">user@example.com</div></div>
+              <span class="mono" style="font-size:8px;color:var(--accent)">复制</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft)">
+              <div><div class="mono" style="font-size:8px">密码</div>
+                <div style="font-family:var(--mono);font-size:13px;letter-spacing:.16em;margin-top:3px">••••••••</div></div>
+              <span class="mono" style="font-size:8px;color:var(--accent)">显示</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft)">
+              <div><div class="mono" style="font-size:8px">一次性密码</div>
+                <div style="font-family:var(--mono);font-size:17px;letter-spacing:.14em;margin-top:3px">418 902</div></div>
+              <span class="mono" style="font-size:8px;opacity:.7">18s</span>
+            </div>
+          </div>
+
+          <div style="margin-top:18px;border:1px solid var(--accent);color:var(--accent);text-align:center;
+            font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;padding:11px">复制密码</div>
+          <p class="mono" style="font-size:8px;margin-top:10px;text-align:center;opacity:.6;text-transform:none">
+            30 秒后自动清除剪贴板</p>
+
+          <div style="margin-top:20px;border-top:1px solid var(--rule);padding-top:14px">
+            <div class="label" style="font-size:8px">安全检查</div>
+            <div style="display:flex;justify-content:space-between;margin-top:9px">
+              <span style="font-size:11.5px">重复使用</span>
+              <span style="font-family:var(--display);font-size:16px;color:var(--accent)">2</span>
+            </div>
+          </div>
+        </div>
+        <div style="height:26px"></div>
+      </div></div>
+      <figcaption><b>M4</b> 密码详情</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<script>
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === 'paper' ? 'ink' : 'paper';
+});
+</script>
+</body>
+</html>

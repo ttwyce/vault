@@ -1,0 +1,333 @@
+# CHANGELOG
+
+记录结构性变更。日常文字修订不入表，只记「改了决策 / 加了模块 / 换了方向」。
+
+---
+
+## v0.12 · 2026-11-08
+
+### 写入层与活动埋点：唯一写入口 + 条目加密信封 + 三档合并窗口
+
+**改了什么**
+- 新增 `lib/data/write/`：`write_gateway` / `item_envelope` / `entry_snapshot`
+- 新增 `lib/data/activity/activity_logger.dart`
+- `SecretWrapper` 泛化为通用 AEAD box：新增 `seal`/`open`（任意字节），
+  `wrap`/`unwrap` 保留给 DEK；参数 `kek` 改名 `key`
+- `EntryKind` 枚举落到 `entry_tables.dart`
+- 新增 2 个测试文件、45 条用例，总数 157 → 202
+
+**关键决策**
+- **`WriteGateway` 是唯一写入口**：实体变更 + oplog + 历史 + 回收站 + FTS + HLC
+  全部同一事务。绕过它就等于静默丢同步，且事后无法修复
+- **条目加密信封 = 明文头 {entity,id,rev} + AAD = 头部字节本身**。
+  原方案「AAD 需要 rev，但 rev 在密文里」是个死循环；明文头是唯一同时
+  满足"防重放"与"接收端能解"的做法
+- **oplog payload 与云端 item 文件字节完全一致**，推送可直接 PUT。
+  因此**删掉 `VaultKeys.oplog()` 子密钥** —— 域分离靠 AAD，不靠换密钥
+- **content_hash 只覆盖 {kind,title,body,meta}**，且 meta 先解码再哈希。
+  含 rev/updated_at 会让"只是同步了一次"变成假冲突
+- **内容未变不产生新版本、空操作不写 oplog**：否则自动保存与误触
+  会把一堆无意义变更推给所有设备
+- **活动埋点按 (kind, entry) 时间窗口合并**（浏览 30min / 编辑 5min / 搜索 60s），
+  不记流水账。合并后的粒度恰好是日总结要的「读了 5 篇、写了 3 条」
+
+**验证**
+- 用"索引写入故意抛错"验证事务原子性：实体 / oplog / 历史三者必须全部回滚
+- 把 A 的 payload 塞进 B 的行 → `readSnapshot` 抛错（信封头与行元数据交叉校验）
+- 改信封头一个字节 → 认证失败（证明 AAD 真的绑在头部上）
+- 记三种活动后断言 `oplog` 表仍为空（隐私边界是可测的）
+
+**影响文档**：17（新增）、16（子密钥从 6 条改 5 条）、README（索引 / D17~D19 /
+目录 / 进度）、09（M1 任务状态）、14（Day 7）
+
+---
+
+## v0.11 · 2026-11-08
+
+### 密钥层：Argon2id + XChaCha 包裹 + BIP-39 恢复码
+
+**改了什么**
+- 新增 `lib/core/crypto/` 九个文件：`secret_bytes` / `argon2_params` / `kdf` /
+  `secret_wrapper` / `vault_keys` / `bip39_english` / `recovery_code` /
+  `vault_meta` / `vault_lock`
+- `bip39_english.dart` 内置 2048 词表（生成文件，非手写）
+- `DatabaseKey` 重构为委托 `SecretBytes`，去掉重复的零拷贝/比较/擦除实现
+- 新增依赖 `cryptography` 2.9；**放弃 `sodium_libs`**（一个包覆盖 AEAD + Argon2 + HKDF）
+- 新增 4 个测试文件、74 条用例，总数 83 → 157
+
+**关键数据（实测，非推测）**
+- Argon2id `m=64MB t=3 p=4` 在桌面 JIT 上 **2147 ms**，设计文档推测的是 0.6~1.2s
+- 这是纯 Dart 实现的必然结果。保留 64MB（与 Bitwarden 默认一致），
+  但解锁页必须有进度反馈、派生不阻塞首帧、提供生物识别跳过 —— 已记为 R19
+
+**关键决策**
+- **恢复码不跑 Argon2**：256 bit 真随机熵无可爆破空间，慢哈希收益为零而代价是灾难恢复变慢
+- **AAD 绑定 `vault_id + purpose`**：防止 `wrapped_dek` 与 `recovery_wrapped_dek` 互换位置
+- **`DEK_local` 改为从 DEK 派生**，不再单独包裹：恢复码只需恢复一个秘密（偏离 03 文档原设计）
+- **创建时自检两条解锁路径**：防止产出「看起来成功但永远打不开」的 vault
+- **`meta.enc` 序列化按 key 排序**：否则每次写出字节不同，制造无意义的 If-Match 冲突
+
+**关键修正**
+- 🔴 `SecretBytes.fingerprint` 第一版取密钥首尾各 4 字节，等于把 64 bit 真实密钥
+  写进日志。改成 `sha256(key)` 前 4 字节 —— 测试断言"toString 不含 ababab" 直接
+  暴露了这个设计问题，不是测试写错
+- `RecoveryCode.parse` 内部已验校验和，不能用来构造"词还原正确但校验和错"的中间态
+
+**影响文档**：16（新增）、02（§2 依赖表 + §13）、03（§2 密钥层级重写、§7 恢复码）、
+09（M1 任务状态 + R19/R20）、README、14（Day 6）
+
+---
+
+## v0.10 · 2026-11-08
+
+### 数据库层：22 张表 + 加密打开器 + 中文检索生产化
+
+**改了什么**
+- `lib/data/db/tables/` 8 个文件，按 13 号文档铺完 22 张表
+- `lib/data/db/vault_database.dart`：drift `@DriftDatabase` + 手写 FTS5 虚拟表 + 检索 API
+- `lib/data/db/database_opener.dart`：`VaultDatabaseOpener`，全项目唯一 open 入口
+- `lib/data/db/database_key.dart`：`DatabaseKey`（32B，`PRAGMA key` 二进制字面量）+ `SqlitePragmas`
+- `lib/data/search/cjk_segmenter.dart`：归一化 + 按字切分 + 短语查询构造
+- 测试 40 条新增，总数 43 → 83
+
+**关键修正（比功能本身更重要）**
+- 🔴 **只查 `PRAGMA cipher_version` 发现不了"忘了加密"**。
+  本项目全局用 SQLCipher，所以没设 key 的连接照样报出版本号，
+  然后以明文建库 —— 不报错、测试全绿、密码明文落盘。
+  真正的探针是 **`PRAGMA cipher_salt`**（无密钥上下文时返回空集），已实测确认。
+  现在三道断言：`cipher_version` + `cipher_salt` + 落盘文件头非 `SQLite format 3\0`
+- 🔴 `PRAGMA key = x'..'` 是语法错误，必须写成 `PRAGMA key = "x'..'"`（外层双引号）
+- `drift` 自己导出了 `DatabaseOpener`，故改名 `VaultDatabaseOpener`；
+  同因测试里要 `hide isNotNull`
+
+**为什么值得单独记一笔**
+加密失败是**唯一一种无声失效**：不报错、测试通过、用户不知情。
+所以它从"实现细节"升级为 README 的第 4 条工程红线。
+
+**影响文档**：03（§1.1 三条硬规则）、06（§1.3 已同步）、README（红线 4 / 目录结构 / 进度）、14（Day 5）
+
+---
+
+## v0.9 · 2026-11-08
+
+### 数据库加密定案：SQLCipher（一行配置）+ 中文检索方案纠正
+
+**改了什么**
+- `pubspec.yaml` 加 `hooks.user_defines.sqlite3.source: sqlcipher`，改用 SQLCipher 预编译产物
+- `sqlite3` 提升为直接依赖
+- 新增 `test/sqlcipher_probe_test.dart`（6 条用例）：cipher_version / 错误密钥拒绝 / FTS5 / 中文检索 / trigram 对比 / WAL
+- 06 §1.3 中文分词**整节重写**（原结论错误）
+- 03 §1.1 新增「第 1 层已定案」+ 打开数据库的三条硬规则
+- 02 §11.2 重写，A1 假设标记为已通过
+
+**为什么**
+- 原判断「`sqlcipher_flutter_libs` EOL ⇒ 必须自建构建」是错的。
+  `sqlite3` 3.9 的 native-assets 钩子把 SQLCipher 做成内置选项，
+  三端预编译产物齐备，成本从 5+ 人日降到 0.5 人日
+- 应用层字段加密 + 明文索引（方案 B）有一个不可修补的洞：
+  `entry_fts` / `entry_history` / `trash` / `activity` 都含明文，
+  拿到 db 文件即可还原全部内容。字段级 AEAD 仍要做，但那是**同步层**的事
+
+**实测数据**
+- `PRAGMA cipher_version` = `4.20.0 community`
+- 错误密钥 → `hmac check failed`，符合预期
+- FTS5 + WAL 正常
+
+**纠正的错误结论**
+- 原文：「`unicode61` 对中文按字切分，召回率高但精度低」
+- 实际：`unicode61` 把**连续汉字当成一个 token**，`MATCH '同步'` 对「增量同步」返回 0 条，
+  是**完全搜不到**，不是精度低
+- 新方案：应用层按字切分（`增 量 同 步`）+ **短语查询**（`MATCH '"同 步"'`）；
+  `trigram` 因要求 ≥3 字符被否决（中文 2 字词占多数）
+
+**影响文档**：02（§8 A1 / §11.2）、03（§1.1）、06（§1.3 重写）、09（A1 已完成 / 执行顺序）、14（Day 4）
+
+---
+
+## v0.8 · 2026-11-08
+
+### 同步前置原语：UUIDv7 / HLC / Canonical JSON
+
+**改了什么**
+- `lib/core/identity/uuid_v7.dart`：单调 UUIDv7（同毫秒 12 位计数器，溢出借毫秒）
+- `lib/core/sync/hlc.dart`：`Hlc` + `HlcClock`（tick / observe / restore）
+- `lib/core/crypto/canonical.dart`：确定性 JSON + `contentHash`
+- 新增 `test/core_primitives_test.dart` 22 条用例
+
+**为什么先做这三个**
+20 张表全都要用 `id` / `hlc` / `content_hash`。它们的错误不会在建表时暴露，
+而是在同步合并阶段才爆发 —— 那时排查成本高一个数量级。先把它们测透再铺表。
+
+**关键约束**
+- HLC 编码必须**固定宽度**，否则字符串比较 ≠ 时间比较，所有"取最新"的查询都会错
+- `HlcClock.restore()` **只能前进**：重启后从零开始会生成比历史更小的时钟值
+- `Canonical` 必须让 `1` 与 `1.0` 等价，否则同一条内容在不同设备算出不同哈希
+
+**影响文档**：14（Day 3）
+
+---
+
+## v0.7 · 2026-11-08
+
+### 字体子系统（三角色排版 + 内置 3 套 + 用户导入）
+
+**改了什么**
+- 新增 `lib/core/fonts/` 九件套：`font_role` / `font_face` / `font_catalog` /
+  `font_validation` / `font_runtime` / `font_state` / `font_store` / `font_service` / `font_providers`
+- 新增 `SketchTypography`（`ThemeExtension`）：三个角色各一条 `FontStack`，
+  生成 `TextTheme` 并提供 `monoStyle()`
+- `SketchTheme` 由「静态双主题」改为 `build(palette, brightness, typography)`，
+  字体不再写死
+- 内置三套 SIL OFL 字体随包：霞鹜文楷 Lite 13.3 MB / Caveat 394 KB / JetBrains Mono 264 KB
+- 四套预设：手写默认 / 阅读优先 / 系统原生 / 极客等宽；改单角色后与预设一致会自动归位
+- 用户导入 TTF/OTF/TTC：文件头校验、sha256 内容寻址、40 MB 上限、
+  家族名 `imp_<hash12>`（`FontLoader` 不可卸载，必须保证不重名）
+- 新增设置页 `lib/features/settings/fonts_page.dart`；入口由 `AppActions`
+  注入到 `PageScaffold` 右上角（避免 `core/widgets` 反向依赖 `features`）
+- 新增 4 枚自制图标：`settings` / `type` / `upload` / `close`
+- 测试 15 条全绿（字体校验 / 状态 / 排版解析 13 条 + 外壳渲染 2 条）
+
+**为什么**
+- 手绘风的产品身份几乎全由字体承担，Android 上没有可用的手写中文字体
+- 用户有权换成自己买的字体，不能等发版
+- 字体必须在 `runApp` 之前就绪，否则首帧会闪一下系统字体
+
+**关键决策**
+- **字体分三个角色**（正文 / 标题 / 等宽），不是一个全局字体 ——
+  手绘风的核心是「两套声音」，元数据必须等宽才能对齐
+- **中文只内置一套**：任何覆盖 GB2312 的中文字体都 10 MB 量级，多放一套包体不可接受
+- **字体不参与同步**：体积大、许可复杂，且「桌面用等宽、手机用文楷」本身合理
+- **持久化用 JSON 而非数据库**：必须在 DB 打开前可读
+- **绝对路径不入库**：iOS 沙盒路径会变，只存文件名，启动时重新拼
+
+**顺带修掉**
+- 🟡 `flutter test` 在本环境失败的真正原因找到了：环境里有 `http_proxy=127.0.0.1:51096`，
+  `flutter_tester` 的本地 WebSocket 被代理拦截（`Invalid WebSocket upgrade request`）。
+  设 `NO_PROXY=127.0.0.1,localhost` 后测试正常 —— **不是沙箱限制，之前的判断是错的**
+- `file_picker` 已到 13.3.2，API 与常见教程的 8.x 完全不同（无 `.platform`、无 `allowMultiple`）
+
+**影响文档**：15（新增）、02（§1 表格 + §12）、10（§4 重写）、README（索引 / D13 / 目录结构）、14
+
+---
+
+## v0.6 · 2026-11-08
+
+### 工程初始化 + M1 骨架落地
+
+**改了什么**
+- 创建 Flutter 工程（`package: vault` / `com.shiyi.vault` / android + ios + windows）
+- 依赖实测解析：`flutter_riverpod 3.5.0`（Riverpod 3）、`go_router 18.1.3`、`drift 2.35.3`、`sqlite3 3.9.0`
+- 落地主题层与组件库：`SketchPalette` / `SketchMetrics` / `SketchTheme` / `SketchFrame` / `SketchButton` / `SketchTag` / `PageScaffold`
+- 自制图标 + 极简 SVG path 解析器（只支持 M/L/C/Z）
+- 五分区外壳（桌面 rail / 移动底栏）+ 五个页面骨架
+- `flutter analyze` 通过
+
+**关键发现（已写入 02 §11）**
+- 🔴 `sqlcipher_flutter_libs`（0.7.0+eol）与 `sqlite3_flutter_libs`（0.6.0+eol）**均已停止维护**，
+  因为 `sqlite3` 3.9 改用 Dart Native Assets 自带原生库 → 两个包已移除
+- 🔴 **SQLCipher 整库加密方案需重新选型**（原 A1 假设失效）：
+  候选为「native assets 自编译 SQLCipher」/「应用层字段加密 + 明文索引」/「依赖系统盘加密」，
+  建议先验 A 方案，B 作退路；期间 DB 打开逻辑收敛到单一 `DatabaseOpener`
+- 🟡 本沙箱内 `flutter test` 无法建立本地 WebSocket（400），测试需在普通终端跑；`flutter analyze` 正常
+
+**影响文档**：02（§11 新增）、14（新增）、README（目录结构）
+
+---
+
+## v0.5 · 2026-11-08
+
+### 里程碑重排：纳入全部新增功能
+
+**改了什么**
+- 09 号文档从 M0~M8（190 人日）重排为 **M0~M9（247 人日）**
+- 新增六个任务块：手绘主题组件库（M1）、分类与标签 + 日记月历（M2）、taxonomy 同步（M3）、归档总览（M4）、账号分组 + 自定义字段（M6）、会话与抽屉（M7）
+- 新增 M9「发布前硬化」阶段（回归 / 性能 / 安全审计 / 三端联调）
+- 同步回归用例从 20 条扩到 **26 条**（新增 T21~T26）
+- 风险从 12 条扩到 17 条（新增 R13~R17：字体包体、虚线掉帧、会话膨胀、标签同名冲突、手绘风削弱安全感）
+- 新增 §15「手绘风 vs 安全感」处理方案：密码模块用同色板但更克制的变体
+- MVP 重新定义为 M0~M3 = 94 人日 ≈ 4.5 个月
+
+**为什么**
+- 原计划未包含功能补齐（40 人日）与会话/主题（16 人日），实际工作量被低估 30%
+
+**影响文档**：09（重写）、README（索引数字）
+
+---
+
+## v0.4 · 2026-11-08
+
+### 首页从「今天」改为「聊天」，引入对话抽屉
+
+**改了什么**
+- 首页标题「今天」→「聊天」，底部导航与桌面侧栏同步改名
+- 新增左上三横杠 → 左侧抽屉（搜索 / 按日期分组 / 新建对话 / 当前会话高亮）
+- 新增右上「＋ 开启新对话」，进入空白会话（草稿态，不落库）
+- 主区新增「当前对话条」
+
+**为什么**
+- 引入抽屉后「今天」与抽屉首个分组标题重名，产生"今天 → 今天"的语义重复
+- 页面本质已变为「会话列表 + 当前会话」，是聊天产品骨架
+- 「今天」降级为抽屉内的分组标题，时间感保留
+
+**影响文档**：12（新增）、10（页面清单）、README（决策表）
+
+---
+
+## v0.3 · 2026-11-08
+
+### 视觉方向第 3 次改版：手绘草图风
+
+**改了什么**
+- 废弃前两版（暖色编辑风、冷灰蓝简洁风）
+- 确定「手绘草图」：不规则圆角 + 虚线描边 + 零模糊硬阴影 + 整体倾斜 + 纸纹
+- 色板改为：纸白 `#FDFBF7` / 墨 `#2D2D2D` / 马克笔红 `#FF4D4D` / 圆珠笔蓝 `#2D5DA1` / 便签黄 `#FFF9C4`
+- 字体改为手写体栈（Segoe Print + 楷体），并确定跨端需打包 LXGW WenKai
+- 全部图标改为自制 SVG（无图标库痕迹）
+- 桌面侧栏与移动底栏统一为悬浮便签条，五项：聊天 / 记录 / 日记 / 归档 / 密码
+
+**为什么**
+- 前两版都是"通用 SaaS 长相"，与"个人档案馆"的题材无关
+- 手绘风天然避开 2024–26 年 AI 产品的通用视觉（Inter + 渐变 + 玻璃）
+
+**影响文档**：10（重写）、11（视觉约束）、README
+
+---
+
+## v0.2 · 2026-11-08
+
+### 功能补齐
+
+**新增**
+- **日记页面**：月历总览 + 详情 + 补写；`meta.date` 与 `created_at` 分离；新增 `diary_index`
+- **笔记分类与标签**：分类=两级树（最多 1 个），标签=扁平云（最多 8 个）；新增 `category` / `tag` 及关联表
+- **归档网站页面**：状态筛选 + 站点聚合 + 存储配额；新增 `link_check`
+- **账号分组 / 自定义字段 / 备注**：分组两级树 + 组内字段模板；`custom_fields` 支持 `secret` 标记
+
+**关键决策**
+- 分类与标签严格分工，不允许都做成多选（否则用户陷入整理瘫痪）
+- 账号 `secret: true` 字段与密码同级加密，AI 永远读不到
+- 分类/标签作为**独立同步实体**走 `taxonomy/` 通道，同名自动合并
+
+**影响文档**：11（新增）、13（新增）、04（同步新增实体）
+
+---
+
+## v0.1 · 2026-11-08
+
+### 初始方案
+
+**确定**
+- 三端（Android / iOS / Windows）+ 无后端 + WebDAV 同步 + 端侧 AI
+- 统一 `entry` 数据模型，`kind` 区分笔记/想法/日记/书签/密码
+- 同步引擎：三级探测（设备水位 → 分片 PROPFIND / sync-collection → 按需拉取）
+- 冲突处理：六层保障，核心规则「删除永不覆盖未同步的编辑」
+- 网页归档：三层模型（正文 / PDF 快照 / 原始 HTML）
+- 检索：FTS5 + 向量 + RRF 融合
+- AI：双模型路由，密码与日记强制走端侧（L0）
+
+**关键数字**
+- 20 个同步测试用例（M3 硬门槛）
+- 190 人日 ≈ 单人全职 9~10 个月
+- MVP（M0~M3 + 正文层归档）= 75 人日 ≈ 4 个月
+
+**影响文档**：01~09
