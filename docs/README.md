@@ -38,6 +38,7 @@
 | [15 字体系统](15-字体系统.md) | 三角色排版、内置 3 套字体、4 套预设、导入管线与限制 | ✅ 已落地 |
 | [16 密钥与恢复码](16-密钥与恢复码.md) | **Argon2id 实测数据**、XChaCha 包裹、AAD 用途绑定、BIP-39 恢复码、`meta.enc` 结构 | ✅ 已落地 |
 | [17 写入路径与活动埋点](17-写入路径与活动埋点.md) | **唯一写入口**、条目加密信封、rev 与 content_hash 语义、埋点合并窗口 | ✅ 已落地 |
+| [18 会话、存储与启动装配](18-会话存储与启动装配.md) | 五态状态机、闸门判断顺序、`meta.enc` 原子写、不伪造进度 | ✅ 已落地 |
 | [14 开发日志](14-开发日志.md) | 施工过程、踩坑、环境限制、下一步任务 | ✅ 持续更新 |
 | [CHANGELOG](CHANGELOG.md) | 各版本决策变更记录 | ✅ 持续更新 |
 
@@ -91,6 +92,9 @@
 | D17 | **写入路径** | **`WriteGateway` 是唯一写入口，实体变更与 oplog 同事务** | 绕过它就等于静默丢同步；已在测试里用"故意失败"验证回滚 |
 | D18 | **条目加密信封** | **明文头 {entity,id,rev} + AAD = 头部字节** | 解决"AAD 需要 rev 但 rev 在密文里"的鸡生蛋；oplog 与云端 item 字节一致，可直接 PUT |
 | D19 | **活动埋点** | **按 (kind, entry) 时间窗口合并，不记流水账** | 浏览 30 分钟 / 编辑 5 分钟 / 搜索 60 秒；`dwellMs` 是最有价值的字段 |
+| D20 | **路由判断** | **全 App 只有 `resolveGateScreen` 一处决定显示哪一屏** | 「未确认的恢复码」优先于状态机，否则 24 个词永远看不到 |
+| D21 | **解锁进度** | **不伪造百分比，只显示真实秒数 + 不确定转圈** | Argon2id 没有进度回调；假进度条会在 1% 卡两秒，比没有更焦虑 |
+| D22 | **meta.enc 写入** | **先写 .tmp 再 rename** | 它是解锁唯一入口，写一半断电等于永久锁死整个库 |
 
 ---
 
@@ -127,7 +131,7 @@
 
 ```
 C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
-├── docs/                     # 文档（01~17 + README + CHANGELOG）
+├── docs/                     # 文档（01~18 + README + CHANGELOG）
 ├── assets/
 │   ├── fonts/                # 内置 3 套 OFL 字体（13.9 MB）
 │   └── licenses/             # 字体许可声明
@@ -137,6 +141,8 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 │   ├── main.dart             # ProviderScope + VaultApp
 │   ├── app/
 │   │   ├── app.dart          # MaterialApp，亮/暗双主题
+│   │   ├── chrome/           # 右上角操作注入
+│   │   ├── session/          # 会话状态机 / 存储 / 闸门 / 启动装配
 │   │   ├── shell/            # 桌面 rail / 移动底栏 + 五分区
 │   │   └── theme/            # 色板 / 度量 / ThemeData
 │   ├── core/
@@ -151,13 +157,13 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 │   │   ├── db/               # drift 22 张表 + 加密打开器 + FTS5 索引
 │   │   ├── search/           # CJK 切分（中文检索的关键）
 │   │   └── write/            # WriteGateway + 条目加密信封 + 快照
-│   └── features/             # chat / records / diary / archive / vault / settings
+│   └── features/             # chat / records / diary / archive / vault / settings / unlock
 ├── android/ ios/ windows/    # 三端平台工程
 ├── test/                     # widget 测试
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：M1 只剩解锁 UI（27 人日中约 25 已完成）——
+**当前进度**：**M1 已完成**（29 人日）——
 主题层、组件库、五分区外壳、五个页面占位、
 **字体子系统（内置 3 套 + 导入 + 4 套预设 + 设置页）**、
 **三个同步前置原语（UUIDv7 / HLC / Canonical JSON）**、
@@ -165,9 +171,10 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 **数据库层（22 张表 + 加密打开器 + FTS5 索引 + 中文切分）**、
 **密钥层（Argon2id + XChaCha 包裹 + BIP-39 恢复码 + meta.enc）**、
 **写入层（唯一写入口 + 条目加密信封 + 历史/回收站/索引一体）**、
-**活动埋点（三档合并窗口 + 日摘要）** 已落地。
-`flutter analyze` 无告警，`flutter test` **202 条全绿**。
-解锁 UI、同步引擎、对话抽屉尚未开始。
+**活动埋点（三档合并窗口 + 日摘要）**、
+**会话层与解锁 UI（首次创建 → 24 词恢复码 → 抽词验证 → 解锁）** 已落地。
+`flutter analyze` 无告警，`flutter test` **236 条全绿**。
+**下一步：M2 条目系统**（三视图 + 编辑器 + 分类标签 + 日记月历）。
 
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`。
 环境说明见 `C:\Android\AGENTS.md`。
