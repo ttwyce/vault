@@ -1,8 +1,9 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:vault/data/db/tables/taxonomy_tables.dart';
+import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/features/organize/organize_page.dart';
 
 import 'support/test_harness.dart';
@@ -26,8 +27,8 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(ProviderScope(
-      parent: app.container,
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
       child: const MaterialApp(home: OrganizePage()),
     ));
     await tester.pump(const Duration(milliseconds: 250));

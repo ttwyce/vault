@@ -28,10 +28,11 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(ProviderScope(
-      parent: app.container,
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
       child: MaterialApp(
-        home: DiaryPage(initialMonth: DateTime(2026, 11)),
+        // 生产环境由 AppShell 的 Scaffold 提供 Material 祖先，测试里补一个。
+        home: Scaffold(body: DiaryPage(initialMonth: DateTime(2026, 11))),
       ),
     ));
     // 不用 pumpAndSettle：加载圈与手绘控件动画会一直触发重绘。

@@ -25,9 +25,13 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(ProviderScope(
-      parent: app.container,
-      child: const MaterialApp(home: RecordsPage()),
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: const MaterialApp(
+        // RecordsPage 是 AppShell 里的 tab，生产环境由 AppShell 的 Scaffold
+        // 提供 Material 祖先；测试里单独 pump 要自己补一个。
+        home: Scaffold(body: RecordsPage()),
+      ),
     ));
     // 不用 pumpAndSettle：加载圈 + 手绘控件动画会一直触发重绘。
     await tester.pump(const Duration(milliseconds: 250));

@@ -78,7 +78,14 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
   void _refresh() {
     // 防抖回调可能在页面销毁后触发，setState 前必须确认还活着。
     if (!mounted) return;
-    setState(() => _results = _compute());
+    // 先算 Future 再 setState：setState 的闭包不能返回 Future，
+    // 否则 Flutter 会直接抛「callback argument returned a Future」。
+    // 写成 `setState(() => _results = _compute())` 看着省事，
+    // 但那个箭头闭包的返回值恰好就是 Future，页面会在首帧崩掉。
+    final Future<List<EntrySummary>> next = _compute();
+    setState(() {
+      _results = next;
+    });
   }
 
   void _onQueryChanged(String value) {

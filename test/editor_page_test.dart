@@ -32,8 +32,8 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(ProviderScope(
-      parent: app.container,
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
       child: MaterialApp(
         home: Builder(
           builder: (BuildContext context) => Scaffold(
@@ -65,7 +65,9 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), '正文内容');
     await tester.tap(find.text('保存'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+    // 路由 pop 过渡约 300ms，要等它走完再断言 EditorPage 已消失
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(EditorPage), findsNothing, reason: '保存成功后应该 pop');
 

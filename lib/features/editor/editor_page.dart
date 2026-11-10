@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
 import '../../app/theme/sketch_theme.dart';
@@ -150,23 +151,28 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   Widget build(BuildContext context) {
     final p = context.sketch;
 
-    return PageScaffold(
-      title: widget.entryId == null ? '新建$_kindLabel' : '编辑$_kindLabel',
-      showSettings: false,
-      leading: SketchIconButton(
-        glyph: SketchGlyph.close,
-        tooltip: '返回',
-        onPressed: _saving ? null : () => Navigator.of(context).pop(),
-      ),
-      actions: <Widget>[
-        SketchButton(
-          label: _saving ? '保存中…' : '保存',
-          tone: SketchTone.primary,
-          glyph: SketchGlyph.plus,
-          onPressed: (_loading || _saving) ? null : _save,
+    // 编辑器是被 push 出来的独立路由，没有 AppShell 的 Scaffold 兜底，
+    // 必须自带 —— 否则 TextField 找不到 Material 祖先，直接崩。
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: PageScaffold(
+        title: widget.entryId == null ? '新建$_kindLabel' : '编辑$_kindLabel',
+        showSettings: false,
+        leading: SketchIconButton(
+          glyph: SketchGlyph.close,
+          tooltip: '返回',
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
         ),
-      ],
-      child: _buildBody(p),
+        actions: <Widget>[
+          SketchButton(
+            label: _saving ? '保存中…' : '保存',
+            tone: SketchTone.primary,
+            glyph: SketchGlyph.plus,
+            onPressed: (_loading || _saving) ? null : _save,
+          ),
+        ],
+        child: _buildBody(p),
+      ),
     );
   }
 
@@ -198,7 +204,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             controller: _title,
             enabled: !_saving,
             autofocus: widget.entryId == null,
-            maxLines: null,
+            minLines: 1,
+            // 标题有界：`maxLines: null` 在 Flex 里是无界高度，会把布局撑爆
+            maxLines: 3,
             textInputAction: TextInputAction.next,
             style: TextStyle(
               fontSize: 18,

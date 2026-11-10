@@ -7,7 +7,6 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
-import '../../core/widgets/sketch_frame.dart';
 import '../../data/db/vault_database.dart';
 import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository.dart';
@@ -25,48 +24,54 @@ class OrganizePage extends ConsumerWidget {
     final p = context.sketch;
     final repo = ref.watch(entryRepositoryProvider);
 
-    return PageScaffold(
-      title: '分类与标签',
-      showSettings: false,
-      leading: SketchIconButton(
-        glyph: SketchGlyph.close,
-        tooltip: '返回',
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-      child: FutureBuilder<({List<CategoryRow> categories, List<TagWithCount> tags})>(
-        future: _load(repo),
-        builder: (
-          BuildContext context,
-          AsyncSnapshot<({List<CategoryRow> categories, List<TagWithCount> tags})>
-              snapshot,
-        ) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return Center(child: CircularProgressIndicator(color: p.red));
-          }
-          final data = snapshot.data;
-          final categories = data?.categories ?? const <CategoryRow>[];
-          final tags = data?.tags ?? const <TagWithCount>[];
+    // 组织页是被 push 出来的独立路由，自带 Scaffold（TextField 等
+    // Material 组件需要 Material 祖先；将来加编辑功能时不会踩坑）。
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: PageScaffold(
+        title: '分类与标签',
+        showSettings: false,
+        leading: SketchIconButton(
+          glyph: SketchGlyph.close,
+          tooltip: '返回',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        child: FutureBuilder<({List<CategoryRow> categories, List<TagWithCount> tags})>(
+          future: _load(repo),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<
+                ({List<CategoryRow> categories, List<TagWithCount> tags})>
+                snapshot,
+          ) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return Center(child: CircularProgressIndicator(color: p.red));
+            }
+            final data = snapshot.data;
+            final categories = data?.categories ?? const <CategoryRow>[];
+            final tags = data?.tags ?? const <TagWithCount>[];
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(
-              SketchSpace.lg,
-              SketchSpace.lg,
-              SketchSpace.lg,
-              SketchSpace.xxl,
-            ),
-            children: <Widget>[
-              _buildCategories(p, categories),
-              const SizedBox(height: SketchSpace.xl),
-              _buildTags(p, tags),
-              const SizedBox(height: SketchSpace.lg),
-              Text(
-                '管理功能将在后续版本开放',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, height: 1.5, color: p.muted),
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(
+                SketchSpace.lg,
+                SketchSpace.lg,
+                SketchSpace.lg,
+                SketchSpace.xxl,
               ),
-            ],
-          );
-        },
+              children: <Widget>[
+                _buildCategories(context, p, categories),
+                const SizedBox(height: SketchSpace.xl),
+                _buildTags(p, tags),
+                const SizedBox(height: SketchSpace.lg),
+                Text(
+                  '管理功能将在后续版本开放',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, height: 1.5, color: p.muted),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -83,7 +88,11 @@ class OrganizePage extends ConsumerWidget {
   // 分类树
   // ---------------------------------------------------------------------------
 
-  Widget _buildCategories(SketchPalette p, List<CategoryRow> rows) {
+  Widget _buildCategories(
+    BuildContext context,
+    SketchPalette p,
+    List<CategoryRow> rows,
+  ) {
     final tree = buildCategoryTree(rows);
 
     return Column(
@@ -101,13 +110,15 @@ class OrganizePage extends ConsumerWidget {
           )
         else
           ...<Widget>[
-            for (final node in tree) ..._buildCategoryNode(p, node, depth: 0),
+            for (final node in tree)
+              ..._buildCategoryNode(context, p, node, depth: 0),
           ],
       ],
     );
   }
 
   List<Widget> _buildCategoryNode(
+    BuildContext context,
     SketchPalette p,
     CategoryNode node, {
     required int depth,
@@ -153,7 +164,8 @@ class OrganizePage extends ConsumerWidget {
           ],
         ),
       ),
-      for (final child in node.children) ..._buildCategoryNode(p, child, depth: depth + 1),
+      for (final child in node.children)
+        ..._buildCategoryNode(context, p, child, depth: depth + 1),
     ];
   }
 
