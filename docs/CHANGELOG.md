@@ -4,6 +4,38 @@
 
 ---
 
+## v0.14 · 2026-11-10
+
+### M2 第一轮：条目系统四个页面（未验证提交）
+
+**改了什么**
+- 新增 `lib/data/entry/`：`entry_models`（EntrySummary/CategoryNode + 纯函数）、
+  `entry_repository`（只读：列表/搜索/日记月视图/分类/标签）、provider
+- 新增 `test/support/test_harness.dart`：页面测试共享环境
+- 重写 `records_page.dart`：笔记/想法分段 + 搜索防抖 + 标签过滤 + 列表
+- 重写 `diary_page.dart`：月历三态（用户日记/AI 日记/今天）+ 补写入口 + 当日列表
+- 新增 `editor_page.dart`：新建/编辑 + 保存走 WriteGateway + 日记 meta.date 自动落
+- 新增 `organize_page.dart`：分类两级树 + 标签云（本轮只读）
+- 新增测试：records 4 条 / diary 4 条 / editor 4 条 / organize 4 条
+
+**工作方式**
+- 4 个子代理并行 → 用户机器两次卡死 → 改为**主控串行写完剩余三页**
+- 按用户要求：**本版本未跑 analyze / test**，验证由用户决定时机
+
+**关键决策**
+- 编辑保存时把 `meta` 原样传回 —— 日记日期等扩展字段住在 meta 里，
+  整体替换语义下不传回等于清空扩展字段
+- 标题为空时写侧就规范化（正文首行兜底），与读侧 `displayTitle` 对称
+- 日记月视图按 `meta.date` 分月，不用 `created_at`（补写需求）
+- 列表一次取回标签用 `group_concat` + 单元分隔符，避免 N+1
+
+**已知未验证风险**（等用户跑验证后回填）
+- 4 个新文件未经编译，类型/import 错误可能存在于静态检查环节
+
+**影响文档**：19（新增，并行契约）、README、14（Day 9）
+
+---
+
 ## v0.13 · 2026-11-08
 
 ### 会话层与解锁 UI：M1 收尾

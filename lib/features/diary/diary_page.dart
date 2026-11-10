@@ -1,32 +1,98 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/theme/sketch_metrics.dart';
-import '../../app/theme/sketch_palette.dart';
 import '../../app/theme/sketch_theme.dart';
+import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/db/tables/entry_tables.dart';
+import '../../data/entry/entry_models.dart';
+import '../../data/entry/entry_repository_provider.dart';
+import '../editor/editor_page.dart';
 
-/// 日记：月历 + 本月列表。
+/// 日历格子里的状态点直径。刻意不放进 [SketchSpace]：
+/// 那是间距语义，这里是一个具体图形的尺寸。
+const double _dotSize = 6;
+
+/// 月历格子的宽高比（宽 / 高）。太扁会挤到日期数字，太高会占满首屏。
+const double _cellAspectRatio = 1.15;
+
+/// 日记：月历 + 当日/当月条目列表。
 ///
 /// 月历格子用「简化容器」（实线 + 对称圆角）而不是完整的 SketchFrame：
 /// 一屏 42 个格子若都走虚线 CustomPainter，滚动会掉帧（docs/09 R14）。
-class DiaryPage extends StatelessWidget {
-  const DiaryPage({super.key});
+class DiaryPage extends ConsumerStatefulWidget {
+  const DiaryPage({super.key, this.initialMonth});
+
+  /// 初始展示的月份；默认取当前时间。测试用它固定月份。
+  final DateTime? initialMonth;
+
+  @override
+  ConsumerState<DiaryPage> createState() => _DiaryPageState();
+}
+
+class _DiaryPageState extends ConsumerState<DiaryPage> {
+  late DateTime _month;
+  Map<int, List<EntrySummary>> _byDay = const <int, List<EntrySummary>>{};
+  int? _selectedDay;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final DateTime base = widget.initialMonth ?? DateTime.now();
+    _month = DateTime(base.year, base.month);
+    _load();
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(entryRepositoryProvider);
+    final Map<int, List<EntrySummary>> data =
+        await repo.diaryForMonth(_month.year, _month.month);
+    if (!mounted) return;
+    setState(() {
+      _byDay = data;
+      _loading = false;
+    });
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _month = DateTime(_month.year, _month.month + delta);
+      _selectedDay = null;
+      _loading = true;
+    });
+    _load();
+  }
+
+  void _selectDay(int day) {
+    setState(() {
+      _selectedDay = day;
+    });
+  }
+
+  void _openEditor({String? entryId}) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => entryId == null
+          ? const EditorPage(initialKind: EntryKind.diary)
+          : EditorPage(entryId: entryId),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = context.sketch;
-
     return PageScaffold(
       title: '日记',
-      subtitle: '2026 年 11 月 · 8 篇 · 连续 3 天',
       actions: <Widget>[
         SketchButton(
-          label: '写今天的',
+          label: '补写',
           tone: SketchTone.primary,
           dense: true,
-          onPressed: () {},
+          glyph: SketchGlyph.plus,
+          onPressed: () => _openEditor(),
         ),
       ],
       child: ListView(
@@ -37,113 +103,256 @@ class DiaryPage extends StatelessWidget {
           SketchSpace.xxl,
         ),
         children: <Widget>[
-          const _MonthGrid(),
+          _buildMonthNav(),
           const SizedBox(height: SketchSpace.md),
-          Row(
-            children: <Widget>[
-              _legend(p.note, '有日记', p),
-              const SizedBox(width: SketchSpace.md),
-              _legend(p.surface, '仅 AI 日记', p),
-              const Spacer(),
-              Text('点格子预览 · 双击进入',
-                  style: TextStyle(fontSize: 10.5, color: p.muted)),
-            ],
-          ),
-          const SizedBox(height: SketchSpace.xl),
-          _DiaryTile(
-            variant: 0,
-            date: '11-08',
-            title: '跟限流较劲的一天',
-            excerpt: '上午卡在坚果云的限流上，下午想通了应该按分片批量列举。',
-            meta: '320 字 · 你写的 · 阴',
+          _MonthCalendar(
+            year: _month.year,
+            month: _month.month,
+            byDay: _byDay,
+            selectedDay: _selectedDay,
+            onSelectDay: _selectDay,
           ),
           const SizedBox(height: SketchSpace.md),
-          _DiaryTile(
-            variant: 1,
-            date: '11-07',
-            title: '什么都没干',
-            excerpt: '睡到中午，下午看了会儿书。',
-            meta: '180 字 · 你写的',
-          ),
+          _buildLegend(),
           const SizedBox(height: SketchSpace.md),
-          _DiaryTile(
-            variant: 2,
-            date: '11-06',
-            title: 'AI 日记',
-            excerpt: '你今天大部分时间在整理旧笔记，把 8 月的三条合并成了一篇。',
-            meta: '150 字 · 不是你写的 · 引用 4 条',
-            isAi: true,
-          ),
+          ..._buildEntrySection(),
         ],
       ),
     );
   }
 
-  Widget _legend(Color fill, String label, SketchPalette palette) {
+  // ---------------------------------------------------------------------------
+  // 月份导航
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMonthNav() {
+    final p = context.sketch;
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: fill,
-            shape: BoxShape.circle,
-            border: Border.all(color: palette.lineSoft, width: 1),
+        SketchButton(
+          label: '‹',
+          tone: SketchTone.ghost,
+          dense: true,
+          onPressed: () => _changeMonth(-1),
+        ),
+        Expanded(
+          child: Text(
+            DateFormat('yyyy年M月').format(_month),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+              color: p.ink,
+            ),
           ),
         ),
-        const SizedBox(width: 5),
-        Text(label,
-            style: TextStyle(fontSize: 10.5, color: palette.muted)),
+        SketchButton(
+          label: '›',
+          tone: SketchTone.ghost,
+          dense: true,
+          onPressed: () => _changeMonth(1),
+        ),
       ],
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // 图例与列表
+  // ---------------------------------------------------------------------------
+
+  Widget _buildLegend() {
+    final p = context.sketch;
+    return Row(
+      children: <Widget>[
+        _LegendItem(color: p.red, label: '有日记'),
+        const SizedBox(width: SketchSpace.md),
+        _LegendItem(color: Colors.transparent, borderColor: p.lineSoft, label: '仅 AI 日记'),
+        const Spacer(),
+        Text(
+          '点日期看当天',
+          style: TextStyle(fontSize: 10.5, height: 1.4, color: p.muted),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildEntrySection() {
+    final p = context.sketch;
+
+    if (_loading) {
+      return <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: SketchSpace.xl),
+          child: Center(
+            child: CircularProgressIndicator(color: p.red),
+          ),
+        ),
+      ];
+    }
+
+    final int? selectedDay = _selectedDay;
+    if (selectedDay != null) {
+      return _buildDayEntries(selectedDay);
+    }
+
+    final List<_DayGroup> groups = <_DayGroup>[];
+    for (final MapEntry<int, List<EntrySummary>> entry in _byDay.entries) {
+      if (entry.value.isEmpty) continue;
+      final List<EntrySummary> entries = <EntrySummary>[...entry.value]
+        ..sort((EntrySummary a, EntrySummary b) =>
+            b.updatedAt.compareTo(a.updatedAt));
+      groups.add(_DayGroup(entry.key, entries));
+    }
+    groups.sort((_DayGroup a, _DayGroup b) => b.day.compareTo(a.day));
+
+    if (groups.isEmpty) {
+      return <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: SketchSpace.xl),
+          child: Text(
+            '这个月还没有日记，点右上角补写',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12.5, height: 1.6, color: p.muted),
+          ),
+        ),
+      ];
+    }
+
+    final List<Widget> widgets = <Widget>[];
+    for (final _DayGroup group in groups) {
+      widgets.add(_DateHeader(_dateLabel(group.day)));
+      widgets.add(const SizedBox(height: SketchSpace.sm));
+      for (int i = 0; i < group.entries.length; i++) {
+        widgets.add(_DiaryTile(
+          entry: group.entries[i],
+          index: i,
+          onTap: () => _openEditor(entryId: group.entries[i].id),
+        ));
+        widgets.add(const SizedBox(height: SketchSpace.sm));
+      }
+      widgets.add(const SizedBox(height: SketchSpace.md));
+    }
+    return widgets;
+  }
+
+  List<Widget> _buildDayEntries(int day) {
+    final List<EntrySummary> entries =
+        <EntrySummary>[...(_byDay[day] ?? const <EntrySummary>[])]
+          ..sort((EntrySummary a, EntrySummary b) =>
+              b.updatedAt.compareTo(a.updatedAt));
+
+    final List<Widget> widgets = <Widget>[
+      _DateHeader(_dateLabel(day)),
+      const SizedBox(height: SketchSpace.sm),
+    ];
+
+    if (entries.isEmpty) {
+      widgets.add(Text(
+        '这一天还没有日记，点右上角补写',
+        style: TextStyle(
+          fontSize: 12.5,
+          height: 1.6,
+          color: context.sketch.muted,
+        ),
+      ));
+    } else {
+      for (int i = 0; i < entries.length; i++) {
+        widgets.add(_DiaryTile(
+          entry: entries[i],
+          index: i,
+          onTap: () => _openEditor(entryId: entries[i].id),
+        ));
+        if (i != entries.length - 1) {
+          widgets.add(const SizedBox(height: SketchSpace.sm));
+        }
+      }
+    }
+    return widgets;
+  }
+
+  String _dateLabel(int day) =>
+      DateFormat('M月d日').format(DateTime(_month.year, _month.month, day));
 }
 
-class _MonthGrid extends StatelessWidget {
-  const _MonthGrid();
+/// 某一天的日记，按 `updatedAt` 倒序后的分组。
+class _DayGroup {
+  const _DayGroup(this.day, this.entries);
 
-  static const List<String> _weekdays = <String>['一', '二', '三', '四', '五', '六', '日'];
+  final int day;
+  final List<EntrySummary> entries;
+}
 
-  /// 2026-11-01 是周日，所以前面留 6 个空位
-  static const int _leadingBlanks = 6;
-  static const int _daysInMonth = 30;
-  static const int _today = 8;
-  static const Set<int> _withEntry = <int>{1, 2, 3, 4, 5, 7, 8};
-  static const Set<int> _aiOnly = <int>{6};
+/// 月历。周日起始（日 一 二 三 四 五 六）。
+class _MonthCalendar extends StatelessWidget {
+  const _MonthCalendar({
+    required this.year,
+    required this.month,
+    required this.byDay,
+    required this.selectedDay,
+    required this.onSelectDay,
+  });
+
+  final int year;
+  final int month;
+  final Map<int, List<EntrySummary>> byDay;
+  final int? selectedDay;
+  final ValueChanged<int> onSelectDay;
+
+  static const List<String> _weekdays = <String>[
+    '日', '一', '二', '三', '四', '五', '六',
+  ];
 
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
-    final cells = <Widget>[
-      for (final w in _weekdays)
+    final DateTime first = DateTime(year, month, 1);
+    final int leadingBlanks = first.weekday % 7;
+    final int daysInMonth = DateTime(year, month + 1, 0).day;
+    final DateTime now = DateTime.now();
+    final bool currentMonth = now.year == year && now.month == month;
+
+    final List<Widget> cells = <Widget>[
+      for (final String weekday in _weekdays)
         Center(
-          child: Text(w,
-              style: TextStyle(fontSize: 10.5, color: p.muted, height: 1.4)),
+          child: Text(
+            weekday,
+            style: TextStyle(fontSize: 10.5, height: 1.4, color: p.muted),
+          ),
+        ),
+      for (int i = 0; i < leadingBlanks; i++) const SizedBox.shrink(),
+      for (int day = 1; day <= daysInMonth; day++)
+        _DayCell(
+          day: day,
+          isToday: currentMonth && now.day == day,
+          isSelected: selectedDay == day,
+          hasUserDiary: _hasUserDiary(day),
+          aiOnly: _aiOnly(day),
+          onTap: () => onSelectDay(day),
         ),
     ];
-
-    for (var i = 0; i < _leadingBlanks; i++) {
-      cells.add(const SizedBox.shrink());
-    }
-    for (var day = 1; day <= _daysInMonth; day++) {
-      cells.add(_DayCell(
-        day: day,
-        isToday: day == _today,
-        hasEntry: _withEntry.contains(day),
-        aiOnly: _aiOnly.contains(day),
-      ));
-    }
 
     return GridView.count(
       crossAxisCount: 7,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
-      childAspectRatio: 1.25,
+      mainAxisSpacing: SketchSpace.xs,
+      crossAxisSpacing: SketchSpace.xs,
+      childAspectRatio: _cellAspectRatio,
       children: cells,
     );
+  }
+
+  bool _hasUserDiary(int day) =>
+      (byDay[day] ?? const <EntrySummary>[]).any(
+        (EntrySummary e) => e.kind == EntryKind.diary,
+      );
+
+  bool _aiOnly(int day) {
+    final List<EntrySummary> entries =
+        byDay[day] ?? const <EntrySummary>[];
+    return entries.isNotEmpty &&
+        entries.every((EntrySummary e) => e.kind == EntryKind.aiDiary);
   }
 }
 
@@ -151,69 +360,157 @@ class _DayCell extends StatelessWidget {
   const _DayCell({
     required this.day,
     required this.isToday,
-    required this.hasEntry,
+    required this.isSelected,
+    required this.hasUserDiary,
     required this.aiOnly,
+    required this.onTap,
   });
 
   final int day;
   final bool isToday;
-  final bool hasEntry;
+  final bool isSelected;
+  final bool hasUserDiary;
   final bool aiOnly;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
-    final marked = hasEntry || aiOnly;
+    final bool marked = hasUserDiary || aiOnly;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isToday ? p.red : (marked ? p.surface : Colors.transparent),
-        borderRadius: SketchRadii.pill,
-        border: Border.all(
-          color: isToday
-              ? p.red
-              : (marked ? p.lineSoft : p.lineSoft.withValues(alpha: 0.45)),
-          width: 1,
+    final Color fill = isSelected
+        ? p.note
+        : isToday
+            ? p.red
+            : marked
+                ? p.surface
+                : Colors.transparent;
+    final Color borderColor =
+        isSelected ? p.line : (isToday ? p.red : p.lineSoft);
+    final Color numberColor = isSelected
+        ? p.ink
+        : isToday
+            ? Colors.white
+            : marked
+                ? p.ink
+                : p.muted;
+    final Color dotColor = isToday ? Colors.white : p.red;
+    final Color dotBorderColor = isToday ? Colors.white : p.lineSoft;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: SketchRadii.c,
+          border: Border.all(color: borderColor, width: SketchStroke.hair),
         ),
-      ),
-      child: Stack(
-        children: <Widget>[
-          Positioned(
-            left: 5,
-            top: 3,
-            child: Text(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
               '$day',
               style: TextStyle(
-                fontSize: 10.5,
-                height: 1.3,
-                color: isToday ? Colors.white : (marked ? p.ink : p.muted),
+                fontSize: 11,
+                height: 1.2,
+                fontWeight: marked || isSelected || isToday
+                    ? FontWeight.w700
+                    : FontWeight.w400,
+                color: numberColor,
               ),
             ),
+            const SizedBox(height: 2),
+            SizedBox(
+              height: _dotSize,
+              child: hasUserDiary
+                  ? Container(
+                      width: _dotSize,
+                      height: _dotSize,
+                      decoration: BoxDecoration(
+                        color: dotColor,
+                        shape: BoxShape.circle,
+                      ),
+                    )
+                  : aiOnly
+                      ? Container(
+                          width: _dotSize,
+                          height: _dotSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: dotBorderColor,
+                              width: SketchStroke.hair,
+                            ),
+                          ),
+                        )
+                      : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    this.borderColor,
+  });
+
+  final Color color;
+  final String label;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: _dotSize,
+          height: _dotSize,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: borderColor == null
+                ? null
+                : Border.all(
+                    color: borderColor!,
+                    width: SketchStroke.hair,
+                  ),
           ),
-          if (hasEntry)
-            Positioned(
-              right: 5,
-              bottom: 4,
-              child: Container(
-                width: 5,
-                height: 5,
-                decoration: BoxDecoration(color: p.red, shape: BoxShape.circle),
-              ),
-            ),
-          if (aiOnly)
-            Positioned(
-              right: 5,
-              bottom: 4,
-              child: Container(
-                width: 5,
-                height: 5,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: p.lineSoft, width: 1),
-                ),
-              ),
-            ),
-        ],
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            height: 1.4,
+            color: context.sketch.muted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DateHeader extends StatelessWidget {
+  const _DateHeader(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        height: 1.4,
+        color: context.sketch.ink,
       ),
     );
   }
@@ -221,62 +518,73 @@ class _DayCell extends StatelessWidget {
 
 class _DiaryTile extends StatelessWidget {
   const _DiaryTile({
-    required this.variant,
-    required this.date,
-    required this.title,
-    required this.excerpt,
-    required this.meta,
-    this.isAi = false,
+    required this.entry,
+    required this.index,
+    required this.onTap,
   });
 
-  final int variant;
-  final String date;
-  final String title;
-  final String excerpt;
-  final String meta;
-  final bool isAi;
+  final EntrySummary entry;
+  final int index;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
+    final bool isAi = entry.kind == EntryKind.aiDiary;
+    final String time = DateFormat('HH:mm').format(
+      DateTime.fromMillisecondsSinceEpoch(entry.updatedAt),
+    );
 
-    return SketchCard(
-      variant: variant,
-      fill: isAi ? p.note : null,
-      tilt: variant.isEven ? SketchTilt.left : SketchTilt.right,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Text(date,
-                  style: TextStyle(fontSize: 10.5, color: p.muted)),
-              const SizedBox(width: SketchSpace.sm),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SketchCard(
+        variant: index,
+        fill: isAi ? p.note : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    entry.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
+                      color: p.ink,
+                    ),
                   ),
                 ),
+                if (isAi) ...<Widget>[
+                  const SizedBox(width: SketchSpace.sm),
+                  const SketchTag(
+                    'AI',
+                    tone: SketchTone.blue,
+                    dense: true,
+                  ),
+                ],
+              ],
+            ),
+            if (entry.snippet.isNotEmpty) ...<Widget>[
+              const SizedBox(height: SketchSpace.xs),
+              Text(
+                entry.snippet,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, height: 1.6, color: p.muted),
               ),
-              if (isAi) const SketchTag('不是你写的', dense: true),
             ],
-          ),
-          const SizedBox(height: SketchSpace.xs),
-          Text(
-            excerpt,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, height: 1.6, color: p.muted),
-          ),
-          const SizedBox(height: SketchSpace.sm),
-          Text(meta, style: TextStyle(fontSize: 10.5, color: p.muted)),
-        ],
+            const SizedBox(height: SketchSpace.sm),
+            Text(
+              time,
+              style: TextStyle(fontSize: 10.5, height: 1.4, color: p.muted),
+            ),
+          ],
+        ),
       ),
     );
   }
