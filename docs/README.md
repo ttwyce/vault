@@ -100,6 +100,8 @@
 | D24 | **并发触发** | **单飞锁忙时直接跳过，不排队** | 放弃排队触发，换取不会堆积几十次同步打爆请求预算 |
 | D25 | **零丢失** | **编辑胜、冲突副本、密码永不字段合并** | 删除不能吞未同步编辑；冲突两边都留；密码只做 LWW + 旧值副本 |
 | D26 | **部分分片扫描** | **`includeDeletes=false` 时不推断删除** | 没扫到的分片里文件"不见"不是删除，避免误删本地数据 |
+| D27 | **M3 接入顺序** | **先无依赖内存编排，再确认真实 WebDAV 依赖** | 把条件写 / 412 / 墓碑顺序 / 预算先做成确定性测试；`pubspec.yaml` 未经确认不动 |
+| D28 | **载荷边界** | **`SyncPayloadCodec` + `SyncWorkspace` 隔离加密与数据库** | 后续只替换 codec / backend / workspace，编排逻辑不重写 |
 
 ---
 
@@ -155,7 +157,7 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 │   │   ├── fonts/            # 字体系统：角色/目录/校验/加载/持久化/服务
 │   │   ├── icons/            # 自制 SVG 图标 + path 解析器
 │   │   ├── identity/         # UUIDv7（时间有序主键）
-│   │   ├── sync/             # HLC + M3 纯 Dart 同步核心（状态机 / L1 / L2 / 冲突）
+│   │   ├── sync/             # HLC + 纯 Dart 同步核心 / WebDAV 抽象 / SyncEngine 编排
 │   │   └── widgets/          # SketchFrame / 按钮 / 标签 / 页面骨架
 │   ├── data/
 │   │   ├── activity/         # 活动埋点（日总结的唯一燃料）
@@ -165,11 +167,11 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 │   │   └── write/            # WriteGateway + 条目加密信封 + 快照
 │   └── features/             # chat / records / diary / archive / vault / settings / unlock
 ├── android/ ios/ windows/    # 三端平台工程
-├── test/                     # widget 测试 + 同步 / 写入 / 加密纯逻辑测试
+├── test/                     # widget 测试 + 同步 / 写入 / 加密 / 内存编排测试
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 第一批纯 Dart 同步核心已完成（已验证）**。
+**当前进度**：**M2 已完成；M3 第一批纯 Dart 同步核心 + 第二批无依赖编排已完成（已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -193,16 +195,26 @@ L2 ETag diff 与部分分片删除保护、云端路径规范、**12 条冲突�
 墓碑「编辑胜」**、行级 LCS diff 与 `merge3`（无 base 留副本、
 meta 字段级 LWW / tags 并集、密码永不字段合并）。新增 49 条单测。
 
-`flutter analyze` 无告警，`flutter test` **340 条全绿**（291 + 49）。
+M3 第二批按用户选择的「继续无依赖编排」推进，仍不新增依赖：
+`WebDavBackend` 抽象与能力探测、`WebDavCondition` 条件写、
+`SyncPayloadCodec` / `SyncWorkspace` 载荷边界、`SyncEngine` 内存编排
+（L1/L2 双路径、拉取顺序、meta 双闸门、quarantine、merge3 / 冲突副本、
+墓碑编辑胜、条件推送、412、退避、预算、VERIFY / PUBLISH、单飞锁）。
+新增 `webdav_backend_test.dart` 8 条 + `sync_engine_test.dart` 21 条。
+
+`flutter analyze` 无告警，`flutter test` **369 条全绿**（340 + 29）。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑
 analyze + test，**未执行任何构建**。
 **M2 未做**（见 [09 §4](09-里程碑、验收与风险.md)）：分类拖拽排序、
 回收站 30 天到期清理任务（要写同步墓碑，留到 M3 接入层）、
 1000 条 60fps / 中文搜索 P95 性能基线（需真机，未构建）。
-**M3 未做**：`WebDavBackend` 与真实 HTTP、拉/推与 412 重试、
-quarantine 落库、`sync_state` 集成、taxonomy 同步、26 个集成用例；
-09 §5 的硬门槛尚未通过，不进 M4。
-**下一步：M3 接入层与集成测试**。涉及新增/启用 WebDAV 依赖或确认
+**M3 未做**：真实 WebDAV 客户端与 M0 A5 结论、DEK 加密 codec /
+`ItemEnvelope` / AAD、`sync_state` / `device_watermark` / `sync_log` /
+oplog 数据库事务、quarantine 落盘、taxonomy 同步、30 天清理与墓碑联动、
+26 个集成用例。内存后端只证明编排顺序与零丢失规则，不等于真实服务器 /
+真机计时 / 强杀重启 / 大 blob / 5000 条性能验收；09 §5 的硬门槛尚未通过，
+不进 M4。
+**下一步：M3 真实接入层与集成测试（先确认依赖）**。涉及新增/启用 WebDAV 依赖或确认
 M0 A5 结论时，先向用户确认再改 `pubspec.yaml`。
 环境说明见 `C:\Android\AGENTS.md`。
 

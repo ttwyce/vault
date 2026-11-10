@@ -4,6 +4,77 @@
 
 ---
 
+## v0.17 · 2026-11-10
+
+### M3 第二批：无依赖接入抽象与 SyncEngine 编排（已验证）
+
+按用户选择的「继续无依赖编排」推进：仍不新增依赖、不改 `pubspec.yaml`、
+不接真实 HTTP、不接数据库，但把第一批纯判定层串成一次可测试的同步运行。
+
+**改了什么**
+- 新增 `lib/core/sync/webdav_backend.dart`：
+  - `WebDavBackend` 抽象接口：OPTIONS / PROPFIND / REPORT / GET / PUT / DELETE / MKCOL
+  - `WebDavCondition` 只提供 `If-Match` 或 `If-None-Match: *`，
+    接口层让「无条件 PUT」在编译期无法表达
+  - OPTIONS 大小写不敏感能力探测：支持 `sync-collection` 走 1 请求增量，
+    否则降级 16 分片 PROPFIND
+  - HTTP 状态码 → `SyncErrorCode`、`WebDavPreconditionFailed`、
+    `diffSyncCollection` 与 `diffAllShards`；只有 16 个分片全部扫完才推断删除
+- 新增 `lib/core/sync/sync_payloads.dart`：
+  - `SyncVaultMeta` / `SyncTombstone` / `SyncPendingOp` / `SyncWorkspace`
+  - `SyncPayloadCodec` 把加密信封、JSON 与测试 codec 隔离在边界上；
+    真实实现将来替换为 DEK 派生密钥的加密 codec
+- 新增 `lib/core/sync/sync_engine.dart`：
+  - 单飞锁、请求预算、状态机、L1 水位、L2 双路径发现、
+    「墓碑 → meta → 条目」拉取、vault/schema 校验、损坏隔离、
+    冲突矩阵 / `merge3` / 冲突副本、墓碑编辑胜、条件推送、
+    412 重试、验证与设备水位发布串成一次 `run()`
+  - 删除顺序固定为「先 PUT 墓碑，再 DELETE 条目文件」；
+    连续第 4 次 412 生成冲突副本后继续校验；
+    E_NET / E_RATE 退避，预算耗尽保存进度不做假完成
+- 新增 `test/webdav_backend_test.dart`（8 条）与
+  `test/sync_engine_test.dart`（21 条）：内存后端 + 纯 JSON codec，
+  覆盖 T03/T04/T05/T06/T07/T09/T10/T11/T12/T14/T18/T19 的
+  **可判定部分**、拉取顺序、条件写、删除顺序、预算、锁与水位发布
+  → **340 → 369**
+
+**关键决策**
+- **先无依赖内存编排，再确认真实 WebDAV 依赖**：用户明确选择 fake-first；
+  `pubspec.yaml` 与依赖保持不动，M0 A5 的客户端选型仍需单独确认
+- **条件写做成类型而不是可空参数**：后端接口没有无条件 PUT/DELETE 的调用形态
+- **payload / workspace / backend 三层隔离**：编排逻辑不依赖 drift、
+  不依赖 HTTP 客户端、不依赖具体加密字节，后续逐层替换
+- **编排测试不等于集成验收**：内存后端能证明顺序与零丢失规则，
+  不能证明真实 Nextcloud / mod_dav、断网恢复、强杀重启、blob 进度或耗时
+- 修掉 `sync_engine.dart` 的 `use_of_void_result`：DELETE 后端返回
+  `Future<void>`，不能把 `request<void>` 结果当预算标记；改成
+  `request<bool>` 包装，保留「墓碑已写、DELETE 下次续跑」语义
+
+**尚未完成（M3 硬门槛仍未过）**
+- 真实 WebDAV 客户端与 M0 A5 结论；新增/启用依赖前必须向用户确认
+- DEK 加密 `SyncPayloadCodec`、`ItemEnvelope` 明文头与 AAD、云端 HMAC 文件名
+- `sync_state` / `device_watermark` / `sync_log` / oplog / 回收站 / 历史的数据库事务集成
+- taxonomy 实体同步、30 天回收站清理与墓碑联动、quarantine 落盘
+- T01/T02/T15/T16/T19 的真机 / 大批量 / blob / 计时验收，
+  T09/T10 的真实服务器断网与 412 验收，以及 09 §5 的 **26 个同步用例**
+- 未通过 26 个集成用例前不进 M4
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test` | 通过：**369/369 passed**（基线 340 + 新增 29） |
+| `flutter build` | **未执行**（硬规则：未允许绝不构建） |
+
+**工作方式**：全程主控串行，未开并行子代理；所有验证命令带
+`NO_PROXY=127.0.0.1,localhost`；未改动 `pubspec.yaml`，未新增依赖。
+临时测试日志已清理。
+
+**影响文档**：09（§5 M3 第二批状态）、README（进度 / 数字 / 决策 / 目录）、
+14（Day 12）、CHANGELOG（本条）
+
+---
+
 ## v0.16 · 2026-11-10
 
 ### M3 第一批：纯 Dart 同步核心（已验证）
