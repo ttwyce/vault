@@ -4,6 +4,70 @@
 
 ---
 
+## v0.15 · 2026-11-10
+
+### M2 收尾：taxonomy 写入、回收站/历史、筛选与工具栏（已验证）
+
+**先还 Day 9 的账**
+
+Day 9 的四个页面是「未验证提交」。这轮开局跑基线：`flutter test` 得到
+`+246 -6`，6 条失败全部集中在两个地方：
+
+- `records_page._refresh()` 写成 `setState(() => _results = _compute())`，
+  箭头闭包返回 `Future`，被 Flutter 断言 `setState() callback argument
+  returned a Future` 拦下 —— **首帧必崩**的产品 bug，不是测试写错。
+- `widget_test.dart` 还是 M1 的裸 `ProviderScope`，页面接了真仓库后
+  `vaultBootstrapProvider` 没有 override；`pumpAndSettle` 又因进度圈超时。
+  改用 `TestApp` + `UncontrolledProviderScope(container:)` 与固定 pump。
+
+修完 6 条并提交 `064210e`，基线 252 条全绿，才开始叠新代码。
+
+**改了什么**
+- `SyncEntity.entryTaxonomy` 成为独立同步实体；`WriteGateway` 新增
+  `writeCategory` / `writeTag` / `setEntryTaxonomy` / `restoreVersion` /
+  `readEntryPayload` / `readTaxonomySnapshot` 与 `_commitTaxonomy()`
+- 新增 `lib/data/taxonomy/`：共享模型与硬规则、只读仓库（回收站 / 历史 /
+  关联）、provider。历史版本 payload 是加密信封，统一走
+  `gateway.readEntryPayload()` 解密，不把 `VaultKeys` 暴露成公开 provider
+- 新增页面：`trash` / `history` / `search`（高亮 + `recordSearch` 埋点）/
+  `quick` / `settings_hub`；`organize` 升级为可写（含同名标签合并向导）；
+  `editor` 加分类单选 + 标签多选（≤8）选择器
+- `AppShell` 接设置中心与全局「快速记录」悬浮按钮
+- **补完 09 §4 明列的两项验收**：记录页「分类 OR（递归 CTE 含子级）/
+  标签 AND」筛选；编辑器 Markdown 工具栏（H2 / 列表 / 任务 / 代码 /
+  图片，插入逻辑抽成纯函数）
+- 新增 39 条测试：taxonomy 15 / 回收站历史 4 / 组织页写 3 /
+  编辑器 taxonomy 2 / Markdown 9 / 筛选 6 → **252 → 291**
+
+**关键决策**
+- **taxonomy 是独立同步实体**：分类 / 标签 / 关联变更都要产生可解密的
+  加密 oplog。塞进 `entry.meta` 会让「正文没变」被合并器误判成正文更新
+- **回滚不把 rev 倒回去**：用旧版本内容做一次新的 `EntryWrite.update`，
+  产生新 rev；否则同步时会把它当成旧数据丢掉（测试断言 rev=3）
+- **删除分类不删条目**：清关联让条目回「未分类」，子分类提升为一级并各自写 oplog
+- **同名标签合并保留 usage 最大者**，关联用 `INSERT OR IGNORE` 改指，source 软删
+- **分类 OR / 标签 AND**：选一级分类连带子级；`HAVING COUNT(DISTINCT) = n`
+  保证多标签越选越窄，不是并集
+- **编辑器正文与 taxonomy 分两次写**：不双写 meta；`setEntryTaxonomy`
+  幂等，无变化不产生 oplog
+- **bottom sheet 先返回动作、等 Future 完成再弹确认框**：`pop()` 与
+  `showDialog` 挤在同一帧会抢 Navigator，确认框会整个消失
+- **回收站不做「永久删除」按钮**：30 天到期清理由后台任务负责
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | ✅ No issues found |
+| `flutter test` | ✅ **291/291 passed** |
+| `flutter build` | ⏸ **未执行**（硬规则：未允许绝不构建） |
+
+**工作方式**：全程主控串行，未开并行子代理（Day 9 两次卡死用户机器）；
+所有验证命令带 `NO_PROXY=127.0.0.1,localhost`。
+
+**影响文档**：09（§4 M2 落地状态）、README（进度 / 数字）、14（Day 10）
+
+---
+
 ## v0.14 · 2026-11-10
 
 ### M2 第一轮：条目系统四个页面（未验证提交）

@@ -13,14 +13,20 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/db/tables/entry_tables.dart';
+import '../../data/db/vault_database.dart' show CategoryRow;
 import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
+import '../../data/taxonomy/taxonomy_models.dart';
+import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/write/write_gateway.dart';
+import 'markdown_insert.dart';
 
 /// 条目编辑器。新建（`entryId == null`）与编辑（`entryId != null`）共用。
 ///
-/// 本轮只做纯文本编辑：标题 + 正文。Markdown 渲染、斜杠菜单、附件
-/// 是后续轮次的事 —— 先把"写进去再读出来"这条链路跑通。
+/// 保存是「一次完整提交」：正文走 `EntryWrite`，分类/标签走
+/// `setEntryTaxonomy`。两者是**独立同步实体**，不能把分类塞进
+/// `entry.meta` —— 那样同名分类合并、删除分类后条目回未分类都得改 meta，
+/// 双写必然不一致（docs/11 §2.6）。
 class EditorPage extends ConsumerStatefulWidget {
   const EditorPage({
     super.key,
@@ -52,10 +58,15 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   bool _saving = false;
   String? _error;
 
+  List<CategoryRow> _categories = const <CategoryRow>[];
+  List<TagWithCount> _tags = const <TagWithCount>[];
+  String? _categoryId;
+  List<String> _tagIds = const <String>[];
+
   @override
   void initState() {
     super.initState();
-    if (widget.entryId != null) _load();
+    _bootstrap();
   }
 
   @override
@@ -65,24 +76,54 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final row = await ref.read(entryRepositoryProvider).getRow(widget.entryId!);
-    if (!mounted) return;
+  /// 一次性取齐「正文 + 可选分类标签 + 当前关联」。
+  ///
+  /// 分两次 setState 会让页面在中间态闪一下「未分类」，
+  /// 用户如果恰好在那一瞬点保存，就会把已有分类清掉。
+  Future<void> _bootstrap() async {
+    if (widget.entryId != null) setState(() => _loading = true);
 
-    if (row == null) {
-      setState(() {
-        _loading = false;
-        _error = '这条内容不存在，可能已被删除。';
-      });
-      return;
+    final entryRepo = ref.read(entryRepositoryProvider);
+    final categories = await entryRepo.categories();
+    final tags = await entryRepo.tags();
+
+    String title = '';
+    String body = '';
+    String? existingMeta;
+    EntryKind kind = widget.initialKind;
+    String? notFound;
+    String? categoryId;
+    List<String> tagIds = const <String>[];
+
+    final id = widget.entryId;
+    if (id != null) {
+      final row = await entryRepo.getRow(id);
+      if (row == null) {
+        notFound = '这条内容不存在，可能已被删除。';
+      } else {
+        title = row.title ?? '';
+        body = row.body ?? '';
+        existingMeta = row.meta;
+        kind = EntryKind.fromCode(row.kind) ?? widget.initialKind;
+        final taxonomyRepo = ref.read(taxonomyRepositoryProvider);
+        categoryId = await taxonomyRepo.categoryForEntry(id);
+        tagIds = await taxonomyRepo.tagIdsForEntry(id);
+      }
     }
 
-    _title.text = row.title ?? '';
-    _body.text = row.body ?? '';
-    _existingMeta = row.meta;
-    _kind = EntryKind.fromCode(row.kind) ?? widget.initialKind;
-    setState(() => _loading = false);
+    if (!mounted) return;
+    _title.text = title;
+    _body.text = body;
+    setState(() {
+      _categories = categories;
+      _tags = tags;
+      _categoryId = categoryId;
+      _tagIds = tagIds;
+      _existingMeta = existingMeta;
+      _kind = kind;
+      _error = notFound;
+      _loading = false;
+    });
   }
 
   Future<void> _save() async {
@@ -99,6 +140,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
 
     final gateway = ref.read(writeGatewayProvider);
     try {
+      late final String entryId;
       if (widget.entryId == null) {
         // 日记的日期是显式字段（补写需求），新建时落今天。
         String? meta;
@@ -107,9 +149,10 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
           });
         }
-        await gateway.writeEntry(
+        final created = await gateway.writeEntry(
           EntryWrite.create(kind: _kind, title: title, body: body, meta: meta),
         );
+        entryId = created.snapshot.id;
       } else {
         // update 是整体替换语义：没改的字段（meta）也要原样传回。
         await gateway.writeEntry(
@@ -120,7 +163,17 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             meta: _existingMeta,
           ),
         );
+        entryId = widget.entryId!;
       }
+
+      // 关联整体替换，没选就是「未分类 / 无标签」。写入口会判幂等，
+      // 没变化时不产生 oplog，所以每次保存都不会制造无意义的新版本。
+      await gateway.setEntryTaxonomy(
+        entryId: entryId,
+        categoryId: _categoryId,
+        tagIds: _tagIds,
+      );
+
       if (!mounted) return;
       Navigator.of(context).pop();
     } on WriteException catch (e) {
@@ -136,6 +189,175 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         _error = '保存失败：$e';
       });
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Markdown 工具栏
+  // ---------------------------------------------------------------------------
+
+  /// 工具栏只改 `TextEditingController`，不触发保存。
+  ///
+  /// 插入后显式回写 `selection`：`value.copyWith(text:)` 若不带 selection，
+  /// 光标会留在旧偏移量上，下一字符就插到错误位置。
+  void _applyMarkdown(MarkdownAction action) {
+    final selection = _body.selection;
+    final edit = applyMarkdownAction(
+      text: _body.text,
+      selectionStart: selection.start,
+      selectionEnd: selection.end,
+      action: action,
+    );
+    _body.value = _body.value.copyWith(
+      text: edit.text,
+      selection: TextSelection.collapsed(offset: edit.cursor),
+      composing: TextRange.empty,
+    );
+  }
+
+  Widget _buildMarkdownBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SketchSpace.sm),
+      child: Wrap(
+        spacing: SketchSpace.sm,
+        runSpacing: SketchSpace.sm,
+        children: <Widget>[
+          for (final action in MarkdownAction.values)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _saving ? null : () => _applyMarkdown(action),
+              child: SketchTag(
+                action.label,
+                tone: SketchTone.ghost,
+                dense: true,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 分类 / 标签选择
+  // ---------------------------------------------------------------------------
+
+  String get _categoryLabel {
+    final id = _categoryId;
+    if (id == null) return '未分类';
+    for (final c in _categories) {
+      if (c.id == id) return c.name;
+    }
+    return '已删除的分类';
+  }
+
+  String _tagName(String id) {
+    for (final t in _tags) {
+      if (t.id == id) return t.name;
+    }
+    return id.length > 6 ? '${id.substring(0, 6)}…' : id;
+  }
+
+  Future<void> _pickCategory() async {
+    // 空串代表「未分类」，null 代表用户点外部取消了选择 —— 两者不能混。
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (BuildContext sheetContext) {
+        final p = sheetContext.sketch;
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                title: const Text('未分类'),
+                onTap: () => Navigator.of(sheetContext).pop(''),
+              ),
+              for (final c in _categories)
+                ListTile(
+                  title: Text(c.parentId == null ? c.name : '　└ ${c.name}'),
+                  onTap: () => Navigator.of(sheetContext).pop(c.id),
+                ),
+              if (_categories.isEmpty)
+                ListTile(
+                  title: Text('还没有分类', style: TextStyle(color: p.muted)),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _categoryId = picked.isEmpty ? null : picked);
+  }
+
+  Future<void> _pickTags() async {
+    final selected = <String>{..._tagIds};
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (BuildContext sheetContext) => StatefulBuilder(
+        builder: (BuildContext ctx, StateSetter setSheetState) {
+          final p = ctx.sketch;
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(SketchSpace.md),
+                  child: Text(
+                    '最多 ${TaxonomyRules.maxTagsPerEntry} 个标签'
+                    '（已选 ${selected.length}）',
+                    style: TextStyle(fontSize: 12, color: p.muted),
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: <Widget>[
+                      for (final t in _tags)
+                        CheckboxListTile(
+                          value: selected.contains(t.id),
+                          title: Text(t.name),
+                          onChanged: (bool? value) {
+                            setSheetState(() {
+                              if (value == true) {
+                                if (selected.length >=
+                                    TaxonomyRules.maxTagsPerEntry) {
+                                  return;
+                                }
+                                selected.add(t.id);
+                              } else {
+                                selected.remove(t.id);
+                              }
+                            });
+                          },
+                        ),
+                      if (_tags.isEmpty)
+                        ListTile(
+                          title: Text('还没有标签',
+                              style: TextStyle(color: p.muted)),
+                        ),
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(false),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(true),
+                      child: const Text('完成'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _tagIds = selected.toList(growable: false));
   }
 
   String get _kindLabel => switch (_kind) {
@@ -218,9 +440,12 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             decoration: InputDecoration(
               border: InputBorder.none,
               hintText: '标题',
-              hintStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: p.muted),
+              hintStyle: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: p.muted),
             ),
           ),
+          _buildTaxonomyRow(),
+          _buildMarkdownBar(),
           Expanded(
             child: TextField(
               controller: _body,
@@ -235,11 +460,46 @@ class _EditorPageState extends ConsumerState<EditorPage> {
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: '开始写…',
-                hintStyle: TextStyle(fontSize: 14, height: 1.8, color: p.muted),
+                hintStyle:
+                    TextStyle(fontSize: 14, height: 1.8, color: p.muted),
               ),
             ),
           ),
           const SizedBox(height: SketchSpace.md),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaxonomyRow() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SketchSpace.sm),
+      child: Wrap(
+        spacing: SketchSpace.sm,
+        runSpacing: SketchSpace.sm,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          GestureDetector(
+            onTap: _saving ? null : _pickCategory,
+            child: SketchTag(
+              _categoryLabel,
+              tone: _categoryId == null ? SketchTone.ghost : SketchTone.primary,
+              dense: true,
+            ),
+          ),
+          for (final id in _tagIds)
+            GestureDetector(
+              onTap: _saving ? null : _pickTags,
+              child: SketchTag(
+                '#${_tagName(id)}',
+                tone: SketchTone.blue,
+                dense: true,
+              ),
+            ),
+          GestureDetector(
+            onTap: _saving ? null : _pickTags,
+            child: SketchTag('＋ 标签', tone: SketchTone.ghost, dense: true),
+          ),
         ],
       ),
     );

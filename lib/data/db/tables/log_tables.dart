@@ -19,7 +19,8 @@ class Oplogs extends Table {
 
   TextColumn get deviceId => text()();
 
-  /// entry / category / tag / credential / conversation / message / blob / meta
+  /// entry / category / tag / entry_taxonomy / credential /
+  /// conversation / message / blob / meta
   TextColumn get entity => text()();
 
   TextColumn get entityId => text()();
@@ -112,6 +113,15 @@ abstract final class SyncEntity {
   static const String entry = 'entry';
   static const String category = 'category';
   static const String tag = 'tag';
+
+  /// 条目 ↔ 分类/标签 的关联。
+  ///
+  /// 文档 11 只提到 category / tag 两个新实体，但**关联本身也要同步**：
+  /// 否则「给笔记打了个标签」在另一台设备上不会生效。不能塞进 `entry` ——
+  /// 正文没变、rev 也不该 +1，硬塞会让合并器误判成正文更新，
+  /// 甚至覆盖掉对方真正的编辑。
+  static const String entryTaxonomy = 'entry_taxonomy';
+
   static const String credential = 'credential';
   static const String conversation = 'conversation';
   static const String message = 'message';

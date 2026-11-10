@@ -12,6 +12,8 @@ import 'package:vault/data/db/database_opener.dart';
 import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/entry/entry_repository.dart';
 import 'package:vault/data/entry/entry_repository_provider.dart';
+import 'package:vault/data/taxonomy/taxonomy_repository.dart';
+import 'package:vault/data/taxonomy/taxonomy_repository_provider.dart';
 import 'package:vault/data/write/write_gateway.dart';
 
 /// 页面测试的共享环境。
@@ -48,6 +50,7 @@ class TestApp {
     required this.clock,
     required this.gateway,
     required this.repo,
+    required this.taxonomyRepo,
     required this.activity,
     required this.uuid,
   });
@@ -59,6 +62,7 @@ class TestApp {
   final HlcClock clock;
   final WriteGateway gateway;
   final EntryRepository repo;
+  final TaxonomyRepository taxonomyRepo;
   final ActivityLogger activity;
   final UuidV7 uuid;
 
@@ -88,6 +92,7 @@ class TestApp {
       uuid: uuid,
     );
     final repo = EntryRepository(db);
+    final taxonomyRepo = TaxonomyRepository(db: db, gateway: gateway);
     final activity = ActivityLogger(db: db, deviceId: 'test-device', now: nowFn);
 
     final container = ProviderContainer(
@@ -95,6 +100,7 @@ class TestApp {
         vaultDatabaseProvider.overrideWithValue(db),
         writeGatewayProvider.overrideWithValue(gateway),
         entryRepositoryProvider.overrideWithValue(repo),
+        taxonomyRepositoryProvider.overrideWithValue(taxonomyRepo),
         activityLoggerProvider.overrideWithValue(activity),
       ],
     );
@@ -107,6 +113,7 @@ class TestApp {
       clock: clock,
       gateway: gateway,
       repo: repo,
+      taxonomyRepo: taxonomyRepo,
       activity: activity,
       uuid: uuid,
     );

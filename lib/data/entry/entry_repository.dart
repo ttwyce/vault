@@ -176,6 +176,87 @@ class EntryRepository {
   }
 
   // ---------------------------------------------------------------------------
+  // 列表筛选（docs/09 §4：分类 OR / 标签 AND）
+  // ---------------------------------------------------------------------------
+
+  /// 命中某个分类的条目 id，**包含它所有子分类**。
+  ///
+  /// 用户点一级分类「工作」时，期望连「工作 › 周报」一起看到；
+  /// 只查 `entry_category` 里精确等于该 id 的行会漏掉一半内容。
+  /// 递归 CTE 展开整棵子树（表本身限制两级，不会无限递归），
+  /// 同时排掉软删分类和已进回收站的条目。
+  Future<Set<String>> entryIdsForCategory(String categoryId) async {
+    final rows = await db.customSelect(
+      'WITH RECURSIVE subtree(id) AS ('
+      '  SELECT id FROM category WHERE id = ? AND deleted = 0 '
+      '  UNION ALL '
+      '  SELECT c.id FROM category c JOIN subtree s ON c.parent_id = s.id '
+      '    WHERE c.deleted = 0'
+      ') '
+      'SELECT DISTINCT ec.entry_id AS entry_id FROM entry_category ec '
+      'JOIN subtree s ON s.id = ec.category_id '
+      'JOIN entry e ON e.id = ec.entry_id AND e.deleted = 0;',
+      variables: <Variable<Object>>[Variable<String>(categoryId)],
+      readsFrom: <ResultSetImplementation<dynamic, dynamic>>{
+        db.categories,
+        db.entryCategories,
+        db.entries,
+      },
+    ).get();
+    return rows.map((QueryRow r) => r.read<String>('entry_id')).toSet();
+  }
+
+  /// 没有任何有效分类关联的条目 id（「未分类」筛选项）。
+  ///
+  /// 删除分类后关联行会被清掉；但同步合并可能留下指向软删分类的关联，
+  /// 所以这里 JOIN 到 `category` 判断有效性，而不是只看 `NOT EXISTS` 关联行。
+  Future<Set<String>> uncategorizedEntryIds() async {
+    final rows = await db.customSelect(
+      'SELECT e.id AS entry_id FROM entry e '
+      'WHERE e.deleted = 0 AND NOT EXISTS ('
+      '  SELECT 1 FROM entry_category ec '
+      '  JOIN category c ON c.id = ec.category_id AND c.deleted = 0 '
+      '  WHERE ec.entry_id = e.id'
+      ');',
+      readsFrom: <ResultSetImplementation<dynamic, dynamic>>{
+        db.categories,
+        db.entryCategories,
+        db.entries,
+      },
+    ).get();
+    return rows.map((QueryRow r) => r.read<String>('entry_id')).toSet();
+  }
+
+  /// 同时带齐所有选中标签的条目 id —— **AND，不是 OR**。
+  ///
+  /// `IN (...)` 只保证"沾上任意一个"，`HAVING COUNT(DISTINCT) = n`
+  /// 才保证每个都命中。多选标签的语义是「越选越窄」，选成并集会让
+  /// 用户以为筛选坏了。
+  Future<Set<String>> entryIdsWithAllTags(Iterable<String> tagIds) async {
+    final ids = tagIds.toSet().toList(growable: false);
+    if (ids.isEmpty) return <String>{};
+
+    final marks = List<String>.filled(ids.length, '?').join(', ');
+    final rows = await db.customSelect(
+      'SELECT et.entry_id AS entry_id FROM entry_tag et '
+      'JOIN tag t ON t.id = et.tag_id AND t.deleted = 0 '
+      'JOIN entry e ON e.id = et.entry_id AND e.deleted = 0 '
+      'WHERE et.tag_id IN ($marks) '
+      'GROUP BY et.entry_id HAVING COUNT(DISTINCT et.tag_id) = ?;',
+      variables: <Variable<Object>>[
+        for (final id in ids) Variable<String>(id),
+        Variable<int>(ids.length),
+      ],
+      readsFrom: <ResultSetImplementation<dynamic, dynamic>>{
+        db.tags,
+        db.entryTags,
+        db.entries,
+      },
+    ).get();
+    return rows.map((QueryRow r) => r.read<String>('entry_id')).toSet();
+  }
+
+  // ---------------------------------------------------------------------------
   // 内部
   // ---------------------------------------------------------------------------
 

@@ -12,15 +12,16 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/db/tables/entry_tables.dart';
+import '../../data/db/vault_database.dart' show CategoryRow;
 import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
 import '../organize/organize_page.dart';
 
-/// 记录页：笔记 / 想法两个分段 + 标签筛选 + 搜索。
+/// 记录页：笔记 / 想法两个分段 + 分类/标签筛选 + 搜索。
 ///
-/// 这是"三视图"里最常用的一屏，所以它不做花哨的东西 ——
-/// 一条列表、一个搜索框、几个筛选 chip，没了。
+/// 筛选规则（docs/09 §4）：分类取 OR（选一级分类连带子级），
+/// 标签取 AND（越选越窄）。两者同时存在时取交集，搜索结果同样适用。
 class RecordsPage extends ConsumerStatefulWidget {
   const RecordsPage({super.key});
 
@@ -29,20 +30,31 @@ class RecordsPage extends ConsumerStatefulWidget {
 }
 
 class _RecordsPageState extends ConsumerState<RecordsPage> {
+  /// 「未分类」是一个筛选项，不是「没筛选」，所以不能用 null 表示。
+  /// 用一个不可能和 UUID 撞上的哨兵值区分这两种状态。
+  static const String _uncategorized = '\u0000uncategorized';
+
   EntryKind _kind = EntryKind.note;
   String _query = '';
-  String? _selectedTag;
 
+  /// null = 不按分类筛；[_uncategorized] = 只看未分类；其余 = 分类 id。
+  String? _categoryFilter;
+  final Set<String> _selectedTagIds = <String>{};
+
+  List<CategoryRow> _categories = const <CategoryRow>[];
   List<TagWithCount> _tags = const <TagWithCount>[];
   Future<List<EntrySummary>> _results = Future<List<EntrySummary>>.value(
     const <EntrySummary>[],
   );
   Timer? _debounce;
 
+  bool get _hasFilter =>
+      _categoryFilter != null || _selectedTagIds.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
-    _loadTags();
+    _loadFilters();
     _refresh();
   }
 
@@ -52,27 +64,45 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
     super.dispose();
   }
 
-  Future<void> _loadTags() async {
-    final tags = await ref.read(entryRepositoryProvider).tags();
+  Future<void> _loadFilters() async {
+    final repo = ref.read(entryRepositoryProvider);
+    final categories = await repo.categories();
+    final tags = await repo.tags();
     if (!mounted) return;
-    setState(() => _tags = tags);
+    setState(() {
+      _categories = categories;
+      _tags = tags;
+    });
   }
 
   /// 重算列表数据源。
   ///
-  /// 搜索词非空走 FTS；否则按分段拉全量、在内存里按标签过滤。
-  Future<List<EntrySummary>> _compute() {
+  /// 搜索词非空走 FTS；否则按分段拉全量。筛选统一在读侧按 id 求集合，
+  /// 这样「搜索结果 + 分类 + 多标签」三种条件能干净地取交集，
+  /// 也避免把 tag 名字塞进摘要模型做内存比对（同名标签合并后会误判）。
+  Future<List<EntrySummary>> _compute() async {
     final repo = ref.read(entryRepositoryProvider);
-    if (_query.trim().isNotEmpty) {
-      return repo.search(_query);
+    final List<EntrySummary> rows = _query.trim().isNotEmpty
+        ? await repo.search(_query)
+        : await repo.list(kind: _kind);
+
+    Set<String>? allowed;
+    final category = _categoryFilter;
+    if (category != null) {
+      allowed = category == _uncategorized
+          ? await repo.uncategorizedEntryIds()
+          : await repo.entryIdsForCategory(category);
     }
-    return repo.list(kind: _kind).then((List<EntrySummary> rows) {
-      final tag = _selectedTag;
-      if (tag == null) return rows;
-      return rows
-          .where((EntrySummary s) => s.tagNames.contains(tag))
-          .toList(growable: false);
-    });
+    if (_selectedTagIds.isNotEmpty) {
+      final tagged = await repo.entryIdsWithAllTags(_selectedTagIds);
+      allowed = allowed == null ? tagged : allowed.intersection(tagged);
+    }
+
+    final visible = allowed;
+    if (visible == null) return rows;
+    return rows
+        .where((EntrySummary s) => visible.contains(s.id))
+        .toList(growable: false);
   }
 
   void _refresh() {
@@ -131,7 +161,9 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
         children: <Widget>[
           _buildSearchField(p),
           _buildSegments(),
+          if (_categories.isNotEmpty) _buildCategoryChips(),
           if (_tags.isNotEmpty) _buildTagChips(),
+          if (_hasFilter) _buildClearRow(),
           const SizedBox(height: SketchSpace.xs),
           Expanded(child: _buildList()),
         ],
@@ -204,10 +236,7 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
             selected: _kind == EntryKind.note,
             onTap: () {
               if (_kind == EntryKind.note) return;
-              setState(() {
-                _kind = EntryKind.note;
-                _selectedTag = null;
-              });
+              setState(() => _kind = EntryKind.note);
               _refresh();
             },
           ),
@@ -217,14 +246,83 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
             selected: _kind == EntryKind.thought,
             onTap: () {
               if (_kind == EntryKind.thought) return;
-              setState(() {
-                _kind = EntryKind.thought;
-                _selectedTag = null;
-              });
+              setState(() => _kind = EntryKind.thought);
               _refresh();
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    // 只列一级：点父分类时读侧的递归 CTE 会把子分类内容一起带出来，
+    // 再列一遍子级只会让 chip 行变成重复噪音。
+    final topLevel = _categories
+        .where((CategoryRow c) => c.parentId == null)
+        .toList(growable: false);
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(
+          SketchSpace.lg,
+          SketchSpace.sm,
+          SketchSpace.lg,
+          0,
+        ),
+        children: <Widget>[
+          _TagChip(
+            name: '全部',
+            selected: _categoryFilter == null,
+            onTap: () => _setCategoryFilter(null),
+          ),
+          const SizedBox(width: SketchSpace.sm),
+          _TagChip(
+            name: '未分类',
+            selected: _categoryFilter == _uncategorized,
+            onTap: () => _setCategoryFilter(_uncategorized),
+          ),
+          for (final c in topLevel) ...<Widget>[
+            const SizedBox(width: SketchSpace.sm),
+            _TagChip(
+              name: c.name,
+              selected: _categoryFilter == c.id,
+              onTap: () => _setCategoryFilter(c.id),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _setCategoryFilter(String? value) {
+    setState(() => _categoryFilter = value);
+    _refresh();
+  }
+
+  Widget _buildClearRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SketchSpace.lg,
+        SketchSpace.xs,
+        SketchSpace.lg,
+        0,
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SketchButton(
+          label: '清除筛选',
+          tone: SketchTone.ghost,
+          dense: true,
+          onPressed: () {
+            setState(() {
+              _categoryFilter = null;
+              _selectedTagIds.clear();
+            });
+            _refresh();
+          },
+        ),
       ),
     );
   }
@@ -244,10 +342,13 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
           for (final tag in _tags) ...<Widget>[
             _TagChip(
               name: tag.name,
-              selected: _selectedTag == tag.name,
+              selected: _selectedTagIds.contains(tag.id),
               onTap: () {
                 setState(() {
-                  _selectedTag = _selectedTag == tag.name ? null : tag.name;
+                  // 多选：AND 语义，选得越多结果越少。
+                  if (!_selectedTagIds.remove(tag.id)) {
+                    _selectedTagIds.add(tag.id);
+                  }
                 });
                 _refresh();
               },

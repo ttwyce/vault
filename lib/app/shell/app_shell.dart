@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/icons/sketch_icons.dart';
+import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../features/archive/archive_page.dart';
 import '../../features/chat/chat_page.dart';
 import '../../features/diary/diary_page.dart';
+import '../../features/quick/quick_capture_page.dart';
 import '../../features/records/records_page.dart';
-import '../../features/settings/fonts_page.dart';
+import '../../features/settings/settings_hub_page.dart';
 import '../../features/vault/vault_page.dart';
 import '../chrome/app_actions.dart';
 import '../theme/sketch_metrics.dart';
@@ -60,16 +62,23 @@ class _AppShellState extends State<AppShell> {
     setState(() => _index = index);
   }
 
-  /// 打开设置。目前只有字体一页，后续「同步 / 模型 / 回收站」都从这里进。
+  /// 打开设置中心。字体 / 整理 / 搜索 / 回收站都从这一页进。
   void _openSettings() {
     Navigator.of(context).push<void>(_settingsRoute());
+  }
+
+  /// 全局快速记录：任何分区都能一键记一条想法。
+  void _openQuickCapture() {
+    Navigator.of(context).push<void>(MaterialPageRoute<void>(
+      builder: (_) => const QuickCapturePage(),
+    ));
   }
 
   Route<void> _settingsRoute() {
     return PageRouteBuilder<void>(
       transitionDuration: SketchMotion.page,
       reverseTransitionDuration: SketchMotion.page,
-      pageBuilder: (_, _, _) => const FontsPage(),
+      pageBuilder: (_, _, _) => const SettingsHubPage(),
       transitionsBuilder: (BuildContext context, Animation<double> animation,
           Animation<double> secondary, Widget child) {
         // 尊重系统「减少动效」
@@ -100,6 +109,20 @@ class _AppShellState extends State<AppShell> {
       openSettings: _openSettings,
       child: Scaffold(
         backgroundColor: palette.bg,
+        // 快速记录是全局入口，放在内容区右下而不是塞进某个分区 ——
+        // 「想到一句话」不该要求用户先切到「记录」页。
+        // 抬高一截是为了不压住移动端的底部导航条。
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: SketchSpace.xxl, right: 4),
+          child: SketchButton(
+            label: '快速记录',
+            glyph: SketchGlyph.plus,
+            tone: SketchTone.primary,
+            dense: true,
+            onPressed: _openQuickCapture,
+          ),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: SafeArea(
           bottom: false,
           child: breakpoint.useRail

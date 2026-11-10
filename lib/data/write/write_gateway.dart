@@ -13,6 +13,7 @@ import '../db/tables/entry_tables.dart';
 import '../db/tables/log_tables.dart';
 import '../db/vault_database.dart';
 import '../search/cjk_segmenter.dart';
+import '../taxonomy/taxonomy_models.dart';
 import 'entry_snapshot.dart';
 import 'item_envelope.dart';
 
@@ -611,6 +612,943 @@ class WriteGateway {
         .getSingleOrNull();
     if (row == null || row.payload == null) return null;
     return readSnapshot(row);
+  }
+
+  // ---------------------------------------------------------------------------
+  // taxonomy 写入（category / tag / entry_taxonomy）
+  // ---------------------------------------------------------------------------
+  //
+  // 这三类写入和 entry 共享**同一个事务骨架**：读旧 → 加密快照 → 写 oplog
+  // → 改实体 → 更新索引 → 持久化 HLC。它们没有另起一个 Gateway，因为
+  // 「唯一写入口」不是文件名层面的规矩，而是「实体变更与 oplog 不可能分开」
+  // 这件事本身。拆成第二个类，就等于给了后来者一个绕过 oplog 的入口。
+  //
+  // 与 entry 的差别：category / tag 表没有 rev 列，版本号从该实体
+  // 最近一条 oplog 里读出来再 +1（见 [_nextRev]）。这样即使本地库被
+  // 重建过，rev 也不会倒退。
+
+  /// 写一条分类。create / update / delete / restore 都走这里。
+  Future<TaxonomyWriteResult> writeCategory(CategoryWrite write) {
+    return _db.transaction(() async {
+      final key = await _keys.item();
+      return switch (write.mutation) {
+        TaxonomyMutation.create => _createCategory(write, key),
+        TaxonomyMutation.update => _updateCategory(write, key),
+        TaxonomyMutation.delete => _deleteCategory(write, key),
+        TaxonomyMutation.restore => _restoreCategory(write, key),
+        TaxonomyMutation.merge => throw const WriteException(
+            'invalid', '分类不支持合并，请用 update 改名'),
+      };
+    });
+  }
+
+  /// 写一条标签。merge 用于同名合并向导。
+  Future<TaxonomyWriteResult> writeTag(TagWrite write) {
+    return _db.transaction(() async {
+      final key = await _keys.item();
+      return switch (write.mutation) {
+        TaxonomyMutation.create => _createTag(write, key),
+        TaxonomyMutation.update => _renameTag(write, key),
+        TaxonomyMutation.delete => _deleteTag(write, key),
+        TaxonomyMutation.restore => _restoreTag(write, key),
+        TaxonomyMutation.merge => _mergeTags(write, key),
+      };
+    });
+  }
+
+  /// 设置一条条目的分类与标签。**整体替换**：[categoryId] 为 null 表示
+  /// 「未分类」，[tagIds] 为空表示清空全部标签。
+  ///
+  /// 标签参与全文索引（`entry_fts.tags`），所以改关联后必须重建该条目的
+  /// 检索文档 —— 否则「打了标签却搜不到」，而且这个 bug 不报错。
+  Future<TaxonomyWriteResult> setEntryTaxonomy({
+    required String entryId,
+    String? categoryId,
+    List<String> tagIds = const <String>[],
+  }) {
+    return _db.transaction(() async {
+      final key = await _keys.item();
+      final entry = await _loadEntry(entryId);
+      if (entry == null) {
+        throw WriteException('not_found', '条目 $entryId 不存在，无法设置分类标签');
+      }
+      if (entry.deleted != 0) {
+        throw const WriteException(
+            'already_deleted', '条目在回收站里，请先恢复再整理');
+      }
+      if (tagIds.length > TaxonomyRules.maxTagsPerEntry) {
+        throw WriteException(
+          'invalid',
+          '一条内容最多 ${TaxonomyRules.maxTagsPerEntry} 个标签'
+          '（收到 ${tagIds.length} 个）',
+        );
+      }
+      final nextTagIds = tagIds.toSet().toList(growable: false);
+      for (final id in nextTagIds) {
+        final row = await _tagRow(id);
+        if (row == null || row.deleted != 0) {
+          throw WriteException('not_found', '标签 $id 不存在或已删除');
+        }
+      }
+      if (categoryId != null) {
+        final row = await _categoryRow(categoryId);
+        if (row == null || row.deleted != 0) {
+          throw WriteException('not_found', '分类 $categoryId 不存在或已删除');
+        }
+      }
+
+      final oldTagRows = await (_db.select(_db.entryTags)
+            ..where((t) => t.entryId.equals(entryId)))
+          .get();
+      final oldTagIds = <String>{for (final r in oldTagRows) r.tagId};
+      final oldCatRows = await (_db.select(_db.entryCategories)
+            ..where((t) => t.entryId.equals(entryId)))
+          .get();
+      final oldCategoryId =
+          oldCatRows.isEmpty ? null : oldCatRows.first.categoryId;
+
+      final unchanged = oldCategoryId == categoryId &&
+          oldTagIds.length == nextTagIds.length &&
+          oldTagIds.containsAll(nextTagIds);
+      if (unchanged) {
+        final prev = await _latestTaxonomy(SyncEntity.entryTaxonomy, entryId);
+        return TaxonomyWriteResult(
+          snapshot: prev ?? TaxonomySnapshot(
+            entity: SyncEntity.entryTaxonomy,
+            id: entryId,
+            rev: 0,
+            hlc: '',
+            updatedAt: _now(),
+            deleted: false,
+            fields: <String, Object?>{
+              'category_id': categoryId,
+              'tag_ids': nextTagIds,
+            },
+          ),
+          oplogSeq: -1,
+          changed: false,
+        );
+      }
+
+      final hlc = _clock.tick();
+      final rev = await _nextRev(SyncEntity.entryTaxonomy, entryId);
+      final snapshot = TaxonomySnapshot(
+        entity: SyncEntity.entryTaxonomy,
+        id: entryId,
+        rev: rev,
+        hlc: hlc.encode(),
+        updatedAt: hlc.millis,
+        deleted: false,
+        fields: <String, Object?>{
+          'category_id': categoryId,
+          'tag_ids': nextTagIds,
+        },
+      );
+
+      return _commitTaxonomy(
+        snapshot: snapshot,
+        op: OplogOp.update,
+        key: key,
+        apply: () async {
+          await (_db.delete(_db.entryCategories)
+                ..where((t) => t.entryId.equals(entryId)))
+              .go();
+          if (categoryId != null) {
+            await _db.into(_db.entryCategories).insert(
+                  EntryCategoriesCompanion.insert(
+                    entryId: entryId,
+                    categoryId: categoryId,
+                  ),
+                );
+          }
+          await (_db.delete(_db.entryTags)
+                ..where((t) => t.entryId.equals(entryId)))
+              .go();
+          for (final id in nextTagIds) {
+            await _db.into(_db.entryTags).insert(
+                  EntryTagsCompanion.insert(entryId: entryId, tagId: id),
+                );
+          }
+          await _recountTags(<String>{...oldTagIds, ...nextTagIds});
+          await _recountCategories(<String>{
+            ?oldCategoryId,
+            ?categoryId,
+          });
+          await _rebuildEntrySearch(entryId);
+        },
+      );
+    });
+  }
+
+  /// 把条目的某个历史版本重新写回当前内容。
+  ///
+  /// **不是把 rev 倒回去**：回滚也是一次新的编辑，rev 必须继续递增，
+  /// 否则另一台设备会用「rev 更大」判定我们这条是旧数据，直接覆盖掉。
+  /// 回滚的内容来自 `entry_history` 里加密的旧快照。
+  Future<EntryWriteResult> restoreVersion({
+    required String entryId,
+    required int rev,
+  }) async {
+    final row = await (_db.select(_db.entryHistory)
+          ..where((t) => t.entryId.equals(entryId) & t.rev.equals(rev)))
+        .getSingleOrNull();
+    if (row == null) {
+      throw WriteException('not_found', '版本 r$rev 不存在，可能已被清理');
+    }
+    final snapshot = await readEntryPayload(row.payload, expectedId: entryId);
+    return writeEntry(EntryWrite.update(
+      id: entryId,
+      title: snapshot.title,
+      body: snapshot.body,
+      meta: snapshot.meta,
+    ));
+  }
+
+  /// 解开一条历史 / 回收站里的条目信封（与 oplog payload 同源）。
+  Future<EntrySnapshot> readEntryPayload(
+    Uint8List payload, {
+    required String expectedId,
+  }) async {
+    final key = await _keys.item();
+    final envelope = ItemEnvelope.parse(payload);
+    if (envelope.entity != SyncEntity.entry) {
+      throw StateError('信封实体是 ${envelope.entity}，不是 entry');
+    }
+    if (envelope.entityId != expectedId) {
+      throw StateError('信封 id 是 ${envelope.entityId}，期望 $expectedId');
+    }
+    final snapshot = EntrySnapshot.fromJson(
+      _decodeJson(await envelope.open(key: key)),
+    );
+    if (snapshot.id != expectedId || snapshot.rev != envelope.rev) {
+      throw StateError('条目快照与信封不一致');
+    }
+    return snapshot;
+  }
+
+  /// 解开一条 taxonomy oplog 的 payload。校验信封头与行元数据交叉一致。
+  Future<TaxonomySnapshot> readTaxonomySnapshot(OplogRow row) async {
+    final key = await _keys.item();
+    final envelope = ItemEnvelope.parse(row.payload!);
+    if (envelope.entity != row.entity || envelope.entityId != row.entityId) {
+      throw StateError('oplog #${row.seq} 的信封头与行元数据不一致');
+    }
+    final decoded = jsonDecode(utf8.decode(await envelope.open(key: key)));
+    if (decoded is! Map<String, Object?>) {
+      throw const FormatException('taxonomy 快照顶层不是对象');
+    }
+    final snapshot = TaxonomySnapshot.fromJson(decoded);
+    if (snapshot.id != row.entityId || snapshot.rev != envelope.rev) {
+      throw StateError('oplog #${row.seq} 的 taxonomy 快照与信封不一致');
+    }
+    return snapshot;
+  }
+
+  // ---------------------------------------------------------------------------
+  // category
+  // ---------------------------------------------------------------------------
+
+  Future<TaxonomyWriteResult> _createCategory(
+    CategoryWrite write,
+    SecretBytes key,
+  ) async {
+    final name = _validName(write.name);
+    final id = write.id ?? _uuid.next();
+    if (await _categoryRow(id) != null) {
+      throw WriteException('exists', '分类 $id 已存在');
+    }
+    final parentId = write.parentId;
+    if (parentId != null) {
+      final parent = await _categoryRow(parentId);
+      if (parent == null || parent.deleted != 0) {
+        throw WriteException('not_found', '父分类 $parentId 不存在或已删除');
+      }
+      // 两级封顶：父分类自己不能已经是二级
+      if (parent.parentId != null) {
+        throw const WriteException(
+            'invalid', '分类最多两级，不能再给二级分类建子分类');
+      }
+    }
+    if (await _siblingNameExists(name, parentId, excludeId: null)) {
+      throw WriteException('exists', '同级已有名为「$name」的分类');
+    }
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.category,
+      id: id,
+      rev: 1,
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: false,
+      fields: <String, Object?>{
+        'name': name,
+        'kind': write.kind ?? EntryKind.note.code,
+        'parent_id': parentId,
+        'sort_order': write.sortOrder ?? 0,
+      },
+    );
+
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.create,
+      key: key,
+      apply: () async {
+        await _db.into(_db.categories).insert(CategoriesCompanion(
+              id: Value<String>(id),
+              kind: Value<int>(write.kind ?? EntryKind.note.code),
+              parentId: Value<String?>(parentId),
+              name: Value<String>(name),
+              sortOrder: Value<int>(write.sortOrder ?? 0),
+              entryCount: const Value<int>(0),
+              createdAt: Value<int?>(hlc.millis),
+              updatedAt: Value<int?>(hlc.millis),
+              hlc: Value<String>(hlc.encode()),
+              deleted: const Value<int>(0),
+            ));
+      },
+    );
+  }
+
+  Future<TaxonomyWriteResult> _updateCategory(
+    CategoryWrite write,
+    SecretBytes key,
+  ) async {
+    final id = write.id!;
+    final row = await _categoryRow(id);
+    if (row == null) throw WriteException('not_found', '分类 $id 不存在');
+    if (row.deleted != 0) {
+      throw const WriteException('already_deleted', '分类已删除，请先恢复');
+    }
+    final name = _validName(write.name);
+    final parentId = write.parentId;
+    if (parentId == id) {
+      throw const WriteException('invalid', '分类不能做自己的父分类');
+    }
+    if (parentId != null) {
+      final parent = await _categoryRow(parentId);
+      if (parent == null || parent.deleted != 0) {
+        throw WriteException('not_found', '父分类 $parentId 不存在或已删除');
+      }
+      if (parent.parentId != null) {
+        throw const WriteException('invalid', '分类最多两级');
+      }
+      // 自己已有子分类时不能变成二级（否则会造出第三级）
+      final children = await (_db.select(_db.categories)
+            ..where((t) => t.parentId.equals(id) & t.deleted.equals(0)))
+          .get();
+      if (children.isNotEmpty) {
+        throw const WriteException(
+            'invalid', '这个分类下还有子分类，不能把它变成二级分类');
+      }
+    }
+    if (await _siblingNameExists(name, parentId, excludeId: id)) {
+      throw WriteException('exists', '同级已有名为「$name」的分类');
+    }
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.category,
+      id: id,
+      rev: await _nextRev(SyncEntity.category, id),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: false,
+      fields: <String, Object?>{
+        'name': name,
+        'kind': row.kind,
+        'parent_id': parentId,
+        'sort_order': write.sortOrder ?? 0,
+      },
+    );
+
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.update,
+      key: key,
+      apply: () async {
+        await (_db.update(_db.categories)..where((t) => t.id.equals(id)))
+            .write(CategoriesCompanion(
+          name: Value<String>(name),
+          parentId: Value<String?>(parentId),
+          sortOrder: Value<int>(write.sortOrder ?? 0),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+      },
+    );
+  }
+
+  Future<TaxonomyWriteResult> _deleteCategory(
+    CategoryWrite write,
+    SecretBytes key,
+  ) async {
+    final id = write.id!;
+    final row = await _categoryRow(id);
+    if (row == null) throw WriteException('not_found', '分类 $id 不存在');
+    if (row.deleted != 0) {
+      return _noopTaxonomy(SyncEntity.category, id);
+    }
+
+    // 删除分类不删条目：清掉 entry_category 关联，条目回到「未分类」。
+    // 子分类提升为一级并各自写 oplog —— 否则会留下一批 parent_id 指向
+    // 已删除分类的孤儿，两级树重建时它们会神秘消失。
+    final children = await (_db.select(_db.categories)
+          ..where((t) => t.parentId.equals(id) & t.deleted.equals(0)))
+        .get();
+    final related = <int>[];
+    for (final child in children) {
+      final childHlc = _clock.tick();
+      final childSnapshot = TaxonomySnapshot(
+        entity: SyncEntity.category,
+        id: child.id,
+        rev: await _nextRev(SyncEntity.category, child.id),
+        hlc: childHlc.encode(),
+        updatedAt: childHlc.millis,
+        deleted: false,
+        fields: <String, Object?>{
+          'name': child.name,
+          'kind': child.kind,
+          'parent_id': null,
+          'sort_order': child.sortOrder,
+        },
+      );
+      final r = await _commitTaxonomy(
+        snapshot: childSnapshot,
+        op: OplogOp.update,
+        key: key,
+        apply: () async {
+          await (_db.update(_db.categories)
+                ..where((t) => t.id.equals(child.id)))
+              .write(CategoriesCompanion(
+            parentId: const Value<String?>(null),
+            hlc: Value<String>(childHlc.encode()),
+            updatedAt: Value<int?>(childHlc.millis),
+          ));
+        },
+      );
+      related.add(r.oplogSeq);
+    }
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.category,
+      id: id,
+      rev: await _nextRev(SyncEntity.category, id),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: true,
+      fields: <String, Object?>{
+        'name': row.name,
+        'kind': row.kind,
+        'parent_id': row.parentId,
+        'sort_order': row.sortOrder,
+      },
+    );
+    final result = await _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.delete,
+      key: key,
+      apply: () async {
+        await (_db.delete(_db.entryCategories)
+              ..where((t) => t.categoryId.equals(id)))
+            .go();
+        await (_db.update(_db.categories)..where((t) => t.id.equals(id)))
+            .write(CategoriesCompanion(
+          deleted: const Value<int>(1),
+          entryCount: const Value<int>(0),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+      },
+    );
+    return TaxonomyWriteResult(
+      snapshot: result.snapshot,
+      oplogSeq: result.oplogSeq,
+      changed: true,
+      relatedOplogSeqs: related,
+    );
+  }
+
+  Future<TaxonomyWriteResult> _restoreCategory(
+    CategoryWrite write,
+    SecretBytes key,
+  ) async {
+    final id = write.id!;
+    final row = await _categoryRow(id);
+    if (row == null) throw WriteException('not_found', '分类 $id 不存在');
+    if (row.deleted == 0) return _noopTaxonomy(SyncEntity.category, id);
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.category,
+      id: id,
+      rev: await _nextRev(SyncEntity.category, id),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: false,
+      fields: <String, Object?>{
+        'name': row.name,
+        'kind': row.kind,
+        'parent_id': row.parentId,
+        'sort_order': row.sortOrder,
+      },
+    );
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.restore,
+      key: key,
+      apply: () async {
+        await (_db.update(_db.categories)..where((t) => t.id.equals(id)))
+            .write(CategoriesCompanion(
+          deleted: const Value<int>(0),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // tag
+  // ---------------------------------------------------------------------------
+
+  Future<TaxonomyWriteResult> _createTag(
+    TagWrite write,
+    SecretBytes key,
+  ) async {
+    final name = _validName(write.name);
+    final id = write.id ?? _uuid.next();
+    if (await _tagRow(id) != null) throw WriteException('exists', '标签 $id 已存在');
+    if (await _tagNameExists(name, excludeId: null)) {
+      throw WriteException('exists', '已有名为「$name」的标签');
+    }
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.tag,
+      id: id,
+      rev: 1,
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: false,
+      fields: <String, Object?>{'name': name, 'usage_count': 0},
+    );
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.create,
+      key: key,
+      apply: () async {
+        await _db.into(_db.tags).insert(TagsCompanion(
+              id: Value<String>(id),
+              name: Value<String>(name),
+              usageCount: const Value<int>(0),
+              createdAt: Value<int?>(hlc.millis),
+              updatedAt: Value<int?>(hlc.millis),
+              hlc: Value<String>(hlc.encode()),
+              deleted: const Value<int>(0),
+            ));
+      },
+    );
+  }
+
+  Future<TaxonomyWriteResult> _renameTag(
+    TagWrite write,
+    SecretBytes key,
+  ) async {
+    final id = write.id!;
+    final row = await _tagRow(id);
+    if (row == null) throw WriteException('not_found', '标签 $id 不存在');
+    if (row.deleted != 0) {
+      throw const WriteException('already_deleted', '标签已删除，请先恢复');
+    }
+    final name = _validName(write.name);
+    if (await _tagNameExists(name, excludeId: id)) {
+      throw WriteException('exists', '已有名为「$name」的标签');
+    }
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.tag,
+      id: id,
+      rev: await _nextRev(SyncEntity.tag, id),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: false,
+      fields: <String, Object?>{'name': name, 'usage_count': row.usageCount},
+    );
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.update,
+      key: key,
+      apply: () async {
+        await (_db.update(_db.tags)..where((t) => t.id.equals(id)))
+            .write(TagsCompanion(
+          name: Value<String>(name),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+        await _rebuildEntriesForTag(id);
+      },
+    );
+  }
+
+  Future<TaxonomyWriteResult> _deleteTag(
+    TagWrite write,
+    SecretBytes key,
+  ) async {
+    final id = write.id!;
+    final row = await _tagRow(id);
+    if (row == null) throw WriteException('not_found', '标签 $id 不存在');
+    if (row.deleted != 0) return _noopTaxonomy(SyncEntity.tag, id);
+
+    final affected = await _entriesForTag(id);
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.tag,
+      id: id,
+      rev: await _nextRev(SyncEntity.tag, id),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: true,
+      fields: <String, Object?>{'name': row.name, 'usage_count': row.usageCount},
+    );
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.delete,
+      key: key,
+      apply: () async {
+        await (_db.delete(_db.entryTags)..where((t) => t.tagId.equals(id))).go();
+        await (_db.update(_db.tags)..where((t) => t.id.equals(id)))
+            .write(TagsCompanion(
+          deleted: const Value<int>(1),
+          usageCount: const Value<int>(0),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+        for (final entryId in affected) {
+          await _rebuildEntrySearch(entryId);
+        }
+      },
+    );
+  }
+
+  Future<TaxonomyWriteResult> _restoreTag(
+    TagWrite write,
+    SecretBytes key,
+  ) async {
+    final id = write.id!;
+    final row = await _tagRow(id);
+    if (row == null) throw WriteException('not_found', '标签 $id 不存在');
+    if (row.deleted == 0) return _noopTaxonomy(SyncEntity.tag, id);
+
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.tag,
+      id: id,
+      rev: await _nextRev(SyncEntity.tag, id),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: false,
+      fields: <String, Object?>{'name': row.name, 'usage_count': row.usageCount},
+    );
+    return _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.restore,
+      key: key,
+      apply: () async {
+        await (_db.update(_db.tags)..where((t) => t.id.equals(id)))
+            .write(TagsCompanion(
+          deleted: const Value<int>(0),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+      },
+    );
+  }
+
+  /// 同名合并：source 的关联全部改指 target，然后软删 source。
+  ///
+  /// `INSERT OR IGNORE` 是关键：同一条条目可能同时挂着两个同名标签，
+  /// 直接 UPDATE 会撞主键，丢掉整批关联。
+  Future<TaxonomyWriteResult> _mergeTags(
+    TagWrite write,
+    SecretBytes key,
+  ) async {
+    final sourceId = write.sourceId!;
+    final targetId = write.targetId!;
+    if (sourceId == targetId) {
+      throw const WriteException('invalid', '不能把标签合并到自己');
+    }
+    final source = await _tagRow(sourceId);
+    final target = await _tagRow(targetId);
+    if (source == null || target == null) {
+      throw const WriteException('not_found', '待合并的标签不存在');
+    }
+    if (source.deleted != 0 || target.deleted != 0) {
+      throw const WriteException('already_deleted', '已删除的标签不能参与合并');
+    }
+    if (taxonomyNameKey(source.name) != taxonomyNameKey(target.name)) {
+      throw const WriteException('invalid', '只能合并同名标签');
+    }
+
+    final affected = await _entriesForTag(sourceId);
+    final hlc = _clock.tick();
+    final snapshot = TaxonomySnapshot(
+      entity: SyncEntity.tag,
+      id: sourceId,
+      rev: await _nextRev(SyncEntity.tag, sourceId),
+      hlc: hlc.encode(),
+      updatedAt: hlc.millis,
+      deleted: true,
+      fields: <String, Object?>{
+        'name': source.name,
+        'usage_count': source.usageCount,
+        'merged_into': targetId,
+      },
+    );
+
+    final result = await _commitTaxonomy(
+      snapshot: snapshot,
+      op: OplogOp.merge,
+      key: key,
+      apply: () async {
+        await _db.customStatement(
+          'INSERT OR IGNORE INTO entry_tag(entry_id, tag_id) '
+          'SELECT entry_id, ? FROM entry_tag WHERE tag_id = ?;',
+          <Object?>[targetId, sourceId],
+        );
+        await (_db.delete(_db.entryTags)..where((t) => t.tagId.equals(sourceId)))
+            .go();
+        await _recountTags(<String>{sourceId, targetId});
+        for (final entryId in affected) {
+          await _rebuildEntrySearch(entryId);
+        }
+        await (_db.update(_db.tags)..where((t) => t.id.equals(sourceId)))
+            .write(TagsCompanion(
+          deleted: const Value<int>(1),
+          usageCount: const Value<int>(0),
+          hlc: Value<String>(hlc.encode()),
+          updatedAt: Value<int?>(hlc.millis),
+        ));
+      },
+    );
+
+    // target 的 usageCount 变了，也要让另一台设备知道（否则它的标签云
+    // 会一直显示旧数字，合并结果在两个设备上不一致）。
+    final targetHlc = _clock.tick();
+    final targetSnapshot = TaxonomySnapshot(
+      entity: SyncEntity.tag,
+      id: targetId,
+      rev: await _nextRev(SyncEntity.tag, targetId),
+      hlc: targetHlc.encode(),
+      updatedAt: targetHlc.millis,
+      deleted: false,
+      fields: <String, Object?>{
+        'name': target.name,
+        'usage_count': await _tagUsage(targetId),
+      },
+    );
+    final related = await _commitTaxonomy(
+      snapshot: targetSnapshot,
+      op: OplogOp.update,
+      key: key,
+      apply: () async => _db.customStatement(
+        'UPDATE tag SET hlc = ?, updated_at = ? WHERE id = ?;',
+        <Object?>[targetHlc.encode(), targetHlc.millis, targetId],
+      ),
+    );
+    return TaxonomyWriteResult(
+      snapshot: result.snapshot,
+      oplogSeq: result.oplogSeq,
+      changed: true,
+      relatedOplogSeqs: <int>[related.oplogSeq],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // taxonomy 内部
+  // ---------------------------------------------------------------------------
+
+  /// 所有 taxonomy 写路径的共同后半段。**必须只在事务内调用**。
+  Future<TaxonomyWriteResult> _commitTaxonomy({
+    required TaxonomySnapshot snapshot,
+    required OplogOp op,
+    required SecretBytes key,
+    required Future<void> Function() apply,
+  }) async {
+    final envelope = await ItemEnvelope.seal(
+      key: key,
+      entity: snapshot.entity,
+      entityId: snapshot.id,
+      rev: snapshot.rev,
+      plaintext: snapshot.toCanonicalBytes(),
+    );
+    final row = await _db.into(_db.oplogs).insertReturning(
+          OplogsCompanion.insert(
+            hlc: snapshot.hlc,
+            deviceId: deviceId,
+            entity: snapshot.entity,
+            entityId: snapshot.id,
+            op: op.code,
+            payload: Value<Uint8List>(envelope.encode()),
+            createdAt: snapshot.updatedAt,
+          ),
+        );
+    await apply();
+    await _persistClock();
+    return TaxonomyWriteResult(
+      snapshot: snapshot,
+      oplogSeq: row.seq,
+      changed: true,
+    );
+  }
+
+  Future<TaxonomyWriteResult> _noopTaxonomy(String entity, String id) async {
+    final prev = await _latestTaxonomy(entity, id);
+    return TaxonomyWriteResult(
+      snapshot: prev ?? TaxonomySnapshot(
+        entity: entity,
+        id: id,
+        rev: 0,
+        hlc: '',
+        updatedAt: _now(),
+        deleted: false,
+        fields: const <String, Object?>{},
+      ),
+      oplogSeq: -1,
+      changed: false,
+    );
+  }
+
+  Future<TaxonomySnapshot?> _latestTaxonomy(String entity, String id) async {
+    final row = await (_db.select(_db.oplogs)
+          ..where((t) => t.entity.equals(entity) & t.entityId.equals(id))
+          ..orderBy(<OrderClauseGenerator<dynamic>>[
+            (t) => OrderingTerm.desc(t.seq),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+    if (row == null || row.payload == null) return null;
+    return readTaxonomySnapshot(row);
+  }
+
+  /// 版本号只从 oplog 递增，重启 / 重建本地库都不会倒退。
+  Future<int> _nextRev(String entity, String id) async {
+    final last = await _latestTaxonomy(entity, id);
+    return (last?.rev ?? 0) + 1;
+  }
+
+  String _validName(String? raw) {
+    final name = normalizeTaxonomyName(raw ?? '');
+    if (name.isEmpty) {
+      throw const WriteException('invalid', '名称不能为空');
+    }
+    return name;
+  }
+
+  Future<CategoryRow?> _categoryRow(String id) =>
+      (_db.select(_db.categories)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+  Future<TagRow?> _tagRow(String id) =>
+      (_db.select(_db.tags)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<bool> _siblingNameExists(
+    String name,
+    String? parentId, {
+    required String? excludeId,
+  }) async {
+    final rows = await (_db.select(_db.categories)
+          ..where((t) => t.deleted.equals(0) & t.name.equals(name)))
+        .get();
+    final key = taxonomyNameKey(name);
+    for (final row in rows) {
+      if (row.id == excludeId) continue;
+      if (row.parentId == parentId && taxonomyNameKey(row.name) == key) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _tagNameExists(String name, {required String? excludeId}) async {
+    final rows = await (_db.select(_db.tags)
+          ..where((t) => t.deleted.equals(0)))
+        .get();
+    final key = taxonomyNameKey(name);
+    return rows.any((TagRow row) =>
+        row.id != excludeId && taxonomyNameKey(row.name) == key);
+  }
+
+  Future<List<String>> _entriesForTag(String tagId) async {
+    final rows = await _db.customSelect(
+      'SELECT entry_id FROM entry_tag WHERE tag_id = ?;',
+      variables: <Variable<Object>>[Variable<String>(tagId)],
+    ).get();
+    return <String>[for (final r in rows) r.read<String>('entry_id')];
+  }
+
+  Future<void> _rebuildEntriesForTag(String tagId) async {
+    for (final entryId in await _entriesForTag(tagId)) {
+      await _rebuildEntrySearch(entryId);
+    }
+  }
+
+  /// 标签改名 / 删除 / 合并后重建该条目的 FTS 文档。
+  /// 分类不进 FTS（文档 11 §5），所以这里只处理标签。
+  Future<void> _rebuildEntrySearch(String entryId) async {
+    final row = await _loadEntry(entryId);
+    if (row == null || row.deleted != 0) {
+      await _db.removeSearchDocument(entryId);
+      return;
+    }
+    await _db.putSearchDocument(
+      entryId: entryId,
+      title: _segmenter(row.title ?? ''),
+      body: _segmenter(row.body ?? ''),
+      tags: _segmenter(await _tagText(entryId)),
+    );
+  }
+
+  Future<int> _tagUsage(String tagId) async {
+    final row = await _db
+        .customSelect(
+          'SELECT count(*) AS c FROM entry_tag et '
+          'JOIN entry e ON e.id = et.entry_id '
+          'WHERE et.tag_id = ? AND e.deleted = 0;',
+          variables: <Variable<Object>>[Variable<String>(tagId)],
+        )
+        .getSingle();
+    return row.read<int>('c');
+  }
+
+  Future<void> _recountTags(Iterable<String> ids) async {
+    for (final id in ids.toSet()) {
+      await _db.customStatement(
+        'UPDATE tag SET usage_count = ('
+        '  SELECT count(*) FROM entry_tag et '
+        '  JOIN entry e ON e.id = et.entry_id '
+        '  WHERE et.tag_id = ? AND e.deleted = 0'
+        ') WHERE id = ?;',
+        <Object?>[id, id],
+      );
+    }
+  }
+
+  /// 只统计**直接**挂在该分类下的条目（不含子分类）。
+  /// 两级树里父子是并列展示的，把子级算进父级会让 UI 数字对不上。
+  Future<void> _recountCategories(Iterable<String> ids) async {
+    for (final id in ids.toSet()) {
+      await _db.customStatement(
+        'UPDATE category SET entry_count = ('
+        '  SELECT count(*) FROM entry_category ec '
+        '  JOIN entry e ON e.id = ec.entry_id '
+        '  WHERE ec.category_id = ? AND e.deleted = 0'
+        ') WHERE id = ?;',
+        <Object?>[id, id],
+      );
+    }
   }
 
   static Map<String, Object?> _decodeJson(List<int> bytes) {
