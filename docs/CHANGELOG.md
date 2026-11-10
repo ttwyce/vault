@@ -4,6 +4,77 @@
 
 ---
 
+## v0.16 · 2026-11-10
+
+### M3 第一批：纯 Dart 同步核心（已验证）
+
+按 `docs/04-同步引擎设计.md` 先落地**不依赖网络、不依赖数据库、不新增依赖**
+的同步判定层，把最容易出错的状态转移、冲突矩阵与三方合并先变成确定性单测。
+
+**改了什么**
+- 新增 `lib/core/sync/`：
+  - `sync_state_machine.dart`：13 个阶段、`docs/04 §4.2` 完整转移表、
+    非法事件 `StateError`、10 个错误码的线格式
+  - `sync_runtime.dart`：`SingleFlightLock`（锁忙直接跳过，不排队）、
+    `RequestBudget(limit=200)`（不足不消耗）、`BackoffPolicy`
+    （E_NET 1s→5min / E_RATE 30s→10min，不可重试错误直接抛）
+  - `device_watermark.dart`：L1 明文水位解析、schema 兼容判定、
+    未知设备 / HLC 前进 / ETag 心跳三类判据
+  - `change_diff.dart`：L2 ETag diff、部分分片 `includeDeletes=false`
+    安全开关、`sync-collection` 删除列表合入
+  - `cloud_layout.dart`：`[0-9a-f]{32}.enc` 文件名、16 分片、
+    meta/devices/items/tombstones/vec/blobs 路径与分段 URL 编码
+  - `conflict_matrix.dart`：12 条冲突矩阵、#8/#9「编辑胜」、
+    #12 隔离优先、墓碑 90 天 / 回收站 30 天、先写墓碑再删文件
+- 新增 `lib/data/sync/`：
+  - `line_diff.dart`：行级 LCS hunk、重叠分组、git 风格冲突标记、
+    1200 行上限与 `LineDiffTooLarge`
+  - `merge3.dart`：`EntrySnapshot` 三路短路、无 base 不合并、
+    meta 字段级 LWW + `tags` 并集、按 kind 的文本 / LWW / 书签 /
+    密码策略，合并结果 `rev=max+1`、新 HLC、重算 `content_hash`
+- 新增 4 个测试文件、49 条用例：状态机/运行时 14、L1/L2/路径 12、
+  冲突矩阵/墓碑 8、行级 diff/merge3 15 → **291 → 340**
+
+**关键决策**
+- **先纯函数，后 WebDAV**：状态机、探测、冲突与合并都不碰 IO，
+  所以 T04/T05/T06/T07/T08/T11/T12/T13/T14/T17/T18/T20 中
+  能用纯逻辑表达的部分可先钉死；真实 HTTP 行为留到接入层
+- **锁忙跳过而不是排队**：前台、编辑 debounce、定时器会同时触发，
+  排队会堆积几十次同步并打爆请求预算
+- **部分分片扫描禁止推断删除**：没扫到的分片里文件"不见"不是删除，
+  删除必须由完整扫描或 `sync-collection` 明确给出
+- **坏数据优先级最高**：解密失败 / hash 不匹配先隔离，绝不参与合并或覆盖本地
+- **删除不能吞掉未同步编辑**：`localRev > baseRev` 忽略远端墓碑；
+  本地已删且远端确有内容变化、rev 更大时复活远端版本
+- **密码条目永不字段合并**：LWW + 旧值副本，避免把两个密码拼成第三条脏数据
+- **冲突副本是普通新条目**：新 id、rev=1、合法 content_hash，后续同步不再撞车
+- 修掉 4 个新文件的 `library_directive_not_first`：库指令必须在所有 import 之前
+
+**尚未完成（M3 硬门槛仍未过）**
+- `WebDavBackend` / 能力探测 / 真实 PROPFIND、REPORT、GET、PUT、DELETE
+- 拉取（墓碑 → meta → 条目）、推送 `If-Match`、412 重试计数、quarantine 落盘
+- `sync_state` / `device_watermark` / `sync_log` 的数据库集成
+- taxonomy 实体同步、30 天回收站清理与墓碑联动
+- T01/T02/T03/T09/T10/T15/T16/T19 等需要真实服务器 / 真机 / 计时的用例；
+  T10 本批只覆盖状态转移，不覆盖「连续 3 次 412」计数；T19 只覆盖静默判定，
+  不覆盖「≤3 请求 / ≤800ms」
+- 09 §5 的 **26 个同步用例**仍是 M3 硬门槛，未通过前不进 M4
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | ✅ No issues found |
+| `flutter test` | ✅ **340/340 passed**（基线 291 + 新增 49） |
+| `flutter build` | ⏸ **未执行**（硬规则：未允许绝不构建） |
+
+**工作方式**：全程主控串行，未开并行子代理；所有验证命令带
+`NO_PROXY=127.0.0.1,localhost`；未改动 `pubspec.yaml`，未新增依赖。
+
+**影响文档**：09（§5 M3 第一批状态）、README（进度 / 数字 / 目录）、
+14（Day 11）、CHANGELOG（本条）
+
+---
+
 ## v0.15 · 2026-11-10
 
 ### M2 收尾：taxonomy 写入、回收站/历史、筛选与工具栏（已验证）
