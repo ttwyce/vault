@@ -4,6 +4,52 @@
 
 ---
 
+## v0.35 · 2026-11-11
+
+### M4 预备层：归档 meta 模型、策略引擎与总览页接线（已验证）
+
+用户要求「继续开发下一阶段」，在 M3 真实服务商验收仍需外部条件的边界内，
+先落地 docs/05 / docs/11 §3 / docs/13 §3 里**不需要 WebView / 网络 / 真机 /
+新依赖**的归档判定层与 UI 数据层。
+
+**改了什么**
+- 新增 `lib/data/archive/archive_meta.dart`：kind=5 `entry.meta` 的唯一交换格式
+  - 7 个 `ArchiveStatus` / 3 个 `RecheckPolicy` / 5 种 `LinkCheckResult` /
+    `ArchiveBlobKind`；解析即校验（非法枚举、字段类型、超长摘要一律拒绝）
+  - `siteOf()` 去掉 www / 端口、只接受 http/https；`toJsonString()` 用
+    Canonical 保证确定性；`nextCheckAt()` 驱动 weekly/monthly/never
+  - 空 meta 降级为「仅元数据」，坏 meta 不阻断整页
+- 新增 `lib/data/archive/archive_policy.dart` 纯判定层
+  - `decideArchivePolicy()`：L1 正文永远保存；超 80% 配额时 full 降级 text；
+    反爬 / 付费墙 / 死链 / 超时各自给出明确状态
+  - `classifyHttpStatus()`：404/410→dead、403/451→restricted、
+    超时/DNS 重试 2 次后才 unreachable；`shouldTryWayback()`
+  - `hasContentChanged()`：simhash 汉明距离 ≤3 不算实质变更
+  - `planBlobCacheEviction()` LRU 只释放本地空间、不删云端；
+    `planSnapshotDowngrade()` 按最老快照降到 80% 配额线
+  - `groupBySite()` / `filterArchives()` / `summarizeStorage()` 供总览页
+- 新增 `ArchiveRepository` + provider：只读 `entry(kind=5)`，坏 meta 隔离跳过
+- **重写 `ArchivePage`**：从写死 3 条假数据改为 `ConsumerStatefulWidget`
+  + `FutureBuilder`，状态筛选 / 站点聚合 / 存储面板全接真实数据；
+  `FutureBuilder.future` 缓存到 state，避免点筛选时重新 loading 闪屏
+- 测试：`archive_meta_test.dart` 7 条、`archive_policy_test.dart` 15 条、
+  `archive_page_test.dart` 5 条（真实 TestApp + kind=5 数据，含坏 meta 隔离）
+  → 全量 **458 → 485**
+
+**关键边界**
+- 这是 **M4 的纯逻辑 / UI 预备层**，不是 M4 完成：真实抓取、readability
+  注入、PDF 生成、Wayback API、原生分享入口都未实现（需 WebView / 平台通道）
+- M3 硬门槛仍未过（A5 / 26 个真实集成用例），按文档规则不宣称 M4 完成
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**485/485 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表 / 目录）、09（§6）、14（Day 30）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.34 · 2026-11-11
 
 ### 响应体大小上限硬化（已验证）
