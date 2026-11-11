@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
+import 'package:vault/data/db/vault_database.dart';
+import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/features/vault/vault_page.dart';
@@ -130,5 +132,38 @@ void main() {
     expect(rows.single.customFields, isNotNull);
     expect(rows.single.customFields, isNot(contains('API Token')),
         reason: '模板标签也不能以明文落库');
+  });
+
+  testWidgets('点开账号详情不展示明文，可生成新密码替换',
+      (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-ui',
+      kind: EntryKind.credential,
+      title: '详情 UI 账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-ui'),
+        );
+    await repo.setPassword('cred-ui', 'OldSecret!2026');
+    await pumpVault(tester);
+
+    await tester.tap(find.text('详情 UI 账号'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('此页不展示明文'), findsOneWidget);
+    expect(find.textContaining('OldSecret'), findsNothing);
+
+    final before = (await app.db.select(app.db.credentials).get())
+        .single
+        .password;
+    await tester.tap(find.text('生成新密码并替换'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    final after = (await app.db.select(app.db.credentials).get())
+        .single
+        .password;
+    expect(after, isNot(before));
+    expect(after, isNot('OldSecret!2026'));
   });
 }

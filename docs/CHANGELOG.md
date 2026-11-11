@@ -4,6 +4,30 @@
 
 ---
 
+## v0.72 · 2026-11-11
+
+### M6：账号详情脱敏与改密码入口（已验证）
+
+- `CredentialRepository.detail()` 聚合标题 / 用户名 / TOTP 当前码 /
+  泄露状态 / secret 字段掩码标签 / 健康统计；`CredentialDetail.toJson()`
+  **不带任何明文**
+- `VaultPage` 条目点击开详情弹窗，明确提示「密码以 K_item 密文存储，
+  此页不展示明文」；「生成新密码并替换」走 `setPassword` 密文落库
+- 测试：`credential_repository_test.dart` +1 条（toJson 无明文）、
+  `vault_page_test.dart` +1 条（详情无明文 + 替换生效）→ 全量
+  **668 → 670**
+
+**边界**：字段编辑 UI / 拖拽排序 / 图片附件 / 真实自动填充仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**670/670 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 67）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.71 · 2026-11-11
 
 ### M4：抓取任务队列状态机（已验证）

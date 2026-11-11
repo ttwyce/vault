@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -230,5 +232,37 @@ void main() {
         .getSingle();
     expect(row.breached, 1);
     expect((await repo.health(nowMs: 1731052800000)).leaked, 0);
+  });
+
+  test('账号详情只给脱敏信息，toJson 不含任何明文', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-detail',
+      kind: EntryKind.credential,
+      title: '详情账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-detail'),
+        );
+    await repo.setPassword('cred-detail', 'Secret!2026');
+    await repo.setCustomFields(
+      'cred-detail',
+      const CustomFields(<CredentialField>[
+        CredentialField(
+          id: 'f1',
+          label: '恢复码',
+          value: 'xxxx-yyyy',
+          type: CustomFieldType.text,
+          secret: true,
+          sort: 0,
+        ),
+      ]),
+    );
+    final detail = await repo.detail('cred-detail', nowMs: 1731052800000);
+    expect(detail, isNotNull);
+    expect(detail!.title, '详情账号');
+    expect(detail.secretFieldLabels, hasLength(1));
+    final json = jsonEncode(detail.toJson());
+    expect(json, isNot(contains('Secret!2026')));
+    expect(json, isNot(contains('xxxx-yyyy')));
   });
 }

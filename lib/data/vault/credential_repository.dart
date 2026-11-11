@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../db/vault_database.dart';
 import '../entry/entry_models.dart';
 import 'credential_groups.dart';
+import 'credential_template.dart';
 import 'credential_models.dart';
 import 'hibp_client.dart';
 import '../write/write_gateway.dart';
@@ -34,6 +35,47 @@ class CredentialSummary {
     final source = title.trim().isEmpty ? '?' : title.trim();
     return source.substring(0, 1).toUpperCase();
   }
+}
+
+/// 账号详情（脱敏）。
+class CredentialDetail {
+  const CredentialDetail({
+    required this.id,
+    required this.title,
+    required this.username,
+    required this.url,
+    required this.notesAllowedInCloud,
+    required this.totpCode,
+    required this.breached,
+    required this.changedAt,
+    required this.secretFieldLabels,
+    required this.nonSecretFieldCount,
+    required this.healthSummary,
+  });
+
+  final String id;
+  final String title;
+  final String? username;
+  final String? url;
+  final bool notesAllowedInCloud;
+  final String? totpCode;
+  final bool breached;
+  final int? changedAt;
+  final List<String> secretFieldLabels;
+  final int nonSecretFieldCount;
+  final String healthSummary;
+
+  /// 任何序列化路径都不带明文。
+  Map<String, Object?> toJson() => <String, Object?>{
+        'id': id,
+        'title': title,
+        'username': username,
+        'has_totp': totpCode != null,
+        'breached': breached,
+        'secret_fields': secretFieldLabels,
+        'non_secret_fields': nonSecretFieldCount,
+        'health': healthSummary,
+      };
 }
 
 /// 密码健康只读仓库。
@@ -233,6 +275,43 @@ class CredentialRepository {
 
   Future<CredentialHealth> health({required int nowMs}) async =>
       computeCredentialHealth(samples: await samples(), nowMs: nowMs);
+
+  /// 账号详情聚合：**只给 UI 脱敏信息**，密码/TOTP 密钥/secret 字段值
+  /// 一律不出现在返回对象里。
+  Future<CredentialDetail?> detail(String credentialId, {int? nowMs}) async {
+    final entry = await (db.select(db.entries)
+          ..where((t) => t.id.equals(credentialId) & t.deleted.equals(0)))
+        .getSingleOrNull();
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (entry == null || row == null) return null;
+
+    final fields = await customFields(credentialId);
+    final labels = fields.maskedLabels();
+    final summaries = await listSummaries(nowMs: nowMs);
+    final summary = summaries
+        .where((CredentialSummary s) => s.id == credentialId)
+        .firstOrNull;
+    final healthReport =
+        await health(nowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch);
+    return CredentialDetail(
+      id: credentialId,
+      title: displayTitle(entry.title, entry.body),
+      username: row.username,
+      url: row.url,
+      notesAllowedInCloud: false,
+      totpCode: summary?.totpCode,
+      breached: row.breached == 2,
+      changedAt: row.passwordChangedAt,
+      secretFieldLabels: labels,
+      nonSecretFieldCount:
+          fields.fields.where((CredentialField f) => !f.secret).length,
+      healthSummary:
+          '弱 ${healthReport.weak} · 重复 ${healthReport.reused} · '
+          '泄露 ${healthReport.leaked} · 超期 ${healthReport.outdated}',
+    );
+  }
 
   /// 列表数据：`credential.id` = `entry.id`，标题从 entry 取。
   /// 只 select 非敏感列；已删除条目不显示。

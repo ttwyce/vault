@@ -12,6 +12,7 @@ import '../../app/session/vault_session.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
 import '../../data/vault/credential_groups.dart';
+
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/credential_template.dart';
 import '../../data/vault/password_generator.dart';
@@ -147,6 +148,59 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     setState(() {});
   }
 
+  Future<void> _openDetail(String id) async {
+    final repo = ref.read(credentialRepositoryProvider);
+    final detail = await repo.detail(id);
+    if (detail == null || !mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(SketchSpace.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                detail.title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: context.sketch.ink,
+                ),
+              ),
+              const SizedBox(height: SketchSpace.sm),
+              Text('用户名：${detail.username ?? '未填写'}'),
+              if (detail.totpCode != null)
+                Text('当前 TOTP：${detail.totpCode}'),
+              Text(detail.breached ? '状态：已泄露' : '状态：未发现泄露'),
+              Text('secret 字段：${detail.secretFieldLabels.length} 个（掩码）'),
+              Text(detail.healthSummary),
+              const SizedBox(height: SketchSpace.md),
+              Text(
+                '密码与密钥以 K_item 密文存储，此页不展示明文。',
+                style: TextStyle(fontSize: 10.5, color: context.sketch.blue),
+              ),
+              const SizedBox(height: SketchSpace.md),
+              SketchButton(
+                label: '生成新密码并替换',
+                dense: true,
+                onPressed: () async {
+                  final next = generatePassword(const PasswordPolicy());
+                  await repo.setPassword(id, next);
+                  if (sheetContext.mounted) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                  if (mounted) setState(() {});
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
@@ -251,16 +305,19 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 children: <Widget>[
                   for (var i = 0; i < items.length; i++) ...<Widget>[
                     if (i > 0) const SizedBox(height: SketchSpace.md),
-                    _VaultTile(
-                      variant: i % 4,
-                      letter: items[i].letter,
-                      name: items[i].title,
-                      account: items[i].username ?? '未填写用户名',
-                      badges: <(String, SketchTone)>[
-                        if (items[i].totpCode != null)
-                          ('TOTP ${items[i].totpCode}', SketchTone.blue),
-                        if (items[i].breached) ('已泄露', SketchTone.primary),
-                      ],
+                    GestureDetector(
+                      onTap: () => _openDetail(items[i].id),
+                      child: _VaultTile(
+                        variant: i % 4,
+                        letter: items[i].letter,
+                        name: items[i].title,
+                        account: items[i].username ?? '未填写用户名',
+                        badges: <(String, SketchTone)>[
+                          if (items[i].totpCode != null)
+                            ('TOTP ${items[i].totpCode}', SketchTone.blue),
+                          if (items[i].breached) ('已泄露', SketchTone.primary),
+                        ],
+                      ),
                     ),
                   ],
                 ],
