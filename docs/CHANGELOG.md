@@ -4,6 +4,30 @@
 
 ---
 
+## v0.85 · 2026-11-11
+
+### M4：死链 / 内容变更重检查闭环（已验证）
+
+- 新增 `link_check_service.dart`：把 `classifyHttpStatus` /
+  `shouldTryWayback` / `hasContentChanged` 串成一次可复现检查，
+  输出 result / changed / tryWayback / shouldRecord / reasons
+- 200 且 simhash 汉明距离 > 3 → `changed`；404/410 与网络不可达
+  → Wayback；403/451 不回退；距上次检查未过 30 天不重复落证据
+- `LinkCheckService.run` 读最近一次 `link_check` 的 simhash 作基线，
+  经 `WriteGateway.recordLinkCheck` 落证据，避免同一天刷屏
+- 测试：`link_check_service_test.dart` 4 条 → 全量 **701 → 705**
+
+**边界**：真实 HTTP HEAD/GET、Wayback 请求、simhash 计算仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**705/705 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 80）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.84 · 2026-11-11
 
 ### M5：搜索结果卡片元信息（已验证）
