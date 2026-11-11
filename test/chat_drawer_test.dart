@@ -131,4 +131,56 @@ void main() {
     expect(find.text('消息'), findsOneWidget);
     expect(find.textContaining('限流策略'), findsOneWidget);
   });
+
+  testWidgets('切换会话后主区消息滚动复位到顶部', (WidgetTester tester) async {
+    // 造两个会话，第二个带更多消息。
+    for (final id in <String>['conv-a', 'conv-b']) {
+      await app.db.into(app.db.conversations).insert(
+            ConversationsCompanion.insert(
+              id: id,
+              hlc: '0000000000000001:0000:devA',
+              title: Value<String?>(id),
+              createdAt: const Value<int?>(1731052800000),
+              updatedAt: const Value<int?>(1731052800000),
+            ),
+          );
+    }
+    for (var i = 0; i < 40; i++) {
+      await app.db.into(app.db.messages).insert(
+            MessagesCompanion.insert(
+              id: 'm$i',
+              conversationId: 'conv-a',
+              role: 1,
+              content: Value<String?>('消息 $i'),
+              createdAt: Value<int?>(1731052800000 + i),
+              hlc: '0000000000000001:0000:devA',
+            ),
+          );
+    }
+    await pumpChat(tester);
+
+    // 打开抽屉选中 conv-a，滚动主区 ListView 到中段。
+    await tester.tap(find.byTooltip('对话列表'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('conv-a').last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable).last);
+    final controller = scrollable.widget.controller ??
+        PrimaryScrollController.of(scrollable.context);
+    controller.jumpTo(200);
+    await tester.pump();
+    expect(controller.offset, greaterThan(0));
+
+    // 切换到 conv-b，滚动位置必须归零。
+    await tester.tap(find.byTooltip('对话列表'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('conv-b').last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.offset, 0.0);
+  });
 }

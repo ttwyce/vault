@@ -33,7 +33,12 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _input = TextEditingController();
+  final ScrollController _scroll = ScrollController();
   ConversationDraftState _draft = ConversationDraftState.initial;
+  Future<List<ConversationMessageView>> _messages =
+      Future<List<ConversationMessageView>>.value(
+    const <ConversationMessageView>[],
+  );
 
   /// 抽屉用 OverlayEntry 挂在根 Overlay 上：不进 PageScaffold 的布局树，
   /// 因此不会改变主区尺寸，也不会与 Expanded / ListView 的高度约束打架。
@@ -75,16 +80,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (context.mounted) Navigator.of(context).maybePop();
   }
 
-  void _startDraft() {
+  /// 切换会话时重置消息 Future 与滚动位置（docs/12 §5 ③）。
+  void _switchTo(ConversationDraftState next) {
     setState(() {
-      _draft = _draft.startDraft();
-      _input.clear();
+      _draft = next;
+      _messages = next.currentId == null
+          ? Future<List<ConversationMessageView>>.value(
+              const <ConversationMessageView>[])
+          : ref.read(conversationRepositoryProvider).messages(next.currentId!);
+      if (_scroll.hasClients) _scroll.jumpTo(0);
     });
+  }
+
+  void _startDraft() {
+    _input.clear();
+    _switchTo(_draft.startDraft());
     _closeDrawer();
   }
 
   void _selectConversation(String id) {
-    setState(() => _draft = _draft.selectExisting(id));
+    _switchTo(_draft.selectExisting(id));
     _closeDrawer();
   }
 
@@ -119,14 +134,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       content: trimmed,
     );
     if (!mounted) return;
-    setState(() {
-      _draft = next;
-      _input.clear();
-    });
+    _switchTo(next);
+    _input.clear();
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     _input.dispose();
     super.dispose();
   }
@@ -162,6 +176,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
           Expanded(
             child: ListView(
+              controller: _scroll,
               padding: const EdgeInsets.fromLTRB(
                 SketchSpace.lg,
                 SketchSpace.lg,
@@ -170,12 +185,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
               children: <Widget>[
                 FutureBuilder<List<ConversationMessageView>>(
-                  future: _draft.currentId == null
-                      ? Future<List<ConversationMessageView>>.value(
-                          const <ConversationMessageView>[])
-                      : ref
-                          .read(conversationRepositoryProvider)
-                          .messages(_draft.currentId!),
+                  future: _messages,
                   builder: (
                     BuildContext context,
                     AsyncSnapshot<List<ConversationMessageView>> snap,

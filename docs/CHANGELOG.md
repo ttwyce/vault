@@ -4,6 +4,27 @@
 
 ---
 
+## v0.83 · 2026-11-11
+
+### M7：会话切换滚动复位（已验证）
+
+- `ChatPage` 增加 `ScrollController` 与缓存的 `_messages` Future：
+  切换会话 / 进入草稿 / 发出新消息时统一走 `_switchTo`，
+  主区消息列表 `jumpTo(0)` 回到顶部，避免沿用上一会话滚动位置
+- 缓存 Future 后，点筛选与 setState 不再让消息区反复闪回加载态
+- 测试：`chat_drawer_test.dart` +1 条（滚动到中段后切换会话 offset 归零）
+  → 全量 **699 → 700**
+
+**边界**：真实模型回复与流式渲染仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**700/700 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 78）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.82 · 2026-11-11
 
 ### M2：Markdown 实时预览（已验证）
