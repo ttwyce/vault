@@ -4,6 +4,27 @@
 
 ---
 
+## v0.43 · 2026-11-11
+
+### 密码列表与归档搜索真实接线（已验证）
+
+- `CredentialRepository.listSummaries()`：`credential.id` 关联 `entry` 取标题、
+  只 select 非敏感列、跳过已删除条目；`VaultPage` 三个写死的假账号
+  （GitHub / Cloudflare / 阿里云）改为真实列表 + TOTP/泄露徽章
+- `ArchivePage` 新增「找哪个归档…」搜索框，按 title / site / excerpt / url
+  过滤内存中的 meta（不额外触发 blob IO），与状态/站点筛选叠加生效
+- 测试：`credential_repository_test.dart` +1 条真实列表、
+  `archive_page_test.dart` +1 条搜索（既有 5 条夹具补 Scaffold 后保持全绿）
+  → 全量 **576 → 578**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**578/578 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。边界不变：M3 硬门槛未过，M4~M9 未完成。
+
+**影响文档**：README（数字）、14（Day 38）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.42 · 2026-11-11
 
 ### 会话抽屉 / 密码健康报告 UI 真实接线（已验证）

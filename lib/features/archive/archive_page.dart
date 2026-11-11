@@ -27,7 +27,15 @@ class ArchivePage extends ConsumerStatefulWidget {
 class _ArchivePageState extends ConsumerState<ArchivePage> {
   ArchiveFilter _filter = ArchiveFilter.all;
   String? _site;
+  String _query = '';
+  final TextEditingController _search = TextEditingController();
   Future<_ArchiveData>? _future;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -67,9 +75,21 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
         final visibleKeys = filtered
             .map((ArchiveMeta m) => m.toJsonString())
             .toSet();
+        final query = _query.trim().toLowerCase();
         final visible = data.entries
             .where((ArchiveEntry e) =>
                 visibleKeys.contains(e.meta.toJsonString()))
+            .where((ArchiveEntry e) {
+              if (query.isEmpty) return true;
+              final haystack = <Object?>[
+                e.title,
+                e.meta.title,
+                e.meta.site,
+                e.meta.excerpt,
+                e.meta.url,
+              ].whereType<String>().join(' ').toLowerCase();
+              return haystack.contains(query);
+            })
             .toList(growable: false);
         final summary = summarizeStorage(
           data.entries.map((ArchiveEntry e) => e.meta),
@@ -105,6 +125,17 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                     SketchSpace.xxl,
                   ),
                   children: <Widget>[
+                    TextField(
+                      controller: _search,
+                      decoration: const InputDecoration(
+                        hintText: '找哪个归档…',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (String value) =>
+                          setState(() => _query = value),
+                    ),
+                    const SizedBox(height: SketchSpace.md),
                     Wrap(
                       spacing: SketchSpace.sm,
                       runSpacing: SketchSpace.sm,

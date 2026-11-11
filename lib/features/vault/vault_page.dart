@@ -7,6 +7,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/vault/credential_models.dart';
+import '../../data/vault/credential_repository.dart';
 import '../../data/vault/credential_repository_provider.dart';
 
 /// 密码库。
@@ -25,6 +26,7 @@ class VaultPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.sketch;
     final repo = ref.watch(credentialRepositoryProvider);
+    final summaries = repo.listSummaries();
     return FutureBuilder<CredentialHealth>(
       future: repo.health(nowMs: DateTime.now().millisecondsSinceEpoch),
       builder: (BuildContext context, AsyncSnapshot<CredentialHealth> snap) {
@@ -78,37 +80,43 @@ class VaultPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: SketchSpace.lg),
-          _VaultTile(
-            variant: 1,
-            letter: 'G',
-            name: 'GitHub',
-            account: 'user@example.com · 30 天前',
-            badges: const <(String, SketchTone)>[
-              ('TOTP', SketchTone.plain),
-              ('常用', SketchTone.plain),
-            ],
-          ),
-          const SizedBox(height: SketchSpace.md),
-          _VaultTile(
-            variant: 2,
-            letter: 'C',
-            name: 'Cloudflare',
-            account: 'admin@example.com · 92 天前',
-            badges: const <(String, SketchTone)>[
-              ('TOTP', SketchTone.plain),
-              ('已泄露', SketchTone.primary),
-            ],
-          ),
-          const SizedBox(height: SketchSpace.md),
-          _VaultTile(
-            variant: 3,
-            letter: '阿',
-            name: '阿里云',
-            account: 'admin@example.com · 210 天前',
-            badges: const <(String, SketchTone)>[
-              ('TOTP', SketchTone.plain),
-              ('重复', SketchTone.blue),
-            ],
+          FutureBuilder<List<CredentialSummary>>(
+            future: summaries,
+            builder: (
+              BuildContext context,
+              AsyncSnapshot<List<CredentialSummary>> listSnap,
+            ) {
+              final items = listSnap.data ?? const <CredentialSummary>[];
+              if (items.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: SketchSpace.xl),
+                  child: Text(
+                    listSnap.connectionState == ConnectionState.waiting
+                        ? '加载中…'
+                        : '还没有账号',
+                    style: TextStyle(fontSize: 12, color: p.muted),
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  for (var i = 0; i < items.length; i++) ...<Widget>[
+                    if (i > 0) const SizedBox(height: SketchSpace.md),
+                    _VaultTile(
+                      variant: i % 4,
+                      letter: items[i].letter,
+                      name: items[i].title,
+                      account: items[i].username ?? '未填写用户名',
+                      badges: <(String, SketchTone)>[
+                        if (items[i].hasTotp) ('TOTP', SketchTone.plain),
+                        if (items[i].breached) ('已泄露', SketchTone.primary),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: SketchSpace.xl),
           SketchCard(

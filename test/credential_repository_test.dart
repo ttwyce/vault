@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/vault/credential_repository.dart';
+import 'package:vault/data/db/tables/entry_tables.dart';
+import 'package:vault/data/write/write_gateway.dart';
 
 import 'support/test_harness.dart';
 
@@ -64,4 +66,27 @@ void main() {
     expect(samples.single.strength,
         estimatePasswordStrength('hunter2'));
   });
+  test('listSummaries 从真实 entry 取标题，不含密码且跳过已删除', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-a',
+      kind: EntryKind.credential,
+      title: 'GitHub',
+    ));
+    await add('cred-a', password: 'hunter2');
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-b',
+      kind: EntryKind.credential,
+      title: '已删账号',
+    ));
+    await app.gateway.writeEntry(EntryWrite.delete(id: 'cred-b'));
+    await add('cred-b', password: 'x');
+
+    final items = await repo.listSummaries();
+    expect(items, hasLength(1));
+    expect(items.single.title, 'GitHub');
+    expect(items.single.letter, 'G');
+    expect(items.single.hasTotp, isFalse);
+    expect(items.single.toString(), isNot(contains('hunter2')));
+  });
+
 }

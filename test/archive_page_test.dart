@@ -22,7 +22,9 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: app.container,
-      child: const MaterialApp(home: ArchivePage()),
+      child: const MaterialApp(
+        home: Scaffold(body: ArchivePage()),
+      ),
     ));
     // FutureBuilder 两帧足够；不用 pumpAndSettle（页面里有进度圈）。
     await tester.pump(const Duration(milliseconds: 100));
@@ -152,5 +154,35 @@ void main() {
     );
     await pumpArchive(tester);
     expect(find.textContaining('快照 1.0 MB'), findsOneWidget);
+  });
+
+  testWidgets('搜索框按站点/标题/摘要过滤真实归档', (WidgetTester tester) async {
+    await addArchive(
+      id: 'a1',
+      url: 'https://example.com/p1',
+      status: ArchiveStatus.text,
+      title: 'RFC 6578',
+      excerpt: '增量同步报告',
+    );
+    await addArchive(
+      id: 'a2',
+      url: 'https://github.com/p2',
+      status: ArchiveStatus.text,
+      title: 'GitHub Actions',
+    );
+    await pumpArchive(tester);
+
+    expect(find.text('RFC 6578'), findsOneWidget);
+    expect(find.text('GitHub Actions'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'github');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('GitHub Actions'), findsOneWidget);
+    expect(find.text('RFC 6578'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, '增量同步');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('RFC 6578'), findsOneWidget);
+    expect(find.text('GitHub Actions'), findsNothing);
   });
 }
