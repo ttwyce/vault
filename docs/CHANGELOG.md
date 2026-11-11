@@ -11,10 +11,13 @@
 - 新增 `unlock_policy.dart`（docs/08 §6）：生物识别失败 5 次强制主密码、
   主密码连续错误 10 次锁定 5 分钟、锁定过期开启新一轮计数、
   恢复码失败计入同一暴力面、成功后清零、JSON 往返
+- `UnlockPage` 用 `ref.listen` 监听错误文本变化累计失败，
+  锁定期间禁用按钮并显示倒计时；成功解锁清零计数
 - `DiagnosticsPage` 展示阈值
-- 测试：`unlock_policy_test.dart` 3 条 → 全量 **754 → 757**
+- 测试：`unlock_policy_test.dart` 3 条 → 全量 **754 → 757**；
+  `vault_gate_test.dart` 13 条回归全绿
 
-**边界**：计数尚未接进解锁页真实失败路径，也未持久化到安全存储；
+**边界**：失败计数仅当前会话内有效，尚未持久化到安全存储；
 真实生物识别 API 仍缺。M3 硬门槛未过，M4~M9 未完成。
 
 **验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
@@ -51,6 +52,8 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
 
   _UnlockMode _mode = _UnlockMode.passphrase;
   bool _obscure = true;
+  UnlockPolicyState _policy = const UnlockPolicyState();
+  String? _lastError;
 
   /// 只用于"每秒重建一次"以刷新已用秒数，本身不存任何进度。
   Timer? _ticker;
@@ -83,6 +86,31 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
       vaultSessionProvider.select((VaultSessionState s) => s.isBusy),
       (bool? _, bool next) => _syncTicker(next),
     );
+    // docs/08 §6：失败计数只在「新的错误文本」出现时推进一次，
+    // 避免 build 重跑把一次失败算成十次。
+    ref.listen<String?>(
+      vaultSessionProvider.select((VaultSessionState s) => s.error),
+      (String? previous, String? next) {
+        if (next == null || next == _lastError) return;
+        _lastError = next;
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        setState(() {
+          _policy = expireLockIfNeeded(_policy, nowMs: nowMs);
+          _policy = recordUnlockFailure(
+            _policy,
+            method: _mode == _UnlockMode.passphrase
+                ? UnlockMethod.passphrase
+                : UnlockMethod.recovery,
+            nowMs: nowMs,
+          );
+        });
+      },
+    );
+    // 成功解锁（错误清空）后重置计数。
+    if (state.error == null && _lastError != null) {
+      _lastError = null;
+      _policy = recordUnlockSuccess();
+    }
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -101,7 +129,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                 children: <Widget>[
                   const _Wordmark(),
                   const SizedBox(height: SketchSpace.xl),
-                  _buildFormCard(p, state, busy),
+                  _buildFormCard(p, state, busy, _policy),
                   const SizedBox(height: SketchSpace.lg),
                   const _FooterNote(),
                 ],
@@ -121,9 +149,19 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     SketchPalette p,
     VaultSessionState state,
     bool busy,
+    UnlockPolicyState policy,
   ) {
     final passphraseMode = _mode == _UnlockMode.passphrase;
     final error = state.error;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final gate = decideUnlockGate(
+      policy,
+      method: passphraseMode
+          ? UnlockMethod.passphrase
+          : UnlockMethod.recovery,
+      nowMs: nowMs,
+    );
+    final locked = !gate.allowed;
 
     return SketchFrame(
       radius: SketchRadii.b,
@@ -145,6 +183,10 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
             )
           else
             _RecoveryField(controller: _recovery, enabled: !busy),
+          if (locked) ...<Widget>[
+            const SizedBox(height: SketchSpace.md),
+            _ErrorNote(message: gate.hint),
+          ],
           if (error != null) ...<Widget>[
             const SizedBox(height: SketchSpace.md),
             // 文案原样显示：控制器里的措辞明确说了"无法区分密码错与文件损坏"，
@@ -164,7 +206,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                   : (busy ? '解锁中…' : '用恢复码解锁'),
               glyph: SketchGlyph.vault,
               tone: SketchTone.primary,
-              onPressed: busy
+              onPressed: busy || locked
                   ? null
                   : (passphraseMode ? _unlockWithPassphrase : _unlockWithRecovery),
             ),
