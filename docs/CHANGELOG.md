@@ -4,6 +4,29 @@
 
 ---
 
+## v0.75 · 2026-11-11
+
+### M7：工具确认卡片 UI（已验证）
+
+- 新增 `ToolConfirmationCard` / `showToolConfirmation`（docs/07 §4.1）：
+  同时显示人话操作、**完整内容预览**、数据流向；数据离开设备时写明目标
+  模型名并要求勾选二次确认，未勾选时确认按钮禁用
+- 卡片只返回批准/拒绝，不执行工具；`DiagnosticsPage` 提供
+  「预览工具确认卡片」演示入口（明确不写库）
+- 测试：`tool_confirmation_card_test.dart` 3 条（三段可见 / 二次确认 /
+  取消与确认返回值）→ 全量 **672 → 675**
+
+**边界**：真实模型主循环调用卡片、L2 逐次授权弹窗仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**675/675 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 70）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.74 · 2026-11-11
 
 ### M7：工具集补齐到 17 个（已验证）

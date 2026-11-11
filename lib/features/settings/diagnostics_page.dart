@@ -9,10 +9,12 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../agent/widgets/tool_confirmation_card.dart';
 import '../../data/audit/performance_baseline.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/activity/activity_logger.dart';
-import '../../data/agent/agent_policy.dart' show AgentLoopLimits;
+import '../../data/agent/agent_policy.dart'
+    show AgentLoopLimits, PolicyAction, PolicyDecision;
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
@@ -81,6 +83,34 @@ class DiagnosticsPage extends ConsumerWidget {
           SketchSpace.xxl,
         ),
         children: <Widget>[
+          SketchButton(
+            label: '预览工具确认卡片',
+            dense: true,
+            onPressed: () async {
+              const decision = PolicyDecision(
+                PolicyAction.requireConfirm,
+                <String>['写类工具需要用户确认'],
+                '内容预览',
+              );
+              final approved = await showToolConfirmation(
+                context: context,
+                toolName: 'create_note',
+                decision: decision,
+                humanAction: '新建一条笔记（演示，不写库）',
+                contentPreview: '标题：演示\n正文：确认卡片只做展示，不执行任何工具。',
+                dataLeavesDevice: false,
+                modelName: '端侧模型',
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(approved ? '用户已批准（演示）' : '用户已拒绝'),
+                  ),
+                );
+              }
+            },
+          ),
+          const SizedBox(height: SketchSpace.sm),
           SketchButton(
             label: '生成昨日总结',
             dense: true,
