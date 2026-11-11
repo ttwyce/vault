@@ -4,6 +4,31 @@
 
 ---
 
+## v0.57 · 2026-11-11
+
+### M5：模型下载器与索引重建判定层（已验证）
+
+- 新增 `lib/data/search/model_downloader.dart`（docs/06 §5 / §6）
+  - 五档源优先级、状态机 idle→checking→downloading→verifying→ready/corrupt
+  - 磁盘 ≥ 1.5×disk_bytes、`.part` 断点续传、sha256 常量时间比对、
+    每源 3 次重试、换源作废 .part、全源失败才标记损坏
+  - 索引重建：切换模型先删旧向量、全量按 20 条分批 + cursor 可续、
+    单条写入不排全量；下载中/校验中检索降级纯 FTS
+  - 备份排除三端四标记（Android 两处 / iOS / Windows）集中校验
+- `DiagnosticsPage` 展示源优先级、重试策略、备份排除与重建计划
+- 测试：`model_downloader_test.dart` 7 条 → 全量 **618 → 625**
+
+**边界**：真实下载 / Range 请求 / sha256 流式计算 / 推理写 entry_vec 仍属
+平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**625/625 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§5）、14（Day 52）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.56 · 2026-11-11
 
 ### M6：剪贴板 30 秒自动清除（已验证）

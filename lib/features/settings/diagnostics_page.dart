@@ -11,6 +11,7 @@ import '../../data/agent/agent_policy.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/search/embedding_manifest.dart';
+import '../../data/search/model_downloader.dart';
 
 /// 发布前自检 / 备份诊断页。
 ///
@@ -64,6 +65,44 @@ class DiagnosticsPage extends ConsumerWidget {
           const SizedBox(height: SketchSpace.md),
           for (final check in report.checks)
             _CheckTile(check: check),
+          const SizedBox(height: SketchSpace.xl),
+          SketchCard(
+            variant: 1,
+            fill: p.note,
+            tilt: SketchTilt.left,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '向量模型下载与索引重建',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                Text(
+                  '源优先级：${kDefaultSourceOrder.map((ModelSource s) => s.name).join(' → ')}\n'
+                  '每源 $kMaxAttemptsPerSource 次重试 · 校验失败换源 · 全源失败标记损坏\n'
+                  '磁盘需 ≥ 1.5×disk_bytes · .part 断点续传',
+                  style: TextStyle(fontSize: 11, height: 1.7, color: p.muted),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                Text(
+                  '备份排除三端四标记：${BackupExclusion(
+                    androidDataExtraction: true,
+                    androidFullBackup: true,
+                    iosIsExcludedFromBackup: true,
+                    windowsOutsideOneDrive: true,
+                  ).allConfigured ? '已配置' : '未配置'} · '
+                  '切换模型全量重建每批 20 条、cursor 可续\n'
+                  '下载中/校验中检索降级纯 FTS',
+                  style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: SketchSpace.xl),
           SketchCard(
             variant: 2,
