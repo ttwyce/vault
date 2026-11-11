@@ -1220,4 +1220,125 @@ void main() {
       expect(harness.backend.calls, isNotEmpty);
     });
   });
+
+  group('L2 删除列表（远端 item 文件消失）', () {
+    /// 构造一份「本地有该条目、远端明确给了删除列表」的工作区。
+    _Harness deletedHarness({
+      required EntrySnapshot local,
+      required int baseRev,
+      Map<String, String?>? syncState,
+    }) {
+      final harness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+        baseRevs: <String, int>{local.id: baseRev},
+        baseSnapshots: <String, EntrySnapshot?>{
+          local.id: baseRev == 0 ? null : _snapshot(id: local.id, rev: baseRev),
+        },
+        syncState: syncState,
+        delta: SyncCollectionDelta(
+          changed: <String, String?>{},
+          deleted: <String>{},
+          syncToken: 'token-2',
+        ),
+      );
+      final name = harness.codec.hashedName(local.id);
+      final itemPath = CloudLayout.itemPath(name);
+      harness.workspace.entries[name] = local;
+      harness.backend.delta.deleted.add(itemPath);
+      return harness;
+    }
+
+    test('规则 7：远端文件消失且本地未变时软删进回收站，清掉陈旧 ETag',
+        () async {
+      final local = _snapshot(id: 'entry-vanished', body: '原文', rev: 2);
+      final harness = deletedHarness(local: local, baseRev: 2);
+      final itemPath = harness.backend.delta.deleted.single;
+      harness.workspace.syncState[itemPath] = 'gone-e1';
+
+      final result = await harness.engine().run(harness.workspace);
+
+      expect(result.diff.deleted, <String>{itemPath});
+      final applied = result.entries[harness.codec.hashedName(local.id)]!;
+      expect(applied.deleted, isTrue);
+      expect(applied.deletedAt, _now);
+      expect(result.deletedEntries, contains(harness.codec.hashedName(local.id)));
+      expect(result.syncState.containsKey(itemPath), isFalse,
+          reason: '陈旧 sync_state 必须移除，否则下轮反复误判删除');
+      expect(result.cloudAppliedEntryIds, contains(local.id));
+      expect(result.pushedPaths, isEmpty,
+          reason: '本地未变时只是软删，不推新版本');
+    });
+
+    test('编辑胜：本地有未推编辑时复活并写新 rev，绝不因文件消失吞内容',
+        () async {
+      final local = _snapshot(id: 'entry-edited', body: '本地改过', rev: 3);
+      final harness = deletedHarness(local: local, baseRev: 2);
+      final itemPath = harness.backend.delta.deleted.single;
+      harness.workspace.syncState[itemPath] = 'gone-e1';
+
+      final result = await harness.engine().run(harness.workspace);
+
+      final applied = result.entries[harness.codec.hashedName(local.id)]!;
+      expect(applied.deleted, isFalse);
+      expect(applied.rev, 4);
+      expect(applied.body, '本地改过');
+      expect(result.syncState[itemPath], isNot('gone-e1'),
+          reason: '复活后推回云端会写入新 ETag，陈旧 ETag 必须被替换');
+      expect(result.pushedPaths, contains(itemPath),
+          reason: '复活的新版本必须推回云端');
+    });
+
+    test('本轮已有墓碑判定时，文件消失不重复 bump rev / 软删', () async {
+      final local = _snapshot(id: 'entry-both', body: '原文', rev: 3);
+      final harness = deletedHarness(local: local, baseRev: 2);
+      // 墓碑的 hashedName 必须与条目一致才会命中同一条。
+      _addTombstone(
+        harness,
+        SyncTombstone(
+          entryId: local.id,
+          hashedName: harness.codec.hashedName(local.id),
+          deletedAt: _now,
+          deviceId: _other,
+          rev: 3,
+        ),
+      );
+
+      final result = await harness.engine().run(harness.workspace);
+
+      final applied = result.entries[harness.codec.hashedName(local.id)]!;
+      expect(applied.rev, 4, reason: '墓碑的编辑胜已经 bump 一次，不能变成 5');
+      expect(result.pushedPaths.length, 1);
+      expect(
+        result.syncState[harness.backend.delta.deleted.single],
+        isNot('gone-e1'),
+        reason: '墓碑编辑胜推回云端后写入新 ETag，不会被删除列表二次处理',
+      );
+    });
+
+    test('非 items 命名空间的 deleted 只清状态，不动本地实体', () async {
+      final local = _snapshot(id: 'entry-keep', body: '本地完好', rev: 1);
+      final harness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+        delta: SyncCollectionDelta(
+          changed: <String, String?>{},
+          deleted: <String>{},
+          syncToken: 'token-2',
+        ),
+      );
+      final name = harness.codec.hashedName(local.id);
+      harness.workspace.entries[name] = local;
+      const String entityPath =
+          '/vault/entities/0/11111111111111111111111111111111.enc';
+      harness.backend.delta.deleted.add(entityPath);
+      harness.workspace.syncState[entityPath] = 'entity-e1';
+
+      final result = await harness.engine().run(harness.workspace);
+
+      expect(result.entries[name], same(local));
+      expect(result.syncState.containsKey(entityPath), isFalse);
+      expect(result.cloudAppliedEntryIds, isEmpty);
+    });
+  });
 }

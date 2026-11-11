@@ -434,11 +434,12 @@ void main() {
     Future<_FakeBackend> backend({
       required List<EntrySnapshot> remoteEntries,
       Map<String, List<int>> corruptFiles = const <String, List<int>>{},
+      Set<String> deletedPaths = const <String>{},
     }) async {
       final codec = env.codec;
       final delta = SyncCollectionDelta(
         changed: <String, String?>{},
-        deleted: const <String>{},
+        deleted: deletedPaths,
         syncToken: 'token-2',
       );
       final files = <String, _File>{
@@ -581,6 +582,61 @@ void main() {
           .map((row) => row.id)
           .toList();
       expect(ids, <String>[remote.id]);
+    });
+
+    test('远端 item 文件消失：软删进回收站、FTS 移除、sync_state 清干净',
+        () async {
+      // 先在本地写一条，再假装它上次同步已被云端确认（applied=1），
+      // 这样 load() 会给出 baseRev，编排器判定「本地未变 → 规则 7 软删」。
+      final created = await env.gateway.writeEntry(
+        EntryWrite.create(id: 'entry-vanished', title: '会被删掉', body: '正文'),
+      );
+      await env.gateway.markApplied(<int>[created.oplogSeq]);
+      final name = await env.codec.hashedName(created.snapshot.id);
+      final itemPath = CloudLayout.itemPath(name);
+      await env.db.into(env.db.syncStates).insert(
+            SyncStatesCompanion.insert(
+              path: itemPath,
+              etag: const Value<String?>('gone-e1'),
+            ),
+          );
+      final fake = await backend(
+        remoteEntries: const <EntrySnapshot>[],
+        deletedPaths: <String>{itemPath},
+      );
+
+      final result = await env.store().run(
+            SyncEngine(backend: fake, codec: env.codec),
+            trigger: 'integration',
+          );
+
+      expect(result.isFailed, isFalse);
+      expect(result.diff.deleted, <String>{itemPath});
+      final row = await (env.db.select(env.db.entries)
+            ..where((t) => t.id.equals('entry-vanished')))
+          .getSingle();
+      expect(row.deleted, 1);
+      expect(row.deletedAt, isNotNull);
+      expect(await env.count('trash'), 1,
+          reason: '规则 7 要求软删进回收站，不是物理删除');
+      expect(
+        await env.db.searchEntryIds(CjkSegmenter.matchQuery('会被删掉')),
+        isEmpty,
+        reason: '软删后 FTS 索引必须移除',
+      );
+      expect(
+        (await env.db.select(env.db.syncStates).get())
+            .map((row) => row.path)
+            .contains(itemPath),
+        isFalse,
+        reason: '陈旧 path → ETag 不能留到下一轮',
+      );
+      final ops = await (env.db.select(env.db.oplogs)
+            ..where((t) => t.entityId.equals('entry-vanished')))
+          .get();
+      expect(ops.length, 2, reason: '原 create + 同步产生的 delete');
+      expect(ops.last.op, OplogOp.delete.code);
+      expect(ops.last.applied, 1, reason: '远端已确认的软删不该再被推回去');
     });
 
     test('单飞锁跳过的结果不写 sync_log，也不动 sync_state', () async {

@@ -148,6 +148,13 @@ class _RunContext {
   final Set<String> cloudAppliedEntryIds = <String>{};
   final Set<String> tombstonesWritten = <String>{};
   final Set<String> resurrectedEntryIds = <String>{};
+
+  /// 本轮已由 `/vault/tombstones/` 明确处理过的 entry id。
+  ///
+  /// L2 的 `diff.deleted`（条目文件消失）是** weaker 信号**：同一轮里
+  /// 墓碑已经给出判定，就不能再用「文件不见」重复 bump rev 或软删一次。
+  final Set<String> tombstoneHandledEntryIds = <String>{};
+
   final Map<String, int> preconditionAttempts = <String, int>{};
 
   SyncState state = const SyncState(SyncPhase.idle);
@@ -582,6 +589,7 @@ class SyncEngine {
     }
 
     await _applyTombstones(ctx);
+    _applyDeletedItemFiles(ctx);
     ctx.advance(
       ctx.conflicts > 0
           ? SyncEvent.mergeDoneWithConflicts
@@ -591,6 +599,7 @@ class SyncEngine {
 
   Future<void> _applyTombstones(_RunContext ctx) async {
     for (final tombstone in ctx.tombstones) {
+      ctx.tombstoneHandledEntryIds.add(tombstone.entryId);
       if (ctx.resurrectedEntryIds.contains(tombstone.entryId)) {
         // 远端编辑已经通过规则 9 复活，不能再被同一轮墓碑软删回去。
         continue;
@@ -647,6 +656,58 @@ class SyncEngine {
         ctx.cloudAppliedEntryIds.add(tombstone.entryId);
       }
       // alreadyDeleted：幂等清理，不重复写墓碑。
+    }
+  }
+
+  /// 消费 L2 的 `diff.deleted`：远端 `/vault/items/` 文件消失。
+  ///
+  /// docs/04 §3.2 规定完整 16 分片扫描 / `sync-collection` 明确删除列表
+  /// 才能推断删除。这里把它当作**弱于墓碑**的信号：
+  ///
+  /// - 只处理 `/vault/items/` 路径，其它命名空间（entities / tombstones /
+  ///   devices）的 ETag 记录只清理，不碰本地实体；
+  /// - 本轮已有墓碑给出判定的 entry 一律跳过，避免重复 bump rev / 软删；
+  /// - 复用 [decideTombstone]：`localRev > baseRev` 说明本地有未推编辑，
+  ///   **编辑胜**，复活并写新版本，绝不因文件消失吞掉用户内容；
+  /// - 本地未变 → 规则 7 软删进回收站；本地已删 → 幂等，只清状态。
+  /// - 无论哪种结果，`sync_state` 里那条陈旧 path → ETag 都必须移除，
+  ///   否则下一轮会反复把它当成远端删除。
+  void _applyDeletedItemFiles(_RunContext ctx) {
+    const String itemsPrefix = '${CloudLayout.root}/items/';
+    for (final path in ctx.diff.deleted) {
+      ctx.workspace.syncState.remove(path);
+      if (!path.startsWith(itemsPrefix)) continue;
+
+      final hashedName = path.split('/').last;
+      final local = ctx.workspace.entries[hashedName];
+      if (local == null) continue;
+      if (ctx.tombstoneHandledEntryIds.contains(local.id)) continue;
+      if (ctx.resurrectedEntryIds.contains(local.id)) continue;
+
+      final baseRev = ctx.workspace.baseRevs[local.id] ?? 0;
+      final action = decideTombstone(
+        localDeleted: local.deleted,
+        localRev: local.rev,
+        baseRev: baseRev,
+      );
+      if (action == TombstoneAction.ignoreKeepLocal) {
+        final revived = _bumpSnapshot(local, rev: local.rev + 1, ctx: ctx);
+        ctx.workspace.entries[hashedName] = revived;
+        ctx.generatedOps.add(SyncPendingOp.upsert(
+          id: 'generated:upsert:${revived.id}',
+          hashedName: hashedName,
+          snapshot: revived,
+          baseRev: baseRev,
+        ));
+      } else if (action == TombstoneAction.apply) {
+        ctx.workspace.entries[hashedName] = local.copyWith(
+          deleted: true,
+          deletedAt: ctx.workspace.nowMs,
+        );
+        ctx.cloudAppliedEntryIds.add(local.id);
+      } else {
+        ctx.cloudAppliedEntryIds.add(local.id);
+      }
     }
   }
 

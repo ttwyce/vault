@@ -4,6 +4,60 @@
 
 ---
 
+## v0.21 · 2026-11-11
+
+### 修复 L2 删除列表未被消费（已验证）
+
+代码审查发现一个真实的同步缺口：`SyncEngine` 的 `_pull()` 只 GET
+`diff.added + diff.modified`，`diff.deleted` 从未被消费。也就是说
+`sync-collection` 明确给出的删除列表、或 16 分片完整扫描推断出的
+「远端 item 文件消失」，除了被记进 `SyncRunResult.diff` 之外没有任何效果；
+本地会一直保留那条条目。墓碑缺失 / 已被 90 天 TTL 清掉时，这类删除
+永远同步不过来。
+
+**改了什么**
+- `lib/core/sync/sync_engine.dart` 新增 `_applyDeletedItemFiles()`，
+  在 `_applyTombstones()` 之后消费 `ctx.diff.deleted`：
+  - 只处理 `/vault/items/` 路径；其它命名空间的陈旧 `sync_state`
+    记录一律清除但不碰本地实体
+  - 复用 `decideTombstone()`：`localRev > baseRev` 说明本地有未推编辑，
+    **编辑胜** —— 复活并写新 rev、生成 upsert 推回云端，绝不因文件消失
+    吞掉用户内容
+  - 本地未变 → 规则 7 软删进回收站（`deleted=true` + `deletedAt`）；
+    本地已删 → 幂等，只清状态
+  - 无论哪种判定，都从 `sync_state` 移除该 path → ETag，避免下一轮
+    反复把它当成远端删除
+- 新增 `tombstoneHandledEntryIds`：同一轮里墓碑是比「文件不见」更强的
+  信号，已由墓碑处理过的 entry 不再被删除列表二次 bump rev / 软删
+- `test/sync_engine_test.dart` 新增 4 条：规则 7 软删、编辑胜复活、
+  墓碑优先不重复处理、非 items 命名空间只清状态
+- `test/db_sync_workspace_test.dart` 新增 1 条端到端：软删真的落进
+  `trash` 表、FTS 移除、delete oplog `applied=1`、陈旧 ETag 清除
+
+**关键决策**
+- **墓碑优先，文件消失是弱信号**：两条路径都指向同一条删除时，
+  只按墓碑判定一次
+- **编辑胜判据复用 `localRev > baseRev`**，与 docs/04 §5.1 #8/#9 一致，
+  不新增一套「谁更新」的规则
+- **完整扫描才推断删除**这条红线不变：部分分片扫描的 `diff.deleted`
+  本来就是空的（D26），本轮不改变 L2 发现逻辑
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | **413/413 passed**（408 + 编排 4 + DB 1） |
+| `flutter build` / 打包 / 编译 | **未执行** |
+
+**工作方式**：全程主控串行，未开并行子代理；验证命令带
+`NO_PROXY=127.0.0.1,localhost,::1`；`pubspec.yaml` / `pubspec.lock`
+未改动、未新增依赖。**M3 硬门槛不变**：26 个真实集成用例仍未通过，不进 M4。
+
+**影响文档**：09（§5）、README（进度 / 数字 / 决策表）、14（Day 16）、
+20（收尾状态）、CHANGELOG（本条）
+
+---
+
 ## v0.20 · 2026-11-11
 
 ### M3 统一调度：正文 → taxonomy → 本地清理 → 云端墓碑 TTL（已验证）
