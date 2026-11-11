@@ -4,6 +4,28 @@
 
 ---
 
+## v0.47 · 2026-11-11
+
+### 归档阅读器页面接线（已验证）
+
+- 新增 `ArchiveReaderPage`（docs/05 §9）：用 `resolveReaderModes` 判定
+  纯净 / 原貌 / 对比三模式可用性，不可点的模式给出可执行提示，
+  底部显示「归档于 X · 原站状态」与 Wayback 回退提示
+- `ArchivePage` 条目点击 → `Navigator` 进阅读器，接真实 `ArchiveMeta`
+- 测试：`archive_reader_page_test.dart` 3 条（三模式可点、PDF 仅云端降级、
+  死链状态条） → 全量 **586 → 589**
+
+**边界**：PDF 渲染、并排 diff、按需下载仍属平台层，页面明确提示而不假装
+能显示。M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**589/589 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字）、14（Day 42）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.46 · 2026-11-11
 
 ### 归档 / 密码「新增」按钮接真实写入（已验证）

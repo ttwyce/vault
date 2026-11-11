@@ -7,6 +7,7 @@ import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import 'archive_reader_page.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_repository.dart';
@@ -241,7 +242,10 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                         Padding(
                           padding:
                               const EdgeInsets.only(bottom: SketchSpace.md),
-                          child: _ArchiveTile(entry: entry),
+                          child: GestureDetector(
+                            onTap: () => _openReader(entry),
+                            child: _ArchiveTile(entry: entry),
+                          ),
                         ),
                     const SizedBox(height: SketchSpace.lg),
                     SketchCard(
@@ -274,6 +278,21 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                 ),
         );
       },
+    );
+  }
+
+  Future<void> _openReader(ArchiveEntry entry) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext _) => ArchiveReaderPage(
+          title: entry.title ?? entry.meta.title ?? '(无标题)',
+          meta: entry.meta,
+          archivedAtMs: entry.updatedAt,
+          pdfLocal: false,
+          hasPreviousTextVersion: false,
+          body: null,
+        ),
+      ),
     );
   }
 
