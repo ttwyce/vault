@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/sketch_metrics.dart';
+import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
@@ -359,6 +360,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   style: TextStyle(fontSize: 11, color: p.red),
                 ),
                 Text(
+                  '解锁策略：生物识别失败 $kMaxBiometricFailures 次强制主密码 / '
+                  '主密码 $kMaxPassphraseFailures 次锁定 5 分钟\n'
                   '同步回归 ${auditSyncRegression().total} 用例：'
                   '本地 ${auditSyncRegression().localVerified} 条 · '
                   '需真实服务器 ${auditSyncRegression().pendingRealServer} 条\n'
