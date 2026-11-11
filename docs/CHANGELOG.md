@@ -4,6 +4,39 @@
 
 ---
 
+## v0.40 · 2026-11-11
+
+### M8/M9 预备层与 M5 判定层接线（已验证）
+
+**改了什么**
+- 新增 `lib/data/backup/backup_models.dart`（docs/03 §10）
+  - 加密备份包 manifest（entry + blob + 模型清单）、`/backup/` 与 `/vault/`
+    严格分离且拒绝路径穿越、7 天自动备份排期、明文导出二次确认状态机、
+    导入「同 hash 跳过 / 不同 hash 留冲突副本」无冲突合并
+- 新增 `lib/data/backup/security_audit.dart`（docs/09 §11 明文泄露扫描）
+  - 文本扫描定位密码 / 日记正文 / prompt / 密钥 / TOTP 五类泄露
+  - 结构化日志递归扫描：敏感字段名、已知明文、64 位 hex 材料；
+    输出 `passed` 结论与可执行摘要
+- **把 M5 判定层真正接进现有只读仓库**：`EntryRepository.searchHybrid()`
+  - `preprocessSearchQuery` → CjkSegmenter → FTS → 结构化过滤 → 时间衰减重排
+  - 默认排除 AI 日记（kind=4），可由调用方显式打开
+  - 类型限定词 / 指代词从 FTS 短语剥离（否则「那篇日记 同步」匹配不到），
+    剥离后剩余查询变短时短查询权重正确生效
+- 测试：`backup_audit_test.dart` 7 条、真实 FTS 接线
+  `hybrid_search_integration_test.dart` 4 条 → 全量 **553 → 564**
+
+**边界**：备份真实 zip 打包、WebDAV `/backup/` 上传、真机性能基线、
+26 个真实集成用例仍缺；M3 硬门槛未过，M4~M9 均未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**564/564 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§11）、14（Day 35）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.39 · 2026-11-11
 
 ### M7 Agent 预备层：工具策略闸门与日总结判定（已验证）

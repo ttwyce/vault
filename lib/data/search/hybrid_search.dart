@@ -58,10 +58,19 @@ SearchQuery preprocessSearchQuery(String raw, {required int nowMs}) {
   if (exact) text = text.substring(1, text.length - 1).trim();
 
   final kinds = <int>{};
+  // 类型限定词只用于结构化过滤，必须连同指代词一起从 FTS 短语里剥离，
+  // 否则「那篇日记 同步」会变成一个根本匹配不到的长短语。
+  const intentWords = <String>[
+    '日记', '书签', '归档', '想法', '笔记', '那篇', '这篇', '一篇',
+  ];
   if (text.contains('日记')) kinds.addAll(<int>{3, 4});
   if (text.contains('书签') || text.contains('归档')) kinds.add(5);
   if (text.contains('想法')) kinds.add(2);
   if (text.contains('笔记')) kinds.add(1);
+  for (final intent in intentWords) {
+    text = text.replaceAll(intent, ' ');
+  }
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
   int? fromMs;
   for (final entry in _timeHints.entries) {

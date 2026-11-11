@@ -32,7 +32,8 @@ void main() {
       final short = preprocessSearchQuery('同步', nowMs: _now);
       expect(short.vectorWeight, lessThan(1.0));
       expect(short.ftsWeight, greaterThan(1.0));
-      expect(q.vectorWeight, 1.0);
+      // 类型限定词剥离后剩余查询变短，短查询权重同样生效。
+      expect(q.vectorWeight, lessThan(1.0));
     });
 
     test('never 时间策略：不含时间词就没有 fromMs', () {

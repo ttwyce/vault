@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../db/tables/entry_tables.dart';
 import '../db/vault_database.dart';
 import '../search/cjk_segmenter.dart';
+import '../search/hybrid_search.dart';
 import 'entry_models.dart';
 
 /// 条目的**只读**仓库。
@@ -67,13 +68,67 @@ class EntryRepository {
     if (ids.isEmpty) return const <EntrySummary>[];
 
     final summaries = <EntrySummary>[];
-    for (final id in ids) {
+    for (var index = 0; index < ids.length; index++) {
+      final id = ids[index];
       final row = await (db.select(db.entries)..where((t) => t.id.equals(id)))
           .getSingleOrNull();
       if (row == null || row.deleted != 0) continue;
       summaries.add(await _summaryForRow(row));
     }
     return summaries;
+  }
+
+  /// 结构化混合检索（docs/06 §1.2）：在 FTS 前做查询预处理，
+  /// 再用时间衰减重排。向量那一路由 M5 接入层补上后走 RRF。
+  ///
+  /// 硬规则：**默认排除 AI 日记（kind=4）**，避免生成文本污染用户搜索。
+  Future<List<EntrySummary>> searchHybrid(
+    String rawQuery, {
+    required int nowMs,
+    int limit = 20,
+    bool includeAiDiary = false,
+  }) async {
+    final parsed = preprocessSearchQuery(rawQuery, nowMs: nowMs);
+    if (parsed.ftsPhrase.trim().isEmpty) {
+      return const <EntrySummary>[];
+    }
+    final matchQuery = CjkSegmenter.matchQuery(parsed.ftsPhrase);
+    if (!CjkSegmenter.isSearchable(parsed.ftsPhrase)) {
+      return const <EntrySummary>[];
+    }
+    // FTS 多取一些，让结构化过滤与时间衰减重排后仍有足够候选。
+    final ids = await db.searchEntryIds(matchQuery, limit: limit * 3);
+    if (ids.isEmpty) return const <EntrySummary>[];
+
+    final scored = <({EntrySummary summary, double score})>[];
+    for (var index = 0; index < ids.length; index++) {
+      final id = ids[index];
+      final row = await (db.select(db.entries)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+      if (row == null || row.deleted != 0) continue;
+      if (!includeAiDiary && row.kind == EntryKind.aiDiary.code) continue;
+      if (parsed.kinds.isNotEmpty && !parsed.kinds.contains(row.kind)) {
+        continue;
+      }
+      final from = parsed.fromMs;
+      if (from != null && row.updatedAt < from) continue;
+      final summary = await _summaryForRow(row);
+      // 没有向量分数时 rrfScore 用 FTS 名次近似，仍按时间衰减重排。
+      final rank = index + 1;
+      final score = rerankScore(
+        rrfScore: 1 / (60 + rank),
+        updatedAtMs: row.updatedAt,
+        nowMs: nowMs,
+      );
+      scored.add((summary: summary, score: score));
+    }
+    scored.sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      return byScore != 0 ? byScore : a.summary.id.compareTo(b.summary.id);
+    });
+    return List<EntrySummary>.unmodifiable(
+      scored.take(limit).map((item) => item.summary),
+    );
   }
 
   /// 单条完整行。编辑页打开时用。
