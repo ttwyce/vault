@@ -4,6 +4,29 @@
 
 ---
 
+## v0.69 · 2026-11-11
+
+### M4：归档维护计划器（已验证）
+
+- 新增 `archive_maintenance.dart`：把重检查排期、Wayback 回退、
+  本地 blob 缓存清理、L2/L3 快照降级收成一份可执行动作清单，
+  `toJson()` 可直接写进 job_queue / CI；不联网、不写库
+- 只对 dead / unreachable 回退 Wayback，restricted / paywalled 不回退；
+  `never` 策略不排重检查；缓存未超预算 / 配额未触线不产生动作
+- `DiagnosticsPage` 展示四类维护动作
+- 测试：`archive_maintenance_test.dart` 3 条 → 全量 **659 → 662**
+
+**边界**：真实 HTTP 检查、Wayback 请求、PDF 生成与抓取仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**662/662 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§5）、14（Day 64）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.68 · 2026-11-11
 
 ### M9：发布自检诚实暴露外部缺口（已验证）

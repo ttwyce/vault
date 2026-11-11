@@ -17,6 +17,7 @@ import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
 import '../../data/agent/rollup_service.dart';
+import '../../data/archive/archive_maintenance.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/entry/entry_repository.dart';
 import '../../data/platform/platform_capabilities.dart';
@@ -184,6 +185,18 @@ class DiagnosticsPage extends ConsumerWidget {
                   style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: SketchSpace.xl),
+          SketchCard(
+            variant: 2,
+            fill: p.surface,
+            tilt: SketchTilt.left,
+            child: Text(
+              '归档维护计划器：重检查 / Wayback 回退 / 本地缓存清理 / '
+              '快照降级 ${MaintenanceAction.values.length} 类动作，'
+              '按策略纯逻辑排期（真实抓取仍属平台层）',
+              style: TextStyle(fontSize: 11, color: p.muted),
             ),
           ),
           const SizedBox(height: SketchSpace.xl),
