@@ -11,6 +11,7 @@ import '../../data/vault/credential_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
+import '../../data/vault/credential_groups.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/password_generator.dart';
 import '../../data/write/write_gateway.dart';
@@ -127,6 +128,9 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     final p = context.sketch;
     final repo = ref.watch(credentialRepositoryProvider);
     final summaries = repo.listSummaries();
+    final groups = repo.smartGroups(
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
     return FutureBuilder<CredentialHealth>(
       future: repo.health(nowMs: DateTime.now().millisecondsSinceEpoch),
       builder: (BuildContext context, AsyncSnapshot<CredentialHealth> snap) {
@@ -178,6 +182,26 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                     style: TextStyle(fontSize: 10.5, color: p.blue)),
               ],
             ),
+          ),
+          const SizedBox(height: SketchSpace.lg),
+          FutureBuilder<List<CredentialGroupBucket>>(
+            future: groups,
+            builder: (
+              BuildContext context,
+              AsyncSnapshot<List<CredentialGroupBucket>> groupSnap,
+            ) {
+              final buckets = groupSnap.data ??
+                  const <CredentialGroupBucket>[];
+              return Wrap(
+                spacing: SketchSpace.sm,
+                runSpacing: SketchSpace.sm,
+                children: <Widget>[
+                  for (final bucket in buckets)
+                    SketchTag('${bucket.label} ${bucket.ids.length}',
+                        tone: SketchTone.plain),
+                ],
+              );
+            },
           ),
           const SizedBox(height: SketchSpace.lg),
           FutureBuilder<List<CredentialSummary>>(

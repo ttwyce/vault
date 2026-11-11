@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../db/vault_database.dart';
 import '../entry/entry_models.dart';
+import 'credential_groups.dart';
 import 'credential_models.dart';
 import 'hibp_client.dart';
 import '../write/write_gateway.dart';
@@ -175,6 +176,26 @@ class CredentialRepository {
       ));
     }
     return out;
+  }
+
+  /// 智能分组（docs/09 §8）：用已有健康样本派生，不额外读明文。
+  Future<List<CredentialGroupBucket>> smartGroups({
+    required int nowMs,
+    Set<String> favoriteIds = const <String>{},
+    Map<String, String?> categoryById = const <String, String?>{},
+  }) async {
+    final rows = await db.select(db.credentials).get();
+    final health = await samples();
+    final ids = <String>[for (final row in rows) row.id];
+    return groupCredentials(
+      samplesForGroups(
+        health,
+        ids,
+        favoriteIds: favoriteIds,
+        categoryById: categoryById,
+      ),
+      nowMs: nowMs,
+    );
   }
 
   Future<CredentialHealth> health({required int nowMs}) async =>

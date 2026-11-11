@@ -34,6 +34,7 @@ void main() {
     expect(find.text('GitHub'), findsNothing);
     expect(find.text('Cloudflare'), findsNothing);
     expect(find.text('还没有账号'), findsOneWidget);
+    expect(find.text('已泄露 0'), findsOneWidget);
   });
 
   testWidgets('新增账号写 kind=6 entry + credential 行，列表刷新',

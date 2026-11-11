@@ -4,6 +4,29 @@
 
 ---
 
+## v0.55 · 2026-11-11
+
+### M6：账号智能分组与两级树校验（已验证）
+
+- 新增 `lib/data/vault/credential_groups.dart`：收藏 / 未分组 / 已泄露 /
+  重复密码 / 超期未改五个智能分组，一个账号可落多个桶且桶内不重复；
+  超期按 180 天精确判定、未填修改时间保守视为超期；
+  两级分类树深度校验（禁止三级）
+- `CredentialRepository.smartGroups()` 用已有健康样本派生，
+  `VaultPage` 顶部显示「已泄露 N / 重复密码 N …」分组 chips
+- 测试：`credential_groups_test.dart` 3 条 → 全量 **611 → 614**
+
+**边界**：真实分组树 UI / 拖拽换组 / 字段模板 / 剪贴板清除仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**614/614 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 50）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.54 · 2026-11-11
 
 ### M6：HIBP k-anonymity 本地判定层（已验证）
