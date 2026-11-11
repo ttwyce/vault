@@ -4,6 +4,80 @@
 
 ---
 
+## v0.19 · 2026-11-11
+
+### M3 第三批收尾：#14 数据库集成测试 + #15 taxonomy 通道 / 保留策略（已验证）
+
+按 [20 交接文档](20-交接文档.md) §5 的顺序完成 #14 / #15 / #16：
+先给 `DbSyncWorkspaceStore` / `applySyncRun()` 补专用数据库集成测试，
+再实现 taxonomy 独立同步通道与 30 天清理墓碑联动，最后同步文档。
+仍不新增依赖、不改 `pubspec.yaml`、不接真实 HTTP、不执行构建。
+
+**改了什么**
+- 新增 `test/db_sync_workspace_test.dart`（12 条）：
+  - `load()` 装配 `syncState` / `deviceEtags` / `localWatermarks` /
+    `pendingOps`（`rawPayload` 就是 oplog 信封字节）/ `baseRevs` /
+    `baseSnapshots`，坏 oplog 隔离不阻断整轮
+  - 用 fake `WebDavBackend` 跑一次 `DbSyncWorkspaceStore.run()`，断言
+    entry / FTS / oplog `applied=1` / `sync_state` / `sync_log` /
+    `device_watermark` 一起落地
+  - 损坏载荷写进 `sync_quarantine` 且原始字节完整、不覆盖本地；
+    单飞锁跳过不写 `sync_log`
+  - 坏 `content_hash` 与「事务中段索引写入故意失败」两种失败都整次回滚，
+    断言 entity / oplog / sync_state / sync_log / 隔离区 / 水位无半写状态
+  - 钉住 `recordEntityPushes()` / `applyRemoteTaxonomySnapshots()` 落库入口
+- 新增 `lib/core/sync/entity_sync_engine.dart`：
+  - `EntitySyncEngine` 把 category / tag / `entry_taxonomy` 的待推 oplog
+    按 seq 顺序条件推送到 `CloudLayout.entityItemPath()`，成功后
+    `WriteGateway.recordEntityPushes()` 落库
+  - 16 分片 ETag diff 拉取；部分分片扫描不推断删除；坏载荷隔离；
+    单飞锁忙跳过；所有 PUT 必须带 `If-Match` / `If-None-Match`
+  - **不跑 `merge3`**：同 rev 或更旧的远端快照直接跳过
+- 新增 `lib/data/sync/db_entity_sync_port.dart`：
+  - `DbEntitySyncPort` 把通道接到 drift；`pending()` 只取 taxonomy 实体
+  - `purgeExpiredTrash()` 逐条过保留策略闸门后物理清空
+- 新增 `lib/core/sync/retention_policy.dart`：
+  - 30 天本地清理必须同时满足「到期 / 仍为删除态 / 本条墓碑 ETag 已确认 /
+    无未推 oplog」，否则等待下一次同步
+  - 90 天墓碑 TTL 独立判定，只产出云端删除计划，不动本地回收站
+- 修改 `lib/data/write/write_gateway.dart`：
+  - `applyEntityPull()` 在一个事务里落实体 / oplog / 隔离区 /
+    `sync_state` / `sync_log`，且**只替换 `/vault/entities/` 命名空间**
+  - `quarantineOnly()` 处理「只有坏载荷」的独立事务
+  - `purgeTrashEntry()` 是 30 天清理的唯一落库入口
+- 新增 `test/entity_sync_engine_test.dart`（13 条）：条件写 / 路径隔离 /
+  `applied=1` / 拉取不合并 / 隔离 / 部分分片保护 / 30 天闸门 /
+  90 天与 30 天分离判定
+
+**关键决策**
+- **刚 PUT 的文件合入本轮 remote**：PROPFIND 与 PUT 之间没有原子性，
+  否则服务器尚未列出新文件时会被 diff 误判为远端删除
+- **entity 通道只维护自己的 `sync_state` 命名空间**：正文通道的
+  `items/` / `tombstones/` / `devices/` 映射不被覆盖
+- **30 天清理的闸门是「本条墓碑的 ETag 已确认」**，不是「任意墓碑存在」、
+  更不是「到期时间到了」；条目恢复或有未推 oplog 一律不准删
+- **墓碑 90 天 TTL 与本地 30 天清理互不删除对方的依据**
+- **M3 硬门槛不变**：26 个真实集成用例仍未通过，不进 M4；
+  内存后端 / 内存加密库不替代 Nextcloud + mod_dav、真机计时、强杀重启
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | **401/401 passed**（376 + #14 12 + #15 13） |
+| `flutter build` / 打包 / 编译 | **未执行**（硬规则：未允许绝不构建） |
+
+**工作方式**：全程主控串行，未开并行子代理；验证命令带
+`NO_PROXY=127.0.0.1,localhost,::1`；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。本机安装 Flutter 3.47.9 stable / Dart 3.13.7 与 `.metadata`
+一致，用 `PUB_HOSTED_URL=https://pub.flutter-io.cn` + `--enforce-lockfile`
+按原锁文件取依赖，避免锁文件被改写。
+
+**影响文档**：20（交接状态与下一步）、09（§5 第三批收尾状态）、
+README（进度 / 数字 / 目录 / 下一步）、14（Day 14）、CHANGELOG（本条）
+
+---
+
 ## v0.18 · 2026-11-11
 
 ### M3 第三批交接：加密载荷与 DB 工作区（部分落地 / 已验证）

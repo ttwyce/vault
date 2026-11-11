@@ -40,7 +40,7 @@
 | [17 写入路径与活动埋点](17-写入路径与活动埋点.md) | **唯一写入口**、条目加密信封、rev 与 content_hash 语义、埋点合并窗口 | ✅ 已落地 |
 | [18 会话、存储与启动装配](18-会话存储与启动装配.md) | 五态状态机、闸门判断顺序、`meta.enc` 原子写、不伪造进度 | ✅ 已落地 |
 | [19 M2 并行契约](19-M2并行契约.md) | 四个子代理的文件边界、构造函数签名、行为规格、铁律 | ✅ 现行 |
-| [20 交接文档](20-交接文档.md) | M3 第三批中断后的硬规则、代码状态、验证结果与下一步 | ✅ 本次交接 |
+| [20 交接文档](20-交接文档.md) | M3 第三批的硬规则、代码状态、验证结果与后续真实接入边界 | ✅ 已更新至收尾 |
 | [14 开发日志](14-开发日志.md) | 施工过程、踩坑、环境限制、下一步任务 | ✅ 持续更新 |
 | [CHANGELOG](CHANGELOG.md) | 各版本决策变更记录 | ✅ 持续更新 |
 
@@ -103,6 +103,9 @@
 | D26 | **部分分片扫描** | **`includeDeletes=false` 时不推断删除** | 没扫到的分片里文件"不见"不是删除，避免误删本地数据 |
 | D27 | **M3 接入顺序** | **先无依赖内存编排，再确认真实 WebDAV 依赖** | 把条件写 / 412 / 墓碑顺序 / 预算先做成确定性测试；`pubspec.yaml` 未经确认不动 |
 | D28 | **载荷边界** | **`SyncPayloadCodec` + `SyncWorkspace` 隔离加密与数据库** | 后续只替换 codec / backend / workspace，编排逻辑不重写 |
+| D29 | **taxonomy 独立通道** | **category / tag / `entry_taxonomy` 只走 `/vault/entities/`，不跑 `merge3`** | 避免正文同步器把 taxonomy 信封当成 `EntrySnapshot`；同 rev 或更旧直接跳过 |
+| D30 | **刚 PUT 的文件合入本轮 remote** | **PROPFIND 与 PUT 之间没有原子性** | 服务器尚未列出新文件时，diff 不能把它误判为远端删除 |
+| D31 | **30 天清理闸门** | **本条墓碑 ETag 已确认 + 条目仍删除 + 无未推 oplog 才允许物理清空** | 只按到期时间删本地，另一台设备会把内容重新推回来；90 天墓碑 TTL 独立判定 |
 
 ---
 
@@ -158,21 +161,21 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 │   │   ├── fonts/            # 字体系统：角色/目录/校验/加载/持久化/服务
 │   │   ├── icons/            # 自制 SVG 图标 + path 解析器
 │   │   ├── identity/         # UUIDv7（时间有序主键）
-│   │   ├── sync/             # HLC + 纯 Dart 同步核心 / WebDAV 抽象 / SyncEngine 编排
+│   │   ├── sync/             # HLC / 状态机 / 冲突 / 正文编排 / entity 通道 / 保留策略 / 加密 codec
 │   │   └── widgets/          # SketchFrame / 按钮 / 标签 / 页面骨架
 │   ├── data/
 │   │   ├── activity/         # 活动埋点（日总结的唯一燃料）
 │   │   ├── db/               # drift 22 张表 + 加密打开器 + FTS5 索引
 │   │   ├── search/           # CJK 切分（中文检索的关键）
-│   │   ├── sync/             # 行级 diff / 三方合并（纯函数）
+│   │   ├── sync/             # 行级 diff / merge3 / DB 工作区 / entity 通道 drift 端口
 │   │   └── write/            # WriteGateway + 条目加密信封 + 快照
 │   └── features/             # chat / records / diary / archive / vault / settings / unlock
 ├── android/ ios/ windows/    # 三端平台工程
-├── test/                     # widget 测试 + 同步 / 写入 / 加密 / 内存编排测试
+├── test/                     # widget 测试 + 同步 / 写入 / 加密 / DB 集成 / 通道测试
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 第一 / 二批已完成（已验证）；M3 第三批加密载荷与 DB 工作区已交接（376/376）；M3 硬门槛未过**。
+**当前进度**：**M2 已完成；M3 第一 / 二 / 三批已完成（401/401 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -203,33 +206,35 @@ M3 第二批按用户选择的「继续无依赖编排」推进，仍不新增�
 墓碑编辑胜、条件推送、412、退避、预算、VERIFY / PUBLISH、单飞锁）。
 新增 `webdav_backend_test.dart` 8 条 + `sync_engine_test.dart` 21 条。
 
-M3 第三批交接状态（详见 [20 交接文档](20-交接文档.md)）：**#13 真实加密载荷 codec
-已完成**（`VaultKeys` 子密钥 + `ItemEnvelope` + HMAC 文件名 + taxonomy 信封），
-`SyncEngine` 已改为异步 codec；**#14 数据库工作区与事务落库代码已落地**
-（`DbSyncWorkspaceStore` / `WriteGateway.applySyncRun` / `sync_quarantine`），
-但专用数据库集成测试尚未补齐。`/vault/entities/` 独立命名空间已预留，
-taxonomy 独立通道、30 天清理与墓碑联动仍未做。新增
-`encrypted_sync_codec_test.dart` 7 条测试；中断轮留下的 #15 半成品已撤回。
+M3 第三批收尾状态（详见 [20 交接文档](20-交接文档.md) 与 CHANGELOG v0.19）：
+**#13 真实加密载荷 codec 已完成**（`VaultKeys` 子密钥 + `ItemEnvelope` +
+HMAC 文件名 + taxonomy 信封），`SyncEngine` 已改为异步 codec；
+**#14 数据库工作区与事务落库已补齐专用集成测试**
+（`test/db_sync_workspace_test.dart` 12 条：`load()` 装配、fake 后端 `run()`
+全链路、坏 hash 与事务中段失败整次回滚、quarantine 原始字节）；
+**#15 已完成**：`EntitySyncEngine` + `DbEntitySyncPort` 把
+category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件写、
+16 分片 ETag diff、不跑 `merge3`），`RetentionPolicy` 把 30 天本地清理
+与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
+`test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **376 条全绿**
-（369 + 新增 7）。默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载
-出现 5662 ms > 5000 ms 的性能抖动；单独复跑 2610 ms 通过，串行全量复跑 376/376。
+`flutter analyze` 无告警，`flutter test --concurrency=1` **401 条全绿**
+（376 + #14 12 + #15 13）。慢机器上建议继续用 `--concurrency=1`：
+默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
+5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑
 analyze + test，**未执行任何构建**。
 **M2 未做**（见 [09 §4](09-里程碑、验收与风险.md)）：分类拖拽排序、
-回收站 30 天到期清理任务（要写同步墓碑，留到 M3 接入层）、
 1000 条 60fps / 中文搜索 P95 性能基线（需真机，未构建）。
-**M3 未做**：真实 WebDAV 客户端与 M0 A5 结论、
-`DbSyncWorkspaceStore` / `applySyncRun()` 专用数据库集成测试、
-taxonomy 独立同步通道、30 天清理与墓碑联动、26 个集成用例。
-加密 codec 与 DB 事务代码已交接，quarantine 落盘已接入但未单独测试；
-内存后端只证明编排顺序与零丢失规则，不等于真实服务器 /
-真机计时 / 强杀重启 / 大 blob / 5000 条性能验收；09 §5 的硬门槛尚未通过，
-不进 M4。
-**下一步：按 [20 交接文档](20-交接文档.md) 补 #14 专用测试并完成 #15 / #16**。
-仍只跑 `flutter analyze` + `flutter test`，不构建、不开并行子代理；涉及新增/启用
-WebDAV 依赖或确认 M0 A5 结论时，先向用户确认再改 `pubspec.yaml`。
-环境说明见 `C:\Android\AGENTS.md`。
+**M3 未做**：真实 WebDAV 客户端与 M0 A5 结论、26 个真实集成用例、
+Nextcloud + mod_dav Docker、真机计时 / 强杀重启 / 大 blob / 5000 条验收；
+30 天清理的云端墓碑 DELETE 编排与 90 天墓碑文件物理删除仍待真实接入层。
+内存后端 + 内存加密库只证明编排顺序与零丢失规则，不等于真实服务器验收；
+09 §5 的硬门槛尚未通过，不进 M4。
+**下一步**：向用户确认 M0 A5（客户端对坚果云 / Nextcloud）结论，再决定
+是否新增 / 启用 WebDAV 依赖；随后接真实 HTTP、跑 26 个集成用例。
+仍只跑 `flutter analyze` + `flutter test`，不构建、不开并行子代理；涉及
+改 `pubspec.yaml` 时先向用户确认。环境说明见 `C:\Android\AGENTS.md`。
 
 ---
 

@@ -8,6 +8,7 @@ import 'package:drift/drift.dart';
 import '../../core/crypto/secret_bytes.dart';
 import '../../core/crypto/vault_keys.dart';
 import '../../core/identity/uuid_v7.dart';
+import '../../core/sync/cloud_layout.dart';
 import '../../core/sync/hlc.dart';
 import '../../core/sync/sync_engine.dart';
 import '../db/tables/entry_tables.dart';
@@ -1725,6 +1726,132 @@ class WriteGateway {
         requestCount: files.length,
       );
     });
+  }
+
+  /// taxonomy 独立通道的一次拉取落库：实体 / oplog / sync_state / sync_log /
+  /// 隔离区都在同一事务里。
+  ///
+  /// [entityState] 只覆盖 `/vault/entities/` 命名空间，不碰正文通道的
+  /// `items/` / `meta.enc` / `devices/` 映射 —— 两条通道各自维护 sync_state。
+  Future<void> applyEntityPull(
+    Iterable<RemoteTaxonomyFile> files, {
+    required Map<String, String?> entityState,
+    Map<String, List<int>> quarantinePayloads =
+        const <String, List<int>>{},
+    String trigger = 'entity_pull',
+  }) {
+    return _db.transaction(() async {
+      await _ensureQuarantineTable();
+      final key = await _keys.item();
+      var applied = 0;
+      for (final file in files) {
+        final snapshot = file.snapshot;
+        if (!_isTaxonomyEntity(snapshot.entity)) {
+          throw WriteException(
+            'invalid',
+            '远端 taxonomy 实体 ${snapshot.entity} 不在白名单内',
+          );
+        }
+        _observeSnapshotHlc(snapshot.hlc);
+        final latest = await _latestTaxonomy(snapshot.entity, snapshot.id);
+        if (latest != null && latest.rev >= snapshot.rev) {
+          await _upsertSyncState(file.path, file.etag);
+          continue;
+        }
+        await _commitTaxonomy(
+          snapshot: snapshot,
+          op: _taxonomyOp(latest, snapshot),
+          key: key,
+          apply: () => _applyTaxonomySnapshot(snapshot),
+          applied: true,
+        );
+        await _upsertSyncState(file.path, file.etag);
+        applied++;
+      }
+      await _replaceEntitySyncState(entityState);
+      await _writeQuarantinePayloads(quarantinePayloads);
+      await _writeSyncLogRecord(
+        trigger: trigger,
+        outcome: 'ok',
+        pulled: applied,
+        requestCount: files.length,
+      );
+    });
+  }
+
+  /// 只有坏载荷、没有可落库文件时，也必须在事务里写隔离区。
+  Future<void> quarantineOnly(
+    Map<String, List<int>> payloads, {
+    String trigger = 'entity_pull',
+  }) {
+    return _db.transaction(() async {
+      await _ensureQuarantineTable();
+      await _writeQuarantinePayloads(payloads);
+      await _writeSyncLogRecord(
+        trigger: trigger,
+        outcome: 'partial',
+        pulled: 0,
+        requestCount: payloads.length,
+      );
+    });
+  }
+
+  /// 30 天到期清理：物理删除一条回收站记录及其 entry 行。
+  ///
+  /// **调用方必须先用 [RetentionPolicy] 判定闸门**：墓碑已确认、条目仍处于
+  /// 删除态、没有未推送 oplog。这里只做落库，不重复做安全判断。
+  Future<void> purgeTrashEntry(
+    String entryId, {
+    String trigger = 'trash_retention',
+  }) {
+    return _db.transaction(() async {
+      await (_db.delete(_db.trashRows)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.entryHistory)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.entryCategories)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.entryTags)..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.entries)..where((t) => t.id.equals(entryId))).go();
+      await _db.removeSearchDocument(entryId);
+      await _writeSyncLogRecord(
+        trigger: trigger,
+        outcome: 'ok',
+        pulled: 0,
+        pushed: 0,
+      );
+    });
+  }
+
+  /// 把 `/vault/entities/` 的 sync_state 整体换成一轮通道的最新映射。
+  ///
+  /// 只删这个命名空间的旧行，其它通道（items / tombstones / devices）原样保留。
+  Future<void> _replaceEntitySyncState(
+    Map<String, String?> entityState,
+  ) async {
+    const String prefix = '${CloudLayout.root}/entities/';
+    final stale = await (_db.select(_db.syncStates)
+          ..where((t) => t.path.like('$prefix%')))
+        .get();
+    for (final row in stale) {
+      if (!entityState.containsKey(row.path)) {
+        await (_db.delete(_db.syncStates)..where((t) => t.path.equals(row.path)))
+            .go();
+      }
+    }
+    for (final entry in entityState.entries) {
+      if (!entry.key.startsWith(prefix)) {
+        throw WriteException(
+          'invalid',
+          'entity 通道不允许写其它命名空间的 sync_state：${entry.key}',
+        );
+      }
+      await _upsertSyncState(entry.key, entry.value);
+    }
   }
 
   /// 隔离区记录。表用原生 SQL 创建，避免为了诊断表做一次 drift codegen。
