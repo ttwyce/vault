@@ -131,6 +131,8 @@
 | D54 | **归档写入口也走 WriteGateway** | **blob_ref / link_check / job_queue 的写入统一在事务内，重复检查只补非空字段** | 绕过唯一写入口或让重放抹掉 simhash 证据都会造成静默数据损坏 |
 | D55 | **密码永不向量化** | **`planChunks(kind=6)` 直接返回空计划** | 密码进任何模型上下文都是不可接受的泄露面 |
 | D56 | **向量模型配置写进 manifest** | **Gemma query/doc 前缀分离、Qwen3 last pooling 由 audit 校验** | 两个坑都不报错但召回率静默崩掉 |
+| D57 | **密码明文零出设备** | **`CredentialGuard` 代码级脱敏 + prompt 扫描，健康报告只返回统计** | 靠 prompt 约束挡不住工具返回值夹带明文 |
+| D58 | **空会话不落库** | **新对话是草稿态，首条消息才写 conversation** | 每点一次「新对话」就多一条空记录会填满抽屉（T26） |
 
 ---
 
@@ -201,7 +203,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 编排已补齐；M4 归档 / M5 检索预备层已落地（516/516 已验证）；M3 硬门槛未过，M4/M5 未完成**。
+**当前进度**：**M2 已完成；M3 编排已补齐；M4 归档 / M5 检索 / M6 密码 / M7 会话预备层已落地（533/533 已验证）；M3 硬门槛未过，M4~M7 未完成**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -244,8 +246,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **516 条全绿**
-（交接基线 376 + 后续各批次 140，逐批明细见 CHANGELOG）。慢机器上建议
+`flutter analyze` 无告警，`flutter test --concurrency=1` **533 条全绿**
+（交接基线 376 + 后续各批次 157，逐批明细见 CHANGELOG）。慢机器上建议
 继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。

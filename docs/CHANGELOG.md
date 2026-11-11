@@ -4,6 +4,46 @@
 
 ---
 
+## v0.38 · 2026-11-11
+
+### M6 / M7 预备层：密码判定与会话抽屉判定（已验证）
+
+按 docs/11 §4 / docs/09 §8 / docs/12 §5 继续落地不依赖真实模型 / 平台通道 /
+新依赖的纯逻辑。
+
+**改了什么**
+- 新增 `lib/data/vault/credential_models.dart`
+  - `CustomFields` 结构（≤20 个、id 唯一、解析即校验），`redactedLabels()`
+    只返回字段名不返回值
+  - `estimatePasswordStrength()` 本地 0~4 估算，常见弱模式直接 0
+  - `computeCredentialHealth()` 重复 / 弱 / 泄露 / 超 180 天 / 收藏统计；
+    **报告里没有任何明文或指纹**
+  - `hibpPrefix()` / `hibpHit()` k-anonymity：只发 SHA1 前 5 位、后缀本地比对
+  - `CredentialGuard`：工具返回值敏感字段整体脱敏、prompt 明文扫描、
+    备注默认 L0（云端需逐次授权）—— docs/11 §4.4 的代码级拦截
+- 新增 `lib/data/chat/conversation_models.dart`
+  - `groupConversations()`：用户分组优先且不再出现在日期分组里，
+    今天 / 昨天 / 本周 / 更早四组
+  - `ConversationDraftState`：T26 草稿态不发第一条消息不落库、切走直接丢弃、
+    重复提交幂等
+  - `orderMessages()`：T25 append-only 按 (createdAt, hlc, id) 稳定排序且不可变
+  - `deriveConversationTitle()`：首条消息前 20 字兜底
+- 测试：`credential_models_test.dart` 9 条、`conversation_models_test.dart` 8 条
+  → 全量 **516 → 533**
+
+**边界**：纯判定层。密码字段级加密落库、TOTP 生成、剪贴板 30s 清除、
+HIBP 真实网络请求、会话 UI 抽屉、AI 工具循环都未实现（需平台通道 / 网络 /
+真机）。M3 硬门槛未过，M4~M7 均未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**533/533 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§8 / §9）、14（Day 33）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.37 · 2026-11-11
 
 ### M5 预备层：混合检索判定与向量模型 manifest（已验证）
