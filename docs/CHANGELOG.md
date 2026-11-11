@@ -4,6 +4,30 @@
 
 ---
 
+## v0.53 · 2026-11-11
+
+### M6：敏感字段加密通道统一（已验证）
+
+- `CredentialRepository` 抽出 `_openField/_writeField`，把 TOTP Base32 密钥
+  与 `custom_fields`（含 secret:true 项）也收进 K_item 字段级加密通道；
+  三个字段各自绑定 `credential_field/<field>` + 账号 id
+- `setTotpSecret` 先校验 Base32 再封密文；`customFields()` 解密往返；
+  `listSummaries` 从解密后的密钥生成验证码，密钥本身绝不出仓库
+- 测试：`credential_repository_test.dart` +1 条（TOTP/自定义字段密文落库、
+  解密往返、加密密钥仍生成 RFC 6238 正确码、非法 Base32 拒绝）
+  → 全量 **605 → 606**
+
+**边界**：剪贴板 30 秒清除、HIBP 网络请求、账号分组树与字段模板仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**606/606 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 48）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.52 · 2026-11-11
 
 ### M6：credential 字段级加密落库（已验证）

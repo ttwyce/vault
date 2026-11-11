@@ -152,4 +152,50 @@ void main() {
       throwsA(isA<Object>()),
     );
   });
+
+  test('TOTP 密钥与 secret 自定义字段也走同一加密通道', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-fields',
+      kind: EntryKind.credential,
+      title: '带密钥的账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-fields'),
+        );
+    await repo.setTotpSecret(
+      'cred-fields',
+      'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+    );
+    const fields = CustomFields(<CredentialField>[
+      CredentialField(
+        id: 'f1',
+        label: '恢复码',
+        value: 'xxxx-yyyy',
+        type: CustomFieldType.text,
+        secret: true,
+        sort: 0,
+      ),
+    ]);
+    await repo.setCustomFields('cred-fields', fields);
+
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-fields')))
+        .getSingle();
+    expect(row.totpSecret, isNot(contains('GEZDGNBVGY3TQOJQ')));
+    expect(row.customFields, isNot(contains('xxxx-yyyy')));
+    expect(row.customFields, isNot(contains('恢复码')));
+
+    final back = await repo.customFields('cred-fields');
+    expect(back.fields.single.value, 'xxxx-yyyy');
+    expect(back.fields.single.secret, isTrue);
+
+    final summaries = await repo.listSummaries(nowMs: 59000);
+    expect(summaries.single.totpCode, '287082',
+        reason: '加密密钥仍能正确生成 RFC 6238 验证码');
+
+    expect(
+      () => repo.setTotpSecret('cred-fields', 'ABC1'),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }

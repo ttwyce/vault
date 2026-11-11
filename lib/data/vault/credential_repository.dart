@@ -2,8 +2,8 @@ import 'package:drift/drift.dart';
 
 import '../db/vault_database.dart';
 import '../entry/entry_models.dart';
-import '../write/write_gateway.dart';
 import 'credential_models.dart';
+import '../write/write_gateway.dart';
 import 'totp.dart';
 
 /// 密码列表展示用的一行。只带非敏感字段，绝不把 password 带进 UI。
@@ -51,34 +51,77 @@ class CredentialRepository {
     if (raw == null || raw.isEmpty) return '';
     // 旧数据可能是明文（M6 之前）；密文一定是 base64 且能 parse。
     // 只有「明显不是密文」才按明文算强度，绝不把解密失败当成明文。
+    return _openField(row, 'password', raw);
+  }
+
+  static bool _looksLikeEnvelope(String raw) =>
+      raw.length > 32 && RegExp(r'^[A-Za-z0-9+/=]+$').hasMatch(raw);
+  Future<String> _openField(
+    CredentialRow row,
+    String field,
+    String? raw,
+  ) async {
+    if (raw == null || raw.isEmpty) return '';
     if (!_looksLikeEnvelope(raw)) return raw;
     try {
       return await gateway.openCredentialField(
         raw,
         credentialId: row.id,
-        field: 'password',
+        field: field,
       );
     } on Object {
       return '';
     }
   }
 
-  static bool _looksLikeEnvelope(String raw) =>
-      raw.length > 32 && RegExp(r'^[A-Za-z0-9+/=]+$').hasMatch(raw);
-
-  /// 写入密码（字段级加密）。明文绝不落库。
-  Future<void> setPassword(String credentialId, String plaintext) async {
+  Future<void> _writeField(
+    String credentialId,
+    String field,
+    String plaintext, {
+    bool updateChangedAt = false,
+  }) async {
     final sealed = await gateway.sealCredentialField(
       credentialId: credentialId,
-      field: 'password',
+      field: field,
       plaintext: plaintext,
     );
     await (db.update(db.credentials)
           ..where((t) => t.id.equals(credentialId)))
         .write(CredentialsCompanion(
-      password: Value<String?>(sealed),
-      passwordChangedAt: Value<int?>(DateTime.now().millisecondsSinceEpoch),
+      password: field == 'password' ? Value<String?>(sealed) : const Value<String?>.absent(),
+      totpSecret: field == 'totp_secret' ? Value<String?>(sealed) : const Value<String?>.absent(),
+      customFields: field == 'custom_fields' ? Value<String?>(sealed) : const Value<String?>.absent(),
+      passwordChangedAt: updateChangedAt
+          ? Value<int?>(DateTime.now().millisecondsSinceEpoch)
+          : const Value<int?>.absent(),
     ));
+  }
+
+
+  /// 写入密码（字段级加密）。明文绝不落库。
+  Future<void> setPassword(String credentialId, String plaintext) =>
+      _writeField(credentialId, 'password', plaintext, updateChangedAt: true);
+
+  /// 写入 TOTP Base32 密钥（字段级加密）。
+  Future<void> setTotpSecret(String credentialId, String base32Secret) {
+    // 先校验格式，避免把垃圾密钥封进密文。
+    decodeBase32(base32Secret);
+    return _writeField(credentialId, 'totp_secret', base32Secret);
+  }
+
+  /// 写入自定义字段（含 secret:true 的项，整体加密）。
+  Future<void> setCustomFields(String credentialId, CustomFields fields) =>
+      _writeField(credentialId, 'custom_fields', fields.toJsonString());
+
+  /// 读回自定义字段（只在需要展示详情时调用）。
+  Future<CustomFields> customFields(String credentialId) async {
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (row == null) return const CustomFields(<CredentialField>[]);
+    return CustomFields.fromJsonString(
+      await _openField(row, 'custom_fields', row.customFields),
+    );
   }
 
   Future<List<CredentialHealthSample>> samples() async {
@@ -120,8 +163,8 @@ class CredentialRepository {
           .getSingleOrNull();
       if (entry == null) continue;
       String? totpCode;
-      final totpSecret = row.totpSecret;
-      if (totpSecret != null && totpSecret.isNotEmpty) {
+      final totpSecret = await _openField(row, 'totp_secret', row.totpSecret);
+      if (totpSecret.isNotEmpty) {
         try {
           totpCode = generateTotp(
             base32Secret: totpSecret,
