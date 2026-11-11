@@ -4,6 +4,42 @@
 
 ---
 
+## v0.39 · 2026-11-11
+
+### M7 Agent 预备层：工具策略闸门与日总结判定（已验证）
+
+按 docs/07 §3 / §4 / §5 / §6 落地不依赖模型 / 网络 / MCP 的部分。
+
+**改了什么**
+- 新增 `lib/data/agent/agent_policy.dart`
+  - `AgentTool` 注册表抽象（为二期 MCP 预留）、`RiskLevel` / `PrivacyLevel`
+  - `checkToolCall()`：**所有工具执行前统一过策略闸门**，确认卡片显示
+    人话操作 + 完整内容预览 + 数据是否离开设备
+  - docs/07 §4.3 五条密码绝对边界写成代码级 deny：明文进 prompt、
+    密码走云端、密码同步第三方 MCP、L0-only 工具接云端、L2 未逐次授权
+  - `AgentLoopLimits`：最多 6 轮、工具结果截断 2000 字
+  - `routeModelForTask()`：密码 / 日记 / 日总结 / TOTP 强制端侧
+- 新增 `lib/data/agent/daily_summary.dart`
+  - 活动按「编辑 > 剪藏 > 浏览」加权聚合、时间线升序去重
+  - 滚动摘要层级：周读 7 日 / 月读 4 周 / 年读 12 月
+  - `validateCitations()` 剔除不存在 / 重复引用，绝不展示假引用
+  - `AiDiaryRules`：kind=4 物理隔离、默认排除检索、不向量化、不可编辑、
+    长度 150~300 字
+- 测试：`agent_policy_test.dart` 10 条、`daily_summary_test.dart` 10 条
+  → 全量 **533 → 553**
+
+**边界**：纯判定层，不调模型、不联网、不接 MCP、不生成真实日记；
+定时任务 / 端侧推理 / UI 抽屉仍缺。M3 硬门槛未过，M4~M7 均未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**553/553 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§9）、14（Day 34）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.38 · 2026-11-11
 
 ### M6 / M7 预备层：密码判定与会话抽屉判定（已验证）
