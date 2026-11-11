@@ -23,6 +23,8 @@ import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
+import '../../core/sync/sync_state_machine.dart' show SyncPhase;
+import '../../core/sync/sync_status_ui.dart';
 import '../../data/agent/rollup_service.dart';
 import '../../data/archive/archive_job_queue.dart';
 import '../../data/archive/link_check_service.dart';
@@ -290,6 +292,37 @@ class DiagnosticsPage extends ConsumerWidget {
               '抓取流水线 ${kArchivePipeline.length} 步 + PDF 失败降级 / '
               '按需下载 L1 优先（真实抓取仍属平台层）',
               style: TextStyle(fontSize: 11, color: p.muted),
+            ),
+          ),
+          const SizedBox(height: SketchSpace.xl),
+          SketchCard(
+            variant: 0,
+            fill: p.surface,
+            tilt: SketchTilt.none,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '同步状态 → UI 映射（docs/04 §11）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                Text(
+                  'IDLE 无提示 / PROBE·PULL 细进度条 / PUSH 正在上传 N 项 / '
+                  '冲突橙色横幅 / BACKOFF 静默 / E_AUTH·E_QUOTA 横幅；'
+                  '隔离文件红点见设置页。真实状态注入需 M0 A5。',
+                  style: TextStyle(fontSize: 10.5, color: p.muted),
+                ),
+                Text(
+                  '映射层已就绪 · 当前默认 '
+                  '${resolveSyncBanner(phase: SyncPhase.idle).tone.name}',
+                  style: TextStyle(fontSize: 10.5, color: p.blue),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: SketchSpace.xl),

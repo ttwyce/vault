@@ -4,6 +4,29 @@
 
 ---
 
+## v1.02 · 2026-11-12
+
+### M3 预备：同步状态 → UI 映射（已验证）
+
+- 新增 `sync_status_ui.dart`（docs/04 §11）：把 13 个 SyncPhase、
+  10 类错误码、冲突数、隔离数、重试时间映射成顶部横幅文案 / 颜色 /
+  点击动作；BACKOFF 顶部静默只在设置页显示下次重试
+- 优先级明确：致命错误 > 冲突 > 进行中 > 退避 > IDLE；
+  `SyncDiagnosticsNote` 提供隔离文件红点与重试倒计时
+- `DiagnosticsPage` 展示映射规则；真实状态注入仍需 M0 A5
+- 测试：`sync_status_ui_test.dart` 5 条 → 全量 **738 → 743**
+
+**边界**：只做判定层，未接 App 启动 / 真实 WebDAV 状态；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**743/743 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 97）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.01 · 2026-11-12
 
 ### M7：消息分页与 90 天会话归档判定（R15，已验证）
