@@ -233,6 +233,47 @@ class WriteGateway {
 
   static int _defaultNow() => DateTime.now().millisecondsSinceEpoch;
 
+  /// credential 字段级加密：把一段明文封进 ItemEnvelope 再 base64 存进 TEXT 列。
+  ///
+  /// 用 K_item 与 entry 同域；AAD 绑定 `entity=credential_field`、条目 id 与
+  /// 字段名，因此把密文挪到别的账号 / 别的字段会认证失败。
+  /// 只在写入口内使用 DEK，**密钥绝不出 gateway**。
+  Future<String> sealCredentialField({
+    required String credentialId,
+    required String field,
+    required String plaintext,
+    int rev = 1,
+  }) async {
+    final key = await _keys.item();
+    final envelope = await ItemEnvelope.seal(
+      key: key,
+      entity: 'credential_field/$field',
+      entityId: credentialId,
+      rev: rev,
+      plaintext: utf8.encode(plaintext),
+    );
+    return base64.encode(envelope.encode());
+  }
+
+  /// 解开 [sealCredentialField] 产生的密文。
+  ///
+  /// 除了 AEAD 自身的头部认证，还要**对照数据库行**校验 entity / id：
+  /// 把 A 账号的整段密文原样复制到 B 账号时，信封头里的 id 仍是 A，
+  /// 光靠 AAD 是发现不了的。
+  Future<String> openCredentialField(
+    String encoded, {
+    required String credentialId,
+    required String field,
+  }) async {
+    final envelope = ItemEnvelope.parse(base64.decode(encoded));
+    if (envelope.entityId != credentialId ||
+        envelope.entity != 'credential_field/$field') {
+      throw StateError('credential 密文与当前行不匹配，拒绝解密');
+    }
+    final key = await _keys.item();
+    return utf8.decode(await envelope.open(key: key));
+  }
+
   // ---------------------------------------------------------------------------
   // 写
   // ---------------------------------------------------------------------------

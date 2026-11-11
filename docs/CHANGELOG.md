@@ -4,6 +4,34 @@
 
 ---
 
+## v0.52 · 2026-11-11
+
+### M6：credential 字段级加密落库（已验证）
+
+- `WriteGateway.sealCredentialField/openCredentialField`：复用 K_item +
+  `ItemEnvelope`，AAD 绑定 `credential_field/<field>` / 账号 id / rev，
+  base64 后存进 TEXT 列；**密钥绝不出 gateway**
+- 打开时除了 AEAD 头部认证，还**对照数据库行**校验 entityId / field，
+  堵住「把 A 账号整段密文原样复制到 B 账号」这类跨行重放
+- `CredentialRepository` 注入 gateway：`setPassword` 只写密文、
+  `samples()` 在内存解密算强度但报告只给统计；旧明文行兼容但不回写
+- 密码页「生成强密码」现在真正以密文落库，不再只是展示；
+  `passwordChangedAt` 同步更新
+- 测试：`credential_repository_test.dart` +1 条（明文不落盘 / 跨行重放拒绝 /
+  报告无明文）、`vault_page_test.dart` 1 条改为验证密文落库
+  → 全量 **604 → 605**
+
+**边界**：TOTP 密钥与 secret 自定义字段尚未用同一通道加密、剪贴板清除与
+HIBP 网络请求仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**605/605 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 47）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.51 · 2026-11-11
 
 ### M6：密码生成器落地并接进新增弹窗（已验证）

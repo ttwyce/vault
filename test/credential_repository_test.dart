@@ -16,7 +16,7 @@ void main() {
 
   setUp(() async {
     app = await TestApp.create(now: () => 1731052800000);
-    repo = CredentialRepository(app.db);
+    repo = CredentialRepository(app.db, app.gateway);
   });
   tearDown(() async => app.dispose());
 
@@ -108,5 +108,48 @@ void main() {
         reason: 'RFC 6238 8 位 94287082 的 6 位后缀');
     expect(items.single.toString(),
         isNot(contains('GEZDGNBVGY3TQOJQ')));
+  });
+
+  test('字段级加密：明文不落库，篡改 AAD 头会认证失败', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-enc',
+      kind: EntryKind.credential,
+      title: '加密账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-enc'),
+        );
+    await repo.setPassword('cred-enc', 'CorrectHorse!2026');
+
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-enc')))
+        .getSingle();
+    expect(row.password, isNot('CorrectHorse!2026'));
+    expect(row.password, isNot(contains('CorrectHorse')));
+    expect(row.passwordChangedAt, isNotNull);
+
+    // 健康报告能解出明文做强度估算，但对外只给统计。
+    final health = await repo.health(nowMs: 1731052800000);
+    expect(health.total, 1);
+    expect(health.toJson().toString(), isNot(contains('CorrectHorse')));
+
+    // 与另一个账号的密文互换 → AAD 绑定失败，绝不误解密。
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-other'),
+        );
+    await (app.db.update(app.db.credentials)
+          ..where((t) => t.id.equals('cred-other')))
+        .write(CredentialsCompanion(password: Value<String?>(row.password)));
+    final other = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-other')))
+        .getSingle();
+    await expectLater(
+      app.gateway.openCredentialField(
+        other.password!,
+        credentialId: 'cred-other',
+        field: 'password',
+      ),
+      throwsA(isA<Object>()),
+    );
   });
 }

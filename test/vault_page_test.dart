@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
+import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/features/vault/vault_page.dart';
 
 import 'support/test_harness.dart';
@@ -58,7 +59,7 @@ void main() {
     expect(find.textContaining('1 个'), findsWidgets);
   });
 
-  testWidgets('新增弹窗可生成强密码，且不把明文写进本地库',
+  testWidgets('新增弹窗生成强密码并以密文落库',
       (WidgetTester tester) async {
     await pumpVault(tester);
     await tester.tap(find.text('新增'));
@@ -66,14 +67,14 @@ void main() {
     await tester.tap(find.text('生成强密码'));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.textContaining('请自行复制保管'), findsOneWidget);
+    expect(find.textContaining('已用 K_item'), findsOneWidget);
     final selectable = find.byType(SelectableText);
     expect(selectable, findsOneWidget);
     final generated = tester.widget<SelectableText>(selectable).data ?? '';
     expect(generated.length, 20);
     expect(generated, matches(RegExp(r'[A-Z]')));
     expect(generated, matches(RegExp(r'[^A-Za-z0-9]')));
-    expect(find.textContaining('不会把明文写进本地库'), findsOneWidget);
+    expect(find.textContaining('明文不会落盘'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).last, '生成测试账号');
     await tester.tap(find.text('确定'));
@@ -82,8 +83,21 @@ void main() {
 
     final credentials = await app.db.select(app.db.credentials).get();
     expect(credentials, hasLength(1));
-    expect(credentials.single.password, isNull,
-        reason: '字段级加密通道未接前绝不落明文');
-    expect(credentials.single.password.toString(), isNot(contains(generated)));
+    expect(credentials.single.password, isNotNull);
+    expect(credentials.single.password, isNot(generated),
+        reason: '字段级加密后列里只能是密文');
+    expect(credentials.single.password!, isNot(contains(generated)));
+    // 仓库能解出原文，但健康报告仍只给统计。
+    final repo = CredentialRepository(app.db, app.gateway);
+    expect(
+      await app.gateway.openCredentialField(
+        credentials.single.password!,
+        credentialId: credentials.single.id,
+        field: 'password',
+      ),
+      generated,
+    );
+    final health = await repo.health(nowMs: 1731052800000);
+    expect(health.toJson().toString(), isNot(contains(generated)));
   });
 }

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../db/vault_database.dart';
 import '../entry/entry_models.dart';
+import '../write/write_gateway.dart';
 import 'credential_models.dart';
 import 'totp.dart';
 
@@ -39,23 +40,62 @@ class CredentialSummary {
 /// password / totp_secret / secret 字段的 value。这里对外只暴露
 /// [CredentialHealth]；明文仅在内存里用于本地强度与重复指纹估算。
 class CredentialRepository {
-  CredentialRepository(this.db);
+  CredentialRepository(this.db, this.gateway);
 
   final VaultDatabase db;
+  final WriteGateway gateway;
+
+  /// 解出密码明文（只在内存里用于强度估算，绝不写日志 / 报告）。
+  Future<String> _passwordOf(CredentialRow row) async {
+    final raw = row.password;
+    if (raw == null || raw.isEmpty) return '';
+    // 旧数据可能是明文（M6 之前）；密文一定是 base64 且能 parse。
+    // 只有「明显不是密文」才按明文算强度，绝不把解密失败当成明文。
+    if (!_looksLikeEnvelope(raw)) return raw;
+    try {
+      return await gateway.openCredentialField(
+        raw,
+        credentialId: row.id,
+        field: 'password',
+      );
+    } on Object {
+      return '';
+    }
+  }
+
+  static bool _looksLikeEnvelope(String raw) =>
+      raw.length > 32 && RegExp(r'^[A-Za-z0-9+/=]+$').hasMatch(raw);
+
+  /// 写入密码（字段级加密）。明文绝不落库。
+  Future<void> setPassword(String credentialId, String plaintext) async {
+    final sealed = await gateway.sealCredentialField(
+      credentialId: credentialId,
+      field: 'password',
+      plaintext: plaintext,
+    );
+    await (db.update(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .write(CredentialsCompanion(
+      password: Value<String?>(sealed),
+      passwordChangedAt: Value<int?>(DateTime.now().millisecondsSinceEpoch),
+    ));
+  }
 
   Future<List<CredentialHealthSample>> samples() async {
     final rows = await db.select(db.credentials).get();
-    return <CredentialHealthSample>[
-      for (final row in rows)
-        CredentialHealthSample(
-          strength: estimatePasswordStrength(row.password ?? ''),
-          // 重复判定用本地 hashCode，绝不把明文写进任何报告 / 日志。
-          passwordFingerprint: (row.password ?? '').hashCode.toString(),
-          leaked: row.breached == 2,
-          favorite: false,
-          passwordUpdatedAt: row.passwordChangedAt,
-        ),
-    ];
+    final out = <CredentialHealthSample>[];
+    for (final row in rows) {
+      final password = await _passwordOf(row);
+      out.add(CredentialHealthSample(
+        strength: estimatePasswordStrength(password),
+        // 重复判定用本地 hashCode，绝不把明文写进任何报告 / 日志。
+        passwordFingerprint: password.hashCode.toString(),
+        leaked: row.breached == 2,
+        favorite: false,
+        passwordUpdatedAt: row.passwordChangedAt,
+      ));
+    }
+    return out;
   }
 
   Future<CredentialHealth> health({required int nowMs}) async =>

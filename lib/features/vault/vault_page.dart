@@ -75,8 +75,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '请自行复制保管；密码字段落库需要 M6 字段级加密通道，'
-                    '当前不会把明文写进本地库。',
+                    '已用 K_item 字段级加密写入本地库，明文不会落盘。',
                     style: TextStyle(
                       fontSize: 10,
                       color: Theme.of(dialogContext)
@@ -113,6 +112,12 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     await db.into(db.credentials).insert(
           CredentialsCompanion.insert(id: created.snapshot.id),
         );
+    if (generated != null) {
+      await ref.read(credentialRepositoryProvider).setPassword(
+            created.snapshot.id,
+            generated!,
+          );
+    }
     _name.clear();
     setState(() {});
   }
