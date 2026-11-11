@@ -4,6 +4,26 @@
 
 ---
 
+## v0.88 · 2026-11-11
+
+### M2：删除分类确认文案补齐受影响条目数（已验证）
+
+- `OrganizePage._deleteCategory` 先用 `entryIdsForCategory`
+  （已含子分类）算真实受影响条目数，确认文案写成
+  「N 条笔记会移到「未分类」，不会被删除」（docs/11 §2 / D23）
+- `organize_write_test.dart` 在既有删除用例里钉住「1 条笔记」
+  数量断言 → 全量保持 **706/706**
+
+**边界**：无层级变更拖拽、无批量改分类 UI；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**706/706 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README、14（Day 83）、20、CHANGELOG（本条）
+
+---
+
 ## v0.87 · 2026-11-11
 
 ### M7：日记页「现在生成 AI 日记」（已验证）

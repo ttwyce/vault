@@ -221,9 +221,14 @@ class _OrganizePageState extends ConsumerState<OrganizePage> {
   }
 
   Future<void> _deleteCategory(CategoryRow row) async {
+    // docs/11 §2：确认文案必须给出受影响的条目数，且不删条目。
+    // entryIdsForCategory 已包含子分类下的条目。
+    final affected =
+        await ref.read(entryRepositoryProvider).entryIdsForCategory(row.id);
     final ok = await _confirm(
       '删除「${row.name}」？',
-      '条目不会被删除，会回到「未分类」；它下面的子分类会提升为一级分类。',
+      '${affected.length} 条笔记会移到「未分类」，不会被删除；'
+      '它下面的子分类会提升为一级分类。',
     );
     if (ok != true) return;
     await _run(() => ref.read(writeGatewayProvider).writeCategory(

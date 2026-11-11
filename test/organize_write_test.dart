@@ -102,6 +102,8 @@ void main() {
     await settleDialog(tester);
     await tester.tap(find.text('删除'));
     await settleDialog(tester);
+    expect(find.textContaining('1 条笔记会移到「未分类」'), findsOneWidget,
+        reason: 'docs/11 §2：确认文案必须给出受影响条目数');
     await tester.tap(find.text('确定'));
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pump(const Duration(milliseconds: 250));
