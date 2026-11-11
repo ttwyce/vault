@@ -37,6 +37,9 @@ class VaultPage extends ConsumerStatefulWidget {
 
 class _VaultPageState extends ConsumerState<VaultPage> {
   final TextEditingController _name = TextEditingController();
+  CredentialSmartGroup? _activeGroup;
+  List<CredentialGroupBucket> _buckets =
+      const <CredentialGroupBucket>[];
 
   @override
   void dispose() {
@@ -271,13 +274,25 @@ class _VaultPageState extends ConsumerState<VaultPage> {
             ) {
               final buckets = groupSnap.data ??
                   const <CredentialGroupBucket>[];
+              _buckets = buckets;
               return Wrap(
                 spacing: SketchSpace.sm,
                 runSpacing: SketchSpace.sm,
                 children: <Widget>[
                   for (final bucket in buckets)
-                    SketchTag('${bucket.label} ${bucket.ids.length}',
-                        tone: SketchTone.plain),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _activeGroup = _activeGroup == bucket.group
+                            ? null
+                            : bucket.group;
+                      }),
+                      child: SketchTag(
+                        '${bucket.label} ${bucket.ids.length}',
+                        tone: _activeGroup == bucket.group
+                            ? SketchTone.primary
+                            : SketchTone.plain,
+                      ),
+                    ),
                 ],
               );
             },
@@ -289,7 +304,19 @@ class _VaultPageState extends ConsumerState<VaultPage> {
               BuildContext context,
               AsyncSnapshot<List<CredentialSummary>> listSnap,
             ) {
-              final items = listSnap.data ?? const <CredentialSummary>[];
+              final all = listSnap.data ?? const <CredentialSummary>[];
+              // 智能分组按 id 集合过滤；未选分组时显示全部。
+              final activeIds = _buckets
+                  .where((CredentialGroupBucket b) =>
+                      b.group == _activeGroup)
+                  .expand((CredentialGroupBucket b) => b.ids)
+                  .toSet();
+              final items = _activeGroup == null
+                  ? all
+                  : all
+                      .where((CredentialSummary c) =>
+                          activeIds.contains(c.id))
+                      .toList();
               if (items.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: SketchSpace.xl),

@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart' show Value;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -167,5 +169,40 @@ void main() {
         .password;
     expect(after, isNot(before));
     expect(after, isNot('OldSecret!2026'));
+  });
+
+  testWidgets('点击已泄露智能分组只显示该组账号', (WidgetTester tester) async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'safe',
+      kind: EntryKind.credential,
+      title: '安全账号',
+    ));
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'leaked',
+      kind: EntryKind.credential,
+      title: '泄露账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'safe'),
+        );
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'leaked', breached: const Value<int>(2)),
+        );
+    await pumpVault(tester);
+
+    expect(find.text('安全账号'), findsOneWidget);
+    expect(find.text('泄露账号'), findsOneWidget);
+    expect(find.textContaining('已泄露 1'), findsOneWidget);
+
+    await tester.tap(find.textContaining('已泄露 1'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('泄露账号'), findsOneWidget);
+    expect(find.text('安全账号'), findsNothing);
+
+    // 再点一次取消筛选。
+    await tester.tap(find.textContaining('已泄露 1'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('安全账号'), findsOneWidget);
   });
 }

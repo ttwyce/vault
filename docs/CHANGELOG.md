@@ -4,6 +4,27 @@
 
 ---
 
+## v0.90 · 2026-11-11
+
+### M6：智能分组 chips 接列表筛选（已验证）
+
+- `VaultPage` 智能分组 chips 从纯展示改为可点击筛选：选中某组后
+  账号列表只显示该组 id 集合，再点一次取消；选中 chip 用 primary 高亮
+- 分组结果缓存到 state，避免两个 FutureBuilder 作用域不互通
+- 测试：`vault_page_test.dart` +1 条（泄露组只显示泄露账号 / 取消恢复）
+  → 全量 **708 → 709**
+
+**边界**：分组树 UI / 拖拽换组 / 字段模板按组自动套用仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**709/709 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 85）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.89 · 2026-11-11
 
 ### M7：AI 日记检索开关与本地偏好持久化（已验证）
