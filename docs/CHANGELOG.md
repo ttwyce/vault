@@ -4,6 +4,30 @@
 
 ---
 
+## v0.95 · 2026-11-11
+
+### M7：OpenAI 兼容客户端纯判定层（已验证）
+
+- 新增 `openai_compat.dart`（docs/07 §7）：4 家服务商 endpoint 配置、
+  `/chat/completions` 请求体（tools / 温度 0.3 / 流式）、SSE 增量解析、
+  最近 6 轮上下文裁剪 + 2000 字截断、token 预算估算、
+  5 分钟检索缓存键、只记 URL/状态码/token 数的脱敏日志
+- **不联网、不存 Key、不记 body / API Key**；真实 transport 与
+  flutter_secure_storage 仍属平台层
+- `DiagnosticsPage` 展示规格
+- 测试：`openai_compat_test.dart` 4 条 → 全量 **721 → 725**
+
+**边界**：真实 HTTP / 流式 / Key 存储 / 多家厂商实测仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**725/725 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 90）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.94 · 2026-11-11
 
 ### M6：账号分组与组内字段模板（已验证）
