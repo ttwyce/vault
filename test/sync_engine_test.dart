@@ -54,20 +54,43 @@ class _MemoryWebDavBackend implements WebDavBackend {
 
   final Map<String, List<WebDavException>> putFailures =
       <String, List<WebDavException>>{};
+  final Map<String, List<WebDavException>> collectionFailures =
+      <String, List<WebDavException>>{};
   final Map<String, int> putCount = <String, int>{};
   final List<String> calls = <String>[];
   final List<String> deletedPaths = <String>[];
   int _etagCounter = 100;
 
+  /// 目录首次出现时模拟 404，供 MKCOL 重建测试用。
+  void failFirstCollection(String path, int statusCode) {
+    collectionFailures.putIfAbsent(path, () => <WebDavException>[]).add(
+          WebDavException(
+            statusCode: statusCode,
+            method: 'PROPFIND',
+            path: path,
+          ),
+        );
+  }
+
+  WebDavException? _takeCollectionFailure(String path) {
+    final failures = collectionFailures[path];
+    if (failures == null || failures.isEmpty) return null;
+    return failures.removeAt(0);
+  }
+
   @override
   Future<Map<String, String>> options(String path) async {
     calls.add('OPTIONS $path');
+    final failure = _takeCollectionFailure(path);
+    if (failure != null) throw failure;
     return optionsHeaders;
   }
 
   @override
   Future<List<WebDavListing>> propfind(String path, {int depth = 1}) async {
     calls.add('PROPFIND $path depth=$depth');
+    final failure = _takeCollectionFailure(path);
+    if (failure != null) throw failure;
     return listings[path] ?? const <WebDavListing>[];
   }
 
@@ -240,6 +263,7 @@ _Harness _harness({
   SyncCollectionDelta? delta,
   int maxPreconditionRetries = 3,
   String? nextHlc,
+  String? syncToken,
 }) {
   final codec = _JsonCodec();
   final remoteHlc = remoteWatermarkHlc ??
@@ -312,7 +336,7 @@ _Harness _harness({
     remoteLabel: '设备 B',
     newConflictCopyId: () => 'copy-${++copyCounter}',
     maxPreconditionRetries: maxPreconditionRetries,
-    syncToken: 'token-1',
+    syncToken: syncToken ?? 'token-1',
   );
 
   return _Harness(codec: codec, backend: backend, workspace: workspace);
@@ -1339,6 +1363,187 @@ void main() {
       expect(result.entries[name], same(local));
       expect(result.syncState.containsKey(entityPath), isFalse);
       expect(result.cloudAppliedEntryIds, isEmpty);
+    });
+  });
+
+  group('增量游标 / 能力缓存 / 目录重建', () {
+    test('sync-collection 的 token 写回 syncState，下一轮用新 token 请求',
+        () async {
+      final harness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+      );
+      final first = await harness.engine().run(harness.workspace);
+
+      expect(first.syncState['sync/token'], 'token-2');
+      expect(harness.backend.calls,
+          contains('REPORT ${CloudLayout.root} token=token-1'));
+
+      // 模拟落库后再装配一次 workspace：load() 从 sync/token 读回。
+      final nextWorkspace = <String, String?>{...first.syncState};
+      final secondHarness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+        syncState: nextWorkspace,
+        syncToken: first.syncState['sync/token'],
+      );
+      // L1 会用 deviceEtags 静默；强制未知设备以进 L2。
+      secondHarness.workspace.localWatermarks.clear();
+      await secondHarness.engine().run(secondHarness.workspace);
+
+      expect(secondHarness.backend.calls,
+          contains('REPORT ${CloudLayout.root} token=token-2'));
+    });
+
+    test('设备水位 schema 高于本地时在 L1 直接拒绝，不发 OPTIONS/REPORT',
+        () async {
+      final harness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+        cloudSchema: 7,
+        schema: 1,
+      );
+
+      final result = await harness.engine().run(harness.workspace);
+
+      expect(result.isFailed, isTrue);
+      expect(result.state.error, SyncErrorCode.schemaTooNew);
+      expect(result.reason, contains('水位 schema'));
+      expect(
+        harness.backend.calls.any((String call) => call.startsWith('OPTIONS')),
+        isFalse,
+      );
+      expect(
+        harness.backend.calls.any((String call) => call.startsWith('REPORT')),
+        isFalse,
+      );
+      expect(result.watermarkPublished, isFalse);
+    });
+
+    test('目录 404 时自动 MKCOL 重建再重试，GET 404 不误建目录', () async {
+      final harness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+      );
+      harness.backend
+          .failFirstCollection('${CloudLayout.root}/tombstones', 404);
+
+      final result = await harness.engine().run(harness.workspace);
+
+      expect(result.isFailed, isFalse);
+      expect(harness.backend.calls,
+          contains('MKCOL ${CloudLayout.root}/tombstones'));
+      expect(
+        harness.backend.calls
+            .where((String call) => call.startsWith('PROPFIND /vault/tombstones'))
+            .length,
+        2,
+      );
+      // GET 一个不存在的条目文件返回 404 是正常的 diff 结果，不能触发 MKCOL。
+      final missing = CloudLayout.itemPath(
+        'dddddddddddddddddddddddddddddddd.enc',
+      );
+      harness.backend.delta.changed[missing] = 'ghost-e1';
+      await harness.engine().run(harness.workspace);
+      expect(
+        harness.backend.calls.any(
+          (String call) => call.startsWith('MKCOL ${CloudLayout.root}/items/'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('PUT 父目录 404 时重建目录后重试，条件写语义不变', () async {
+      final harness = _harness();
+      final snapshot = _snapshot(id: 'entry-mkcol');
+      final name = harness.codec.hashedName(snapshot.id);
+      final path = CloudLayout.itemPath(name);
+      harness.workspace.pendingOps.add(SyncPendingOp.upsert(
+        id: 'oplog:1',
+        hashedName: name,
+        snapshot: snapshot,
+        baseRev: 0,
+      ));
+      harness.backend.putFailures[path] = <WebDavException>[
+        WebDavException(statusCode: 409, method: 'PUT', path: path),
+      ];
+
+      final result = await harness.engine().run(harness.workspace);
+
+      expect(result.isFailed, isFalse);
+      expect(result.pushedPaths, contains(path));
+      expect(harness.backend.calls,
+          contains('MKCOL ${CloudLayout.itemsDir(CloudLayout.shardOf(name))}'));
+      expect(
+        harness.backend.calls
+            .where((String call) => call.startsWith('PUT $path'))
+            .length,
+        2,
+      );
+      expect(
+        harness.backend.calls
+            .where((String call) => call.startsWith('PUT $path'))
+            .every((String call) => call.contains('If-None-Match: *')),
+        isTrue,
+        reason: '重试仍必须是条件写',
+      );
+    });
+
+    test('24 小时内的能力探测结果复用，不发第二次 OPTIONS', () async {
+      final firstHarness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+      );
+      final first = await firstHarness.engine().run(firstHarness.workspace);
+      expect(first.syncState['sync/capabilities'], isNotNull,
+          reason: '第一轮必须持久化能力探测结果');
+      expect(first.syncState['sync/capabilities_checked_at'], isNotNull);
+
+      final second = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+        syncState: Map<String, String?>.from(first.syncState),
+      );
+      final selfPath = CloudLayout.devicePath(_self);
+      final selfEtag = first.syncState[selfPath];
+      second.backend.files[selfPath] = _File(
+        firstHarness.backend.files[selfPath]!.bytes,
+        selfEtag!,
+      );
+      final result = await second.engine().run(second.workspace);
+      expect(result.isFailed, isFalse);
+      expect(result.isIdle, isTrue);
+      expect(
+        second.backend.calls.any((String call) => call.startsWith('OPTIONS')),
+        isFalse,
+      );
+      // 再构造一轮强制进 L2 的同步，验证缓存命中时仍走 sync-collection 路径。
+      second.workspace.localWatermarks.clear();
+      final forced = await second.engine().run(second.workspace);
+      expect(forced.capabilities?.syncCollection, isTrue);
+      expect(
+        second.backend.calls.any((String call) => call.startsWith('OPTIONS')),
+        isFalse,
+        reason: '缓存有效期内一轮里也不该再发 OPTIONS',
+      );
+    });
+
+    test('能力缓存超过 24 小时后重新 OPTIONS', () async {
+      final harness = _harness(
+        localWatermarks: <String, Hlc?>{},
+        deviceEtags: <String, String>{},
+        syncState: <String, String?>{
+          'sync/capabilities': '1, 3, sync-collection',
+          'sync/capabilities_checked_at':
+              (_now - const Duration(hours: 25).inMilliseconds).toString(),
+        },
+      );
+
+      final result = await harness.engine().run(harness.workspace);
+
+      expect(result.isFailed, isFalse);
+      expect(harness.backend.calls, contains('OPTIONS ${CloudLayout.root}/'));
+      expect(result.syncState['sync/capabilities_checked_at'], '$_now');
     });
   });
 }

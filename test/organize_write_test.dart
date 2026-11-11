@@ -113,4 +113,46 @@ void main() {
       isNull,
     );
   });
+
+  testWidgets('分类树渲染两级可拖拽列表，同级排序写入 sortOrder',
+      (WidgetTester tester) async {
+    await app.gateway.writeCategory(CategoryWrite.create(id: 'cat-a', name: '甲'));
+    await app.gateway.writeCategory(CategoryWrite.create(id: 'cat-b', name: '乙'));
+    await app.gateway.writeCategory(
+      CategoryWrite.create(id: 'cat-a-1', name: '甲的子级', parentId: 'cat-a'),
+    );
+
+    await pumpOrganize(tester);
+
+    // 扁平展开两级树，只有一个 ReorderableListView（跨父级拖动由页面拒绝）。
+    expect(find.byType(ReorderableListView), findsOneWidget);
+    expect(find.text('分类（长按拖动可同级排序）'), findsOneWidget);
+    expect(find.text('甲'), findsOneWidget);
+    expect(find.text('乙'), findsOneWidget);
+    expect(find.text('甲的子级'), findsOneWidget);
+
+    // 模拟一级列表把「甲」拖到「乙」之后（onReorderItem 已修正索引）。
+    final roots = find.byKey(const ValueKey<String>('category-roots'));
+    final list = tester.widget<ReorderableListView>(roots);
+    // 扁平顺序是 [甲, 甲的子级, 乙]；把甲拖到「乙」的位置（索引 2）。
+    list.onReorderItem!(0, 2);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final rows = await app.repo.categories();
+    final byId = <String, int>{
+      for (final row in rows) row.id: row.sortOrder,
+    };
+    expect(byId['cat-b'], 0);
+    expect(byId['cat-a'], 1);
+    // 二级分类的 parentId 与顺序都没被拖动影响。
+    expect(byId['cat-a-1'], 0);
+    expect(rows.firstWhere((row) => row.id == 'cat-a-1').parentId, 'cat-a');
+
+    // 每次排序都必须经过唯一写入口，留下可同步的 category oplog。
+    final categoryOps = (await app.gateway.pending())
+        .where((row) => row.entity == SyncEntity.category)
+        .toList();
+    expect(categoryOps, isNotEmpty);
+  });
 }

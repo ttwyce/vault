@@ -109,6 +109,11 @@
 | D32 | **统一调度保守闸门** | **正文 / taxonomy 任一链路不完整就跳过清理** | 本地物理删除与云端墓碑 DELETE 不可逆，不能在半轮同步状态下执行 |
 | D33 | **90 天 TTL 只删云端墓碑** | **DELETE 必须带 `sync_state` 已确认 ETag 做 `If-Match`** | 本地已确认记录仍供 30 天清理闸门使用，两套依据互不删除 |
 | D34 | **L2 删除列表也要落库** | **`diff.deleted` 在墓碑之后按规则 7 软删 / 编辑胜复活 / 清陈旧 ETag** | 墓碑缺失或过期时，远端 item 文件消失同样要同步；墓碑优先，不重复处理 |
+| D35 | **物理清理不留孤儿行** | **30 天清空必须一并清掉 credential / vec / blob_ref / link_check / activity，diary_index 只置空命中列** | 派生表里指向不存在条目的行会在下次同步或重建索引时复活 |
+| D36 | **增量游标与能力缓存落库** | **`sync/token` / `sync/capabilities` 走 `sync_state` 内部键** | 不新增表、不跑 codegen；省掉每轮全量 REPORT 与 OPTIONS |
+| D37 | **MKCOL 只救目录** | **集合请求 / PUT 的 404/409 重建目录再重试，GET 文件 404 不建目录** | GET 404 是正常 diff 结果，盲目建目录会掩盖真实删除 |
+| D38 | **退避错误码显式化** | **`SyncRunResult.retryCode` + `RetryScheduler` 可注入时钟** | 状态机只在 FAILED 保留 error；靠解析文案猜 E_NET/E_RATE 太脆 |
+| D39 | **拖拽不改归属** | **分类只在同 parentId 内排序，跨级落点忽略** | 改层级是独立操作，不能靠一次拖拽悄悄完成 |
 
 ---
 
@@ -178,7 +183,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 第一 / 二 / 三批 + 统一调度 + L2 删除列表修复已完成（413/413 已验证）；M3 硬门槛未过**。
+**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（431/431 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -221,13 +226,17 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **413 条全绿**
-（401 + 统一调度 7 + L2 删除列表 5）。慢机器上建议继续用 `--concurrency=1`：
+`flutter analyze` 无告警，`flutter test --concurrency=1` **431 条全绿**
+（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18）。慢机器上建议继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑
 analyze + test，**未执行任何构建**。
-**M2 未做**（见 [09 §4](09-里程碑、验收与风险.md)）：分类拖拽排序、
+编排完整性（CHANGELOG v0.22）：`sync/token` 落库、水位 schema 闸门、
+E_PATH MKCOL 重建、24h 能力缓存、`RetryScheduler` 退避驱动、
+`purgeTrashEntry` 全关联表清理、**M2 遗留的分类拖拽排序**已补完。
+
+**M2 未做**（见 [09 §4](09-里程碑、验收与风险.md)）：
 1000 条 60fps / 中文搜索 P95 性能基线（需真机，未构建）。
 L2 删除列表修复（CHANGELOG v0.21）：`SyncEngine` 此前只拉 `added + modified`，
 `diff.deleted` 从未被消费；现在按规则 7 软删进回收站，本地有未推编辑则

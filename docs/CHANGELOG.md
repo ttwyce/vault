@@ -4,6 +4,75 @@
 
 ---
 
+## v0.22 · 2026-11-11
+
+### 自主代码审查：P0 数据一致性 + 6 项编排缺口 + M2 遗留 UI（已验证）
+
+用户授权「能做的都做」并允许开子代理 / 团队并行。主控按文件边界串行落地，
+并行只用于只读审查（避免写冲突），共修 8 类缺口。仍不新增依赖、不改
+`pubspec.yaml`、不接真实 HTTP、不执行构建。
+
+**改了什么**
+- **P0 `WriteGateway.purgeTrashEntry()`**：30 天物理清理此前只删 5 张表，
+  漏掉 `credential` / `entry_vec` / `blob_ref` / `link_check` / `activity`，
+  会留下指向不存在条目的孤儿行；`diary_index` 两列现在只把命中的列置空，
+  不误删同一天的另一篇（用户 / AI）日记索引
+- **P1 sync-collection token**：`REPORT` 返回的 `delta.syncToken` 写进
+  `syncState['sync/token']`，随 `_replaceSyncState()` 原子落库；下一轮
+  `load()` 读回它，不再每轮拿旧 token 请求全量变更表
+- **P1 水位 schema 闸门**：`DeviceWatermark.isSchemaTooNew()` 此前从未被调用；
+  现在 L1 就拒绝高版本设备，不发 OPTIONS / REPORT（docs/04 §7 / T18）
+- **P1 E_PATH / MKCOL**：`_RunContext.collectionRequest()` 与
+  `putWithMkcol()` 对目录类请求 / PUT 的 404/409 自动 MKCOL 重建再重试一次；
+  **GET 条目文件 404 不误建目录**（那是正常的 diff 结果），重试仍是条件写
+- **P1 能力探测缓存**：`WebDavCapabilities.isCacheExpired()` 落地，结果存
+  `sync/capabilities` + `sync/capabilities_checked_at`，24 小时内不发 OPTIONS
+- **P1 退避重试驱动**：新增 `RetryScheduler`（可注入 `sleep` 的纯 Dart
+  调度器，生产接 `Future.delayed`），只有 BACKOFF 才重试，E_NET 1s→5min、
+  E_RATE 30s→10min，超过总尝试次数即停；`SyncRunResult.retryCode` 显式
+  记录可重试错误码，不靠解析文案猜
+- **P2 分类拖拽排序**（M2 遗留，docs/09 §4）：新增
+  `lib/data/taxonomy/category_reorder.dart` 纯函数
+  （`sortedSiblings` / `reorderCategorySiblings`），组织页改用 Flutter 3.41+
+  的 `onReorderItem` 扁平渲染两级树，**跨父级 / 跨层级拖动一律拒绝**，
+  同级排序逐条走 `WriteGateway.writeCategory`；`category.sortOrder` 字段
+  终于有了 UI
+- **测试**：`test/sync_engine_test.dart` +6（token / 水位 schema / MKCOL×2 /
+  缓存×2）、`test/retry_scheduler_test.dart` 5 条、
+  `test/entity_sync_engine_test.dart` +1（10 张关联表无孤儿行）、
+  `test/category_reorder_test.dart` 5 条、
+  `test/organize_write_test.dart` +1（拖拽落库 + category oplog）
+  → 全量 **413 → 431**
+
+**关键决策**
+- **孤儿行比「多删一点」更危险**：物理清理必须覆盖所有引用该 entry 的
+  派生表，否则下次同步 / 重建索引会把它们当成还活着的引用
+- **能力缓存与增量游标都走 `sync_state` 内部键**：不新增表、不跑 codegen，
+  随同步结果原子落库
+- **MKCOL 只对集合目录类请求启用**：GET 文件 404 是正常的 diff 结果，
+  盲目建目录会掩盖真实删除
+- **退避错误码显式化**：状态机只在 FAILED 保留 error，BACKOFF 的错误码
+  必须由 `retryCode` 字段传给调度器
+- **拖拽不改归属**：跨父级 / 跨层级落点忽略，改层级是独立操作
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | **431/431 passed**（413 + 新增 18） |
+| `flutter build` / 打包 / 编译 | **未执行** |
+
+**工作方式**：用户明确授权开子代理 / 团队并行后，并行只用于只读代码审查；
+**写文件仍由主控串行**（历史上有并行把用户机器卡死、以及文件写冲突的教训）。
+验证命令带 `NO_PROXY=127.0.0.1,localhost,::1`；`pubspec.yaml` /
+`pubspec.lock` 未改动、未新增依赖。**M3 硬门槛不变**：26 个真实集成用例
+仍未通过，不进 M4。
+
+**影响文档**：09（§4 / §5）、README（进度 / 数字 / 决策表 / 工作方式）、
+14（Day 17）、20（硬规则与收尾状态）、CHANGELOG（本条）
+
+---
+
 ## v0.21 · 2026-11-11
 
 ### 修复 L2 删除列表未被消费（已验证）

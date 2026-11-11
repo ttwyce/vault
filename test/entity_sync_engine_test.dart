@@ -584,6 +584,86 @@ void main() {
       expect(logs.single.result, 'ok');
     });
 
+    test('物理清空会一并清掉所有引用该 entry 的派生表，不留孤儿行', () async {
+      final created = await env.gateway.writeEntry(
+        EntryWrite.create(id: 'entry-orphans', title: '带派生数据'),
+      );
+      final id = created.snapshot.id;
+      final db = env.db;
+
+      // 直接插入各类派生行（这些表多数还没有业务写入口，但物理清理
+      // 必须覆盖它们，否则会留下指向不存在条目的孤儿数据）。
+      await db.into(db.credentials).insert(
+            CredentialsCompanion.insert(id: id, username: const Value<String?>(null)),
+          );
+      await db.into(db.entryVecs).insert(
+            EntryVecsCompanion.insert(
+              entryId: id,
+              chunkIdx: const Value<int>(0),
+              modelId: 'model-a',
+              dim: 768,
+              vec: Uint8List.fromList(<int>[1, 2]),
+              computedAt: _now,
+            ),
+          );
+      await db.into(db.blobRefs).insert(
+            BlobRefsCompanion.insert(
+              entryId: id,
+              blobHash: 'a' * 64,
+              kind: 1,
+              bytes: 10,
+              createdAt: _now,
+            ),
+          );
+      await db.into(db.linkChecks).insert(
+            LinkChecksCompanion.insert(
+              entryId: id,
+              checkedAt: _now,
+              result: 'ok',
+            ),
+          );
+      await db.into(db.activities).insert(
+            ActivitiesCompanion.insert(ts: _now, kind: 1, entryId: Value<String?>(id)),
+          );
+      await db.into(db.diaryIndexes).insert(
+            DiaryIndexesCompanion.insert(
+              date: '2026-11-08',
+              userEntryId: Value<String?>(id),
+              aiEntryId: const Value<String?>('entry-ai-kept'),
+            ),
+          );
+      await db.into(db.entryCategories).insert(
+            EntryCategoriesCompanion.insert(entryId: id, categoryId: 'cat-x'),
+          );
+      await db.into(db.entryTags).insert(
+            EntryTagsCompanion.insert(entryId: id, tagId: 'tag-x'),
+          );
+
+      await env.gateway.writeEntry(EntryWrite.delete(id: id));
+      await env.gateway.markApplied(
+        (await env.gateway.pending()).map((row) => row.seq),
+      );
+      await db.into(db.syncStates).insert(
+            SyncStatesCompanion.insert(
+              path: CloudLayout.tombstonePath(await env.codec.hashedName(id)),
+              etag: const Value<String?>('tomb-e1'),
+            ),
+          );
+      final report = await env.port.purgeExpiredTrash(nowMs: _now + 40 * _day.inMilliseconds);
+
+      expect(report.purged, <String>[id]);
+      for (final table in <String>[
+        'entry', 'trash', 'entry_history', 'entry_category', 'entry_tag',
+        'credential', 'entry_vec', 'blob_ref', 'link_check', 'activity',
+      ]) {
+        expect(await env.count(table), 0, reason: '$table 不能留下孤儿行');
+      }
+      final diary = await db.select(db.diaryIndexes).getSingle();
+      expect(diary.userEntryId, isNull, reason: '只清空命中的列');
+      expect(diary.aiEntryId, 'entry-ai-kept',
+          reason: '同一天的 AI 日记索引不能被一起抹掉');
+    });
+
     test('条目恢复后即使墓碑已确认也不清空', () async {
       final created = await env.gateway.writeEntry(
         EntryWrite.create(id: 'entry-restored', title: '会恢复'),

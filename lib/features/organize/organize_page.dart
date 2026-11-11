@@ -13,6 +13,7 @@ import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
 import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
+import '../../data/taxonomy/category_reorder.dart';
 import '../../data/taxonomy/taxonomy_models.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/write/write_gateway.dart';
@@ -184,6 +185,39 @@ class _OrganizePageState extends ConsumerState<OrganizePage> {
             // kind 在 update 里保持不变（写入口读旧行）
           ),
         ));
+  }
+
+  /// 同级拖拽排序：先算差异，再逐条走唯一写入口。
+  ///
+  /// 只允许同 parentId 内重排，不允许把二级拖成一级或跨父级换组 ——
+  /// 那会改变归属语义，必须走明确的「改层级」操作。
+  Future<void> _reorderSiblings(
+    List<CategoryRow> rows,
+    String? parentId,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final siblings = sortedSiblings(rows, parentId);
+    final changes = reorderCategorySiblings(
+      siblings: siblings,
+      oldIndex: oldIndex,
+      newIndex: newIndex,
+    );
+    if (changes.isEmpty) return;
+    try {
+      final gateway = ref.read(writeGatewayProvider);
+      for (final change in changes) {
+        await gateway.writeCategory(CategoryWrite.update(
+          id: change.categoryId,
+          name: change.name,
+          parentId: change.parentId,
+          sortOrder: change.sortOrder,
+        ));
+      }
+      _refresh();
+    } on WriteException catch (e) {
+      _notify(e.message);
+    }
   }
 
   Future<void> _deleteCategory(CategoryRow row) async {
@@ -405,93 +439,134 @@ class _OrganizePageState extends ConsumerState<OrganizePage> {
     SketchPalette p,
     List<CategoryRow> rows,
   ) {
-    final tree = buildCategoryTree(rows);
-    final byId = <String, CategoryRow>{for (final row in rows) row.id: row};
+    final roots = sortedSiblings(rows, null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          '分类',
+          '分类（长按拖动可同级排序）',
           style: TextStyle(
               fontSize: 13, fontWeight: FontWeight.w700, color: p.ink),
         ),
         const SizedBox(height: SketchSpace.sm),
-        if (tree.isEmpty)
+        if (roots.isEmpty)
           Text(
             '还没有分类',
             style: TextStyle(fontSize: 12, height: 1.6, color: p.muted),
           )
         else
-          ...<Widget>[
-            for (final node in tree)
-              ..._buildCategoryNode(context, p, node, byId, depth: 0),
-          ],
+          // 扁平展开两级树，但每个 item 自带拖拽手柄；跨父级 / 跨层级
+          // 的落点由 _reorderFlat 拒绝，只允许同一 parentId 内重排。
+          ReorderableListView.builder(
+            key: const ValueKey<String>('category-roots'),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _flatCategories(rows).length,
+            onReorderItem: (int oldIndex, int newIndex) => _reorderFlat(
+              rows,
+              oldIndex,
+              newIndex,
+            ),
+            itemBuilder: (BuildContext context, int index) {
+              final flat = _flatCategories(rows)[index];
+              return KeyedSubtree(
+                key: ValueKey<String>('category-${flat.row.id}'),
+                child: _categoryTile(
+                  context,
+                  p,
+                  flat.row,
+                  depth: flat.depth,
+                  canAddChild: flat.depth == 0,
+                ),
+              );
+            },
+          ),
       ],
     );
   }
 
-  List<Widget> _buildCategoryNode(
+  /// 同一 parentId 内按 sortOrder 稳定展开；父节点紧跟着它的子节点。
+  List<({CategoryRow row, int depth})> _flatCategories(List<CategoryRow> rows) {
+    final out = <({CategoryRow row, int depth})>[];
+    for (final root in sortedSiblings(rows, null)) {
+      out.add((row: root, depth: 0));
+      for (final child in sortedSiblings(rows, root.id)) {
+        out.add((row: child, depth: 1));
+      }
+    }
+    return out;
+  }
+
+  /// 扁平列表的拖拽落点若跨越了 parentId 或层级，一律忽略：
+  /// 改变归属必须走明确的「改层级」操作，不能靠一次拖拽悄悄完成。
+  Future<void> _reorderFlat(
+    List<CategoryRow> rows,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final flat = _flatCategories(rows);
+    if (oldIndex < 0 ||
+        oldIndex >= flat.length ||
+        newIndex < 0 ||
+        newIndex >= flat.length) {
+      return;
+    }
+    final moved = flat[oldIndex];
+    final target = flat[newIndex];
+    if (moved.row.parentId != target.row.parentId) return;
+    final siblings = sortedSiblings(rows, moved.row.parentId);
+    final from = siblings.indexWhere((CategoryRow r) => r.id == moved.row.id);
+    final to = siblings.indexWhere((CategoryRow r) => r.id == target.row.id);
+    if (from < 0 || to < 0) return;
+    await _reorderSiblings(rows, moved.row.parentId, from, to);
+  }
+
+  Widget _categoryTile(
     BuildContext context,
     SketchPalette p,
-    CategoryNode node,
-    Map<String, CategoryRow> byId, {
+    CategoryRow row, {
     required int depth,
+    required bool canAddChild,
   }) {
-    final row = byId[node.id];
-    return <Widget>[
-      Padding(
-        padding: EdgeInsets.only(
-          left: depth * SketchSpace.lg,
-          top: SketchSpace.sm,
-          bottom: SketchSpace.sm,
-        ),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: row == null
-              ? null
-              : () {
-                  _categoryActions(row, depth == 0);
-                },
-          child: Row(
-            children: <Widget>[
-              if (node.children.isNotEmpty)
-                SketchIcon(
-                  SketchGlyph.menu,
-                  size: 10,
-                  color: p.muted,
-                  strokeWidth: SketchStroke.icon,
-                ),
-              const SizedBox(width: SketchSpace.sm),
-              Expanded(
-                child: Text(
-                  node.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: node.children.isNotEmpty
-                        ? FontWeight.w700
-                        : FontWeight.w400,
-                    color: p.ink,
-                  ),
+    return Padding(
+      padding: EdgeInsets.only(
+        left: depth * SketchSpace.lg + SketchSpace.lg,
+        top: SketchSpace.sm,
+        bottom: SketchSpace.sm,
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _categoryActions(row, canAddChild),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                row.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight:
+                      depth == 0 ? FontWeight.w700 : FontWeight.w400,
+                  color: p.ink,
                 ),
               ),
-              Text(
-                '${node.entryCount}',
-                style: context.typography.monoStyle(
-                  size: 10.5,
-                  height: 1.4,
-                  color: p.muted,
-                ),
+            ),
+            Text(
+              '${row.entryCount}',
+              style: context.typography.monoStyle(
+                size: 10.5,
+                height: 1.4,
+                color: p.muted,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: SketchSpace.sm),
+            Icon(Icons.drag_indicator, size: 14, color: p.muted),
+          ],
         ),
       ),
-      for (final child in node.children)
-        ..._buildCategoryNode(context, p, child, byId, depth: depth + 1),
-    ];
+    );
   }
 
   Widget _buildTags(SketchPalette p, List<TagWithCount> tags) {

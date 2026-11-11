@@ -45,6 +45,7 @@ class SyncRunResult {
     required this.reason,
     required this.diff,
     this.capabilities,
+    this.retryCode,
   });
 
   factory SyncRunResult.skipped(SyncWorkspace workspace) {
@@ -105,6 +106,11 @@ class SyncRunResult {
   final SyncDiff diff;
   final WebDavCapabilities? capabilities;
 
+  /// 进入 BACKOFF 时的可重试错误码（E_NET / E_RATE）。
+  /// 状态机本身只在 FAILED 保留 error，重试驱动需要这个显式字段，
+  /// 不能靠解析文案猜。
+  final SyncErrorCode? retryCode;
+
   bool get isIdle => state.phase == SyncPhase.idle;
   bool get isBackoff => state.phase == SyncPhase.backoff;
   bool get isFailed => state.phase == SyncPhase.failed;
@@ -125,10 +131,11 @@ class _SyncFatal implements Exception {
 enum _PushOutcome { completed, backoff, failed }
 
 class _RunContext {
-  _RunContext(this.workspace, int budgetLimit)
+  _RunContext(this.workspace, this.backend, int budgetLimit)
       : budget = RequestBudget(limit: budgetLimit);
 
   final SyncWorkspace workspace;
+  final WebDavBackend backend;
   final RequestBudget budget;
 
   final List<SyncPhase> phases = <SyncPhase>[SyncPhase.idle];
@@ -166,6 +173,7 @@ class _RunContext {
   bool watermarkPublished = false;
   int conflicts = 0;
   String reason = '';
+  SyncErrorCode? retryCode;
 
   SyncState advance(SyncEvent event, {SyncErrorCode? error}) {
     state = syncTransition(state, event, error: error);
@@ -180,6 +188,61 @@ class _RunContext {
     }
     requestLog.add(label);
     return await call();
+  }
+
+  /// 目录不存在（404 / 409）时自动 MKCOL 重建再重试一次。
+  ///
+  /// 只对**集合目录类请求**（PROPFIND / REPORT / OPTIONS）启用：GET 一个
+  /// 确实不存在的条目文件返回 404 是正常的 diff 结果，盲目建目录会掩盖
+  /// 真实删除。PUT 的父目录缺失由 [putWithMkcol] 单独处理。
+  Future<T?> collectionRequest<T>(
+    String label,
+    String dir,
+    Future<T> Function() call,
+  ) async {
+    try {
+      return await request<T>(label, call);
+    } on WebDavException catch (e) {
+      if (e.syncErrorCode != SyncErrorCode.path) rethrow;
+      final mkcol = await request<bool>(
+        'MKCOL $dir',
+        () async {
+          await backend.mkcol(dir);
+          return true;
+        },
+      );
+      if (mkcol == null) rethrow;
+      return await request<T>('$label (retry)', call);
+    }
+  }
+
+  /// 条件 PUT 遇到父目录缺失时重建目录再重试，条件写语义不变。
+  Future<WebDavPutResult?> putWithMkcol(
+    String path,
+    List<int> bytes,
+    WebDavCondition condition,
+  ) async {
+    try {
+      return await request<WebDavPutResult>(
+        'PUT $path',
+        () => backend.put(path, bytes, condition: condition),
+      );
+    } on WebDavException catch (e) {
+      if (e.syncErrorCode != SyncErrorCode.path) rethrow;
+      final dir = path.substring(0, path.lastIndexOf('/'));
+      final mkcol = await request<bool>(
+        'MKCOL $dir',
+        () async {
+          await backend.mkcol(dir);
+          return true;
+        },
+      );
+      if (mkcol == null) rethrow;
+      return await request<WebDavPutResult>(
+        'PUT $path (retry)',
+        () => backend.put(path, bytes, condition: condition),
+      );
+    }
   }
 
   SyncRunResult result() => SyncRunResult(
@@ -213,6 +276,7 @@ class _RunContext {
         reason: reason,
         diff: diff,
         capabilities: capabilities,
+        retryCode: retryCode,
       );
 }
 
@@ -238,7 +302,7 @@ class SyncEngine {
   }
 
   Future<SyncRunResult> _run(SyncWorkspace workspace) async {
-    final ctx = _RunContext(workspace, budgetLimit);
+    final ctx = _RunContext(workspace, backend, budgetLimit);
     try {
       ctx.advance(SyncEvent.trigger);
       ctx.advance(SyncEvent.lockAcquired);
@@ -293,6 +357,7 @@ class SyncEngine {
       final code = e.syncErrorCode;
       if ((code == SyncErrorCode.net || code == SyncErrorCode.rate) &&
           ctx.state.phase == SyncPhase.push) {
+        ctx.retryCode = code;
         ctx.advance(
           code == SyncErrorCode.net
               ? SyncEvent.networkError
@@ -310,8 +375,9 @@ class SyncEngine {
   }
 
   Future<void> _probeDevices(_RunContext ctx) async {
-    final listings = await ctx.request<List<WebDavListing>>(
+    final listings = await ctx.collectionRequest<List<WebDavListing>>(
       'PROPFIND /vault/devices',
+      CloudLayout.devicesDir,
       () => backend.propfind(CloudLayout.devicesDir),
     );
     if (listings == null) {
@@ -363,17 +429,37 @@ class SyncEngine {
       selfDeviceId: ctx.workspace.selfDeviceId,
       localEtags: ctx.workspace.deviceEtags,
     );
+    // 云端设备水位里的 schema 高于本地：不能用旧版代码去读写新版格式，
+    // 必须像 meta.schema 过高一样拒绝同步（docs/04 §7 / T18）。这是 L1
+    // 就要拦住的闸门，晚到 PULL_META 才拦就白发了 REPORT / 分片请求。
+    for (final watermark in ctx.remoteWatermarks) {
+      if (watermark.isSchemaTooNew(ctx.workspace.schema)) {
+        throw _SyncFatal(
+          SyncErrorCode.schemaTooNew,
+          '设备 ${watermark.deviceId} 的水位 schema=${watermark.schema} '
+          '高于本地 ${ctx.workspace.schema}：拒绝同步并提示升级',
+        );
+      }
+    }
     ctx.hasChanges = probe.hasChanges || ctx.forceL2;
   }
 
   Future<bool> _discover(_RunContext ctx) async {
-    final headers = await ctx.request<Map<String, String>>(
-      'OPTIONS /vault/',
-      () => backend.options('${CloudLayout.root}/'),
-    );
-    if (headers == null) return false;
-
-    final capabilities = detectWebDavCapabilities(headers);
+    final WebDavCapabilities capabilities;
+    final cached = _cachedCapabilities(ctx);
+    if (cached != null) {
+      // 24 小时内的能力探测结果复用，省掉一次 OPTIONS（docs/04 §3.2）。
+      capabilities = cached;
+    } else {
+      final headers = await ctx.collectionRequest<Map<String, String>>(
+        'OPTIONS /vault/',
+        CloudLayout.root,
+        () => backend.options('${CloudLayout.root}/'),
+      );
+      if (headers == null) return false;
+      capabilities = detectWebDavCapabilities(headers);
+      _persistCapabilities(ctx, capabilities);
+    }
     ctx.capabilities = capabilities;
     if (!capabilities.conditionalPut) {
       throw const _SyncFatal(
@@ -384,8 +470,9 @@ class SyncEngine {
 
     final localItems = _itemSyncState(ctx.workspace);
     if (capabilities.syncCollection) {
-      final delta = await ctx.request<SyncCollectionDelta>(
+      final delta = await ctx.collectionRequest<SyncCollectionDelta>(
         'REPORT sync-collection',
+        CloudLayout.root,
         () => backend.reportSyncCollection(
           CloudLayout.root,
           syncToken: ctx.workspace.syncToken,
@@ -393,14 +480,22 @@ class SyncEngine {
       );
       if (delta == null) return false;
       ctx.diff = diffSyncCollection(delta: delta, local: localItems);
+      // RFC 6578 的增量游标必须随本轮 sync_state 一起落库，否则下一轮
+      // 又会拿旧 token（首次为 null）重新请求全量变更表，1 请求优化失效。
+      // `load()` 从 `sync/token` 读回它，applySyncRun 的 _replaceSyncState
+      // 会把这条内部记录与其它云端路径一起原子写入。
+      if (delta.syncToken.isNotEmpty) {
+        ctx.workspace.syncState['sync/token'] = delta.syncToken;
+      }
       return true;
     }
 
     final shards = <String, List<WebDavListing>>{};
     for (var i = 0; i < CloudLayout.shardCount; i++) {
       final shard = i.toRadixString(16);
-      final listings = await ctx.request<List<WebDavListing>>(
+      final listings = await ctx.collectionRequest<List<WebDavListing>>(
         'PROPFIND /vault/items/$shard',
+        CloudLayout.itemsDir(shard),
         () => backend.propfind(CloudLayout.itemsDir(shard)),
       );
       if (listings == null) return false;
@@ -412,8 +507,9 @@ class SyncEngine {
 
   Future<bool> _pull(_RunContext ctx) async {
     ctx.pullOrder.add('tombstones');
-    final tombListings = await ctx.request<List<WebDavListing>>(
+    final tombListings = await ctx.collectionRequest<List<WebDavListing>>(
       'PROPFIND /vault/tombstones',
+      '${CloudLayout.root}/tombstones',
       () => backend.propfind('${CloudLayout.root}/tombstones'),
     );
     if (tombListings == null) {
@@ -747,14 +843,7 @@ class SyncEngine {
 
     while (true) {
       try {
-        final put = await ctx.request<WebDavPutResult>(
-          'PUT $path',
-          () => backend.put(
-            path,
-            payload,
-            condition: condition,
-          ),
-        );
+        final put = await ctx.putWithMkcol(path, payload, condition);
         if (put == null) {
           ctx.advance(SyncEvent.pushDone);
           ctx.reason = '推送阶段请求预算不足：保存进度，下次续跑';
@@ -865,13 +954,10 @@ class SyncEngine {
     final tombstoneBytes = await codec.encodeTombstone(tombstone);
 
     try {
-      final put = await ctx.request<WebDavPutResult>(
-        'PUT $tombstonePath',
-        () => backend.put(
-          tombstonePath,
-          tombstoneBytes,
-          condition: _conditionFor(ctx, tombstonePath),
-        ),
+      final put = await ctx.putWithMkcol(
+        tombstonePath,
+        tombstoneBytes,
+        _conditionFor(ctx, tombstonePath),
       );
       if (put == null) {
         ctx.advance(SyncEvent.pushDone);
@@ -911,13 +997,10 @@ class SyncEngine {
     final copyName = await codec.hashedName(copy.id);
     final copyPath = CloudLayout.itemPath(copyName);
     final payload = await codec.encodeEntry(copy);
-    final put = await ctx.request<WebDavPutResult>(
-      'PUT $copyPath',
-      () => backend.put(
-        copyPath,
-        payload,
-        condition: const WebDavCondition.createOnly(),
-      ),
+    final put = await ctx.putWithMkcol(
+      copyPath,
+      payload,
+      const WebDavCondition.createOnly(),
     );
     if (put == null) return;
     ctx.workspace.syncState[copyPath] = put.etag;
@@ -929,6 +1012,7 @@ class SyncEngine {
     ctx.reason = error.toString();
     final code = error.syncErrorCode;
     if (code == SyncErrorCode.net || code == SyncErrorCode.rate) {
+      ctx.retryCode = code;
       ctx.advance(
         code == SyncErrorCode.net
             ? SyncEvent.networkError
@@ -973,15 +1057,12 @@ class SyncEngine {
       etag: existing,
     );
     final watermarkBytes = await codec.encodeWatermark(watermark);
-    final put = await ctx.request<WebDavPutResult>(
-      'PUT $path',
-      () => backend.put(
-        path,
-        watermarkBytes,
-        condition: existing == null
-            ? const WebDavCondition.createOnly()
-            : WebDavCondition.ifMatch(existing),
-      ),
+    final put = await ctx.putWithMkcol(
+      path,
+      watermarkBytes,
+      existing == null
+          ? const WebDavCondition.createOnly()
+          : WebDavCondition.ifMatch(existing),
     );
     if (put == null) {
       ctx.reason = '发布设备水位时请求预算不足';
@@ -1041,6 +1122,35 @@ class SyncEngine {
           if (entry.key.startsWith('${CloudLayout.root}/items/'))
             entry.key: entry.value,
       };
+
+  /// 能力探测结果只保留 24 小时；缓存与 `sync/token` 一样走 `sync_state`
+  /// 内部键，随本轮结果原子落库，不为此新增表或 codegen。
+  WebDavCapabilities? _cachedCapabilities(_RunContext ctx) {
+    final raw = ctx.workspace.syncState['sync/capabilities'];
+    if (raw == null || raw.isEmpty) return null;
+    final checkedAt = int.tryParse(
+      ctx.workspace.syncState['sync/capabilities_checked_at'] ?? '',
+    );
+    if (checkedAt == null) return null;
+    final probe = WebDavCapabilities(
+      davTokens: raw.split(','),
+      syncCollection: raw.contains('sync-collection'),
+      conditionalPut: true,
+      depthOnePropfind: true,
+    );
+    if (probe.isCacheExpired(checkedAt, ctx.workspace.nowMs)) return null;
+    return probe;
+  }
+
+  void _persistCapabilities(
+    _RunContext ctx,
+    WebDavCapabilities capabilities,
+  ) {
+    ctx.workspace.syncState['sync/capabilities'] =
+        capabilities.davTokens.join(',');
+    ctx.workspace.syncState['sync/capabilities_checked_at'] =
+        ctx.workspace.nowMs.toString();
+  }
 }
 
 String _deviceIdFromPath(String path) {

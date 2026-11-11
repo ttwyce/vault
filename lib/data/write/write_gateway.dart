@@ -1800,11 +1800,16 @@ class WriteGateway {
   ///
   /// **调用方必须先用 [RetentionPolicy] 判定闸门**：墓碑已确认、条目仍处于
   /// 删除态、没有未推送 oplog。这里只做落库，不重复做安全判断。
+  ///
+  /// 所有引用该 entry 的派生表都必须一起清掉：留下一行 `blob_ref` /
+  /// `credential` / `entry_vec` 就是一条指向不存在条目的孤儿数据，
+  /// 下次同步或重建索引时会把它当成还活着的引用。
   Future<void> purgeTrashEntry(
     String entryId, {
     String trigger = 'trash_retention',
   }) {
     return _db.transaction(() async {
+      // ① 核心与关联表
       await (_db.delete(_db.trashRows)
             ..where((t) => t.entryId.equals(entryId)))
           .go();
@@ -1816,6 +1821,34 @@ class WriteGateway {
           .go();
       await (_db.delete(_db.entryTags)..where((t) => t.entryId.equals(entryId)))
           .go();
+
+      // ② 一对一扩展表 / 检索与归档派生表 / 活动埋点。
+      // credential 的主键就叫 id（= entry.id），其余表用 entry_id。
+      await (_db.delete(_db.credentials)..where((t) => t.id.equals(entryId)))
+          .go();
+      await (_db.delete(_db.entryVecs)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.blobRefs)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.linkChecks)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+      await (_db.delete(_db.activities)
+            ..where((t) => t.entryId.equals(entryId)))
+          .go();
+
+      // ③ diary_index 的两列都可能指向这条日记；只把命中的列置空，
+      // 不删整行，避免把同一天的另一篇（用户/AI）日记索引一起抹掉。
+      await (_db.update(_db.diaryIndexes)
+            ..where((t) => t.userEntryId.equals(entryId)))
+          .write(const DiaryIndexesCompanion(userEntryId: Value<String?>(null)));
+      await (_db.update(_db.diaryIndexes)
+            ..where((t) => t.aiEntryId.equals(entryId)))
+          .write(const DiaryIndexesCompanion(aiEntryId: Value<String?>(null)));
+
+      // ④ 最后删实体本身与 FTS 派生索引。
       await (_db.delete(_db.entries)..where((t) => t.id.equals(entryId))).go();
       await _db.removeSearchDocument(entryId);
       await _writeSyncLogRecord(
