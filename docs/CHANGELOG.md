@@ -4,6 +4,30 @@
 
 ---
 
+## v0.56 · 2026-11-11
+
+### M6：剪贴板 30 秒自动清除（已验证）
+
+- 新增 `lib/data/vault/sensitive_clipboard.dart`：复制敏感值后 30 秒清除，
+  **只清仍是本次写入的内容**；用户中途复制了别的东西绝不误删，
+  连续复制用 generation 让旧任务失效，可显式 cancel。
+  注入 port/sleep 做确定性测试，不依赖真实平台通道
+- `FlutterClipboardPort` 是唯一需要 `Clipboard` MethodChannel 的适配层；
+  `onboarding_page` 复制恢复码改走 `SensitiveClipboard.copy`
+- `vault_gate` 复制的是错误信息（非敏感），保持原样不误清
+- 测试：`sensitive_clipboard_test.dart` 4 条 → 全量 **614 → 618**
+
+**边界**：真实设备上的剪贴板权限 / 后台计时 / Android 12+ 系统提示仍属
+平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**618/618 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 51）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.55 · 2026-11-11
 
 ### M6：账号智能分组与两级树校验（已验证）

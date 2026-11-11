@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
+import '../../app/session/flutter_clipboard_port.dart';
+import '../../data/vault/sensitive_clipboard.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/session/vault_session.dart';
@@ -426,8 +428,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   /// `RecoveryCode.parse` 虽然能吃掉 `1. abandon` 这种序号前缀，但纯词最稳 ——
   /// 用户可能把它粘进任何地方（密码管理器备注、文本文件），
   /// 少一层格式就少一个出错机会。
+  final SensitiveClipboard _sensitiveClipboard = SensitiveClipboard(
+    port: const FlutterClipboardPort(),
+  );
+
   Future<void> _copy(RecoveryCode code) async {
-    await Clipboard.setData(ClipboardData(text: code.words.join(' ')));
+    // 恢复码是库的备份钥匙：30 秒后自动清剪贴板，但只清仍是本次写入的内容。
+    await _sensitiveClipboard.copy(code.words.join(' '));
     if (!mounted) return;
     setState(() => _copied = true);
     _copiedTimer?.cancel();
