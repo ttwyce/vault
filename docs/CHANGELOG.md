@@ -4,6 +4,40 @@
 
 ---
 
+## v0.36 · 2026-11-11
+
+### M4 预备层第二批：阅读器判定与归档派生表写入口（已验证）
+
+**改了什么**
+- 新增 `lib/data/archive/archive_reader.dart` 纯判定层
+  - `resolveReaderModes()`：纯净 / 原貌 / 对比三模式按 L1 正文、PDF 是否
+    本地、是否有上一版正文分别判定；不可用时给出可执行提示
+  - `fallbackReaderMode()` 在没有正文层时仍回退到 `clean`（渲染「仅元数据」
+    空状态），不落到同样不可用的 compare 模式
+  - `readerStatusLine()` 区分原站存活 / 已失效 / 访问受限
+  - `mergeHighlights()` 重叠与相邻高亮合并；`canAskAiAboutSelection()`
+    2 字起、2000 字上限
+- `WriteGateway` 新增 M4 派生表写入口（本地表、不写 oplog，仍走唯一写入口）
+  - `recordArchiveBlob()` 严格校验 sha256、`local=0` 默认仅云端
+  - `markArchiveBlobLocal()` 只把 `local` 置 1，不改内容寻址 hash
+  - `recordLinkCheck()` 记录检查结果与 simhash；**同 entry 同时间戳重放时
+    只补非空字段**（此前 `insertOnConflictUpdate` 会用 `Value(null)` 抹掉
+    已有的 final_url / simhash 证据 —— 真实 bug，已修）
+  - `enqueueArchiveJob()` 排可中断续跑任务；`purgeTrashEntry()` 已覆盖
+    blob_ref / link_check 清理
+- 测试：`archive_reader_test.dart` 7 条、`archive_write_test.dart` 6 条
+  → 全量 **485 → 498**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**498/498 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+边界不变：仍是 M4 纯逻辑 / UI 预备层，真实抓取 / WebView / PDF 未做；
+M3 硬门槛未过，不宣称 M4 完成。
+
+**影响文档**：README（数字 / 决策表）、09（§6）、14（Day 31）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.35 · 2026-11-11
 
 ### M4 预备层：归档 meta 模型、策略引擎与总览页接线（已验证）

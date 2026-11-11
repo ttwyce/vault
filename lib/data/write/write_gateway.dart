@@ -1600,6 +1600,114 @@ class WriteGateway {
   }
 
   // ---------------------------------------------------------------------------
+  // M4 归档派生数据（本地表，不参与 oplog 同步）
+  // ---------------------------------------------------------------------------
+
+  /// 记录一次归档 blob 引用。`blob_hash` 是 sha256（内容寻址、不可变），
+  /// `local=0` 表示只存在云端、打开阅读器时按需下载。
+  Future<void> recordArchiveBlob({
+    required String entryId,
+    required String blobHash,
+    required int kind,
+    required int bytes,
+    bool local = false,
+  }) {
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(blobHash)) {
+      throw const WriteException('invalid', 'blob_hash 必须是 64 位小写十六进制');
+    }
+    return _db.transaction(() async {
+      await _db.into(_db.blobRefs).insertOnConflictUpdate(
+            BlobRefsCompanion.insert(
+              entryId: entryId,
+              blobHash: blobHash,
+              kind: kind,
+              bytes: bytes,
+              local: Value<int>(local ? 1 : 0),
+              createdAt: _now(),
+            ),
+          );
+    });
+  }
+
+  /// 按需下载完成后只把 `local` 置 1，不动云端、不删条目。
+  Future<void> markArchiveBlobLocal({
+    required String entryId,
+    required String blobHash,
+  }) {
+    return _db.transaction(() async {
+      await (_db.update(_db.blobRefs)
+            ..where((t) =>
+                t.entryId.equals(entryId) & t.blobHash.equals(blobHash)))
+          .write(const BlobRefsCompanion(local: Value<int>(1)));
+    });
+  }
+
+  /// 记录一次死链 / 内容变更检查。同 entry 同时间戳只留一条。
+  Future<void> recordLinkCheck({
+    required String entryId,
+    required int checkedAt,
+    required String result,
+    int? httpStatus,
+    String? finalUrl,
+    String? simhash,
+  }) {
+    return _db.transaction(() async {
+      // 同 entry 同时间戳是「同一检查结果重放」。直接
+      // insertOnConflictUpdate 会用 nullable 的 Value(null) 抹掉已经记录的
+      // final_url / simhash 证据；只把本次非空的字段补进去。
+      final existing = await (_db.select(_db.linkChecks)
+            ..where((t) =>
+                t.entryId.equals(entryId) & t.checkedAt.equals(checkedAt)))
+          .getSingleOrNull();
+      if (existing == null) {
+        await _db.into(_db.linkChecks).insert(
+              LinkChecksCompanion.insert(
+                entryId: entryId,
+                checkedAt: checkedAt,
+                result: result,
+                httpStatus: Value<int?>(httpStatus),
+                finalUrl: Value<String?>(finalUrl),
+                simhash: Value<String?>(simhash),
+              ),
+            );
+        return;
+      }
+      await (_db.update(_db.linkChecks)
+            ..where((t) =>
+                t.entryId.equals(entryId) & t.checkedAt.equals(checkedAt)))
+          .write(LinkChecksCompanion(
+        result: Value<String>(result),
+        httpStatus: httpStatus == null
+            ? const Value<int?>.absent()
+            : Value<int?>(httpStatus),
+        finalUrl: finalUrl == null
+            ? const Value<String?>.absent()
+            : Value<String?>(finalUrl),
+        simhash: simhash == null
+            ? const Value<String?>.absent()
+            : Value<String?>(simhash),
+      ));
+    });
+  }
+
+  /// 往后台队列排一条任务（可中断续跑，靠「下次打开 App 补跑」兜底）。
+  Future<int> enqueueArchiveJob({
+    required String type,
+    String? payload,
+    int nextRunAt = 0,
+  }) async {
+    final row = await _db.into(_db.jobQueues).insertReturning(
+          JobQueuesCompanion.insert(
+            type: type,
+            payload: Value<String?>(payload),
+            nextRunAt: Value<int>(nextRunAt),
+            createdAt: _now(),
+          ),
+        );
+    return row.id;
+  }
+
+  // ---------------------------------------------------------------------------
   // 同步结果落库（唯一写入口）
   // ---------------------------------------------------------------------------
 
