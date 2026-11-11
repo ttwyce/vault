@@ -392,6 +392,37 @@ void main() {
       );
     });
 
+    test('T01：超过一批的待推 oplog 只装 50 条，剩余按 seq 留到下一轮',
+        () async {
+      // 60 条本地新建 = 60 条 applied=0 的 oplog。
+      for (var i = 0; i < 60; i++) {
+        await env.gateway.writeEntry(
+          EntryWrite.create(id: 'entry-batch-$i', title: '第 $i 条'),
+        );
+      }
+      final first = await env.store().load();
+      expect(first.pendingOps, hasLength(50));
+      expect(first.pendingOps.first.entryId, 'entry-batch-0');
+      expect(first.pendingOps.last.entryId, 'entry-batch-49');
+
+      // 模拟第一轮推送成功：把这 50 条标为已应用。
+      await env.gateway.markApplied(
+        first.pendingOps.map(
+          (SyncPendingOp op) =>
+              int.parse(op.id.substring('oplog:'.length)),
+        ),
+      );
+      final second = await env.store().load();
+      expect(second.pendingOps, hasLength(10));
+      expect(second.pendingOps.first.entryId, 'entry-batch-50');
+      expect(second.pendingOps.last.entryId, 'entry-batch-59');
+      expect(
+        await env.gateway.pendingCount(),
+        10,
+        reason: '未推的 oplog 必须保持 applied=0，天然续跑',
+      );
+    });
+
     test('已应用 oplog 装成 baseRevs / baseSnapshots，坏 oplog 被跳过',
         () async {
       final created = await env.gateway.writeEntry(

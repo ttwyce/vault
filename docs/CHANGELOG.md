@@ -4,6 +4,31 @@
 
 ---
 
+## v0.24 · 2026-11-11
+
+### 首批同步 50 条分批与分片游标边界（已验证）
+
+- `DbSyncWorkspaceStore.load()` / `run()` 默认待推 oplog 上限由 500 改为
+  **50**（`pendingBatchSize`），与 docs/04 §8.2「首次同步每批 50 条」、
+  §10「PUSH 预留 60 请求」对齐。`EntitySyncPort.pendingBatchSize` 同步。
+  以前 500 会稳定撞满 200 的请求预算，日志里全是「预算不足」，虽不丢数据
+  但每轮白跑；现在超出的 oplog 保持 `applied=0`，下一轮按 seq 升序自然续跑，
+  **不需要额外分批游标**。
+- `test/db_sync_workspace_test.dart` +1 条：60 条待推 → 只装 50 条、标记已推后
+  下轮恰好剩下 10 条 → 全量 **436 → 437**
+- **明确不做（留给真实接入层）**：16 分片扫描的跨轮游标。分片游标需要保存
+  每个分片的结果才能推断删除，只记「起点」仍要重扫 16 个；当前状态机在
+  预算不足时走 `discoverBudgetExceeded → PUSH`，本就是「本轮放弃 L2、
+  下轮重来」，内存 fake 下强行持久化反而会污染跨轮状态。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**437/437 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+**M3 硬门槛不变**：26 个真实集成用例未通过，不进 M4。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 19）、CHANGELOG（本条）
+
+---
+
 ## v0.23 · 2026-11-11
 
 ### 修复 taxonomy 同 rev 并发更新被静默丢弃（T22，已验证）

@@ -99,7 +99,12 @@ class EntityPendingOp {
 
 /// 独立通道与本地库之间的边界。真实实现是 [DbEntitySyncPort]。
 abstract interface class EntitySyncPort {
-  Future<List<EntityPendingOp>> pending({int limit = 500});
+  /// 单轮待推上限，与正文通道的 50 条分批保持一致。
+  static const int pendingBatchSize = 50;
+
+  Future<List<EntityPendingOp>> pending({
+    int limit = pendingBatchSize,
+  });
 
   /// path → 上次见到的 ETag。
   Future<Map<String, String?>> syncState();
@@ -190,7 +195,7 @@ class EntitySyncEngine {
     // 避免「刚 PUT 上去又被自己的 ETag diff 当成远端新增」。
     // -----------------------------------------------------------------------
     state.addAll(await port.syncState());
-    final pending = await port.pending(limit: budgetLimit);
+    final pending = await port.pending(limit: EntitySyncPort.pendingBatchSize);
     final pushes = <SyncedOplogPush>[];
 
     for (final op in pending) {

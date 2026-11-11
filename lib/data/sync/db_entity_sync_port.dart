@@ -32,7 +32,7 @@ class DbEntitySyncPort
   final AsyncSyncPayloadCodec codec;
 
   @override
-  Future<List<EntityPendingOp>> pending({int limit = 500}) async {
+  Future<List<EntityPendingOp>> pending({int limit = 50}) async {
     final rows = await (db.select(db.oplogs)
           ..where(
             (t) =>

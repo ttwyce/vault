@@ -46,8 +46,16 @@ class DbSyncWorkspaceStore {
 
   static int _defaultNow() => DateTime.now().millisecondsSinceEpoch;
 
+  /// 单轮待推 oplog 上限。
+  ///
+  /// docs/04 §10 给 PUSH 预留 60 个请求、§8.2 要求首次同步每批 50 条；
+  /// 取 50 让「一轮 = 一批」，超出的 oplog 保持 `applied=0`，下一轮按 seq
+  /// 升序自然续跑（不需要额外的分批游标）。以前默认 500 会稳定撞满
+  /// 200 的请求预算，日志里全是「预算不足」，虽不丢数据但每次都白跑。
+  static const int pendingBatchSize = 50;
+
   /// 从本地库读出一轮同步所需的全部状态。
-  Future<SyncWorkspace> load({int limit = 500}) async {
+  Future<SyncWorkspace> load({int limit = pendingBatchSize}) async {
     final syncRows = await db.select(db.syncStates).get();
     final syncState = <String, String?>{
       for (final row in syncRows) row.path: row.etag,
@@ -155,7 +163,7 @@ class DbSyncWorkspaceStore {
   /// 便捷闭环：load → SyncEngine.run → commit。
   Future<SyncRunResult> run(
     SyncEngine engine, {
-    int limit = 500,
+    int limit = pendingBatchSize,
     String trigger = 'db_workspace',
   }) async {
     final workspace = await load(limit: limit);
