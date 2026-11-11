@@ -16,6 +16,8 @@ import '../../data/chat/conversation_repository.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/chat/conversation_repository_provider.dart';
+import '../../data/agent/model_availability_provider.dart';
+import '../../data/agent/model_status.dart';
 import '../../data/chat/conversation_writer.dart';
 import 'widgets/conversation_drawer.dart';
 
@@ -148,10 +150,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final palette = context.sketch;
+    final status = resolveModelStatus(
+      availability: ref.watch(modelAvailabilityProvider),
+    );
 
     return PageScaffold(
       title: '聊天',
-      subtitle: '端侧模型 · 就绪',
+      subtitle: status.subtitle,
       leading: SketchIconButton(
         glyph: SketchGlyph.menu,
         tooltip: '对话列表',
@@ -209,6 +214,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               style: TextStyle(
                                   fontSize: 12, color: palette.muted),
                             ),
+                            if (status.guidance.isNotEmpty) ...<Widget>[
+                              const SizedBox(height: SketchSpace.sm),
+                              Text(
+                                status.guidance,
+                                style: TextStyle(
+                                    fontSize: 11, color: palette.blue),
+                              ),
+                            ],
                             const SizedBox(height: SketchSpace.md),
                             for (final question in kExampleQuestions)
                               Padding(

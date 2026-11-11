@@ -4,6 +4,28 @@
 
 ---
 
+## v0.99 · 2026-11-11
+
+### M7：无模型 / 无 API Key 的诚实引导（C5，已验证）
+
+- 新增 `model_status.dart` / `model_availability_provider.dart`：
+  按双模型路由判定顶部文案与空状态引导；默认两端都未就绪，
+  **不再写死「端侧模型 · 就绪」**
+- `ChatPage` 顶部显示真实状态；检索与工具仍可用时明确引导下载端侧模型
+  或配置云端 API Key，绝不假装能生成回复
+- 测试：`model_status_test.dart` 2 条 → 全量 **731 → 733**
+
+**边界**：真实 Key 读取 / 端侧模型就绪探测由平台层注入 provider；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**733/733 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9 / C5）、14（Day 94）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.98 · 2026-11-11
 
 ### M7：对话空状态 3 个示例问题（已验证）
