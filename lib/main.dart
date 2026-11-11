@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
 import 'app/session/vault_session.dart';
+import 'app/settings/local_settings.dart';
+import 'app/settings/local_settings_provider.dart';
 import 'app/session/vault_storage.dart';
 import 'core/crypto/vault_meta.dart';
 import 'core/fonts/font_providers.dart';
@@ -14,6 +16,11 @@ Future<void> main() async {
   // 字体必须在 runApp 之前就绪：字体是首帧的视觉基础，
   // 晚一步就会看到「系统字体闪一下再变手写体」（见 docs/15 §5）。
   final fonts = await FontService.boot();
+
+  // 纯本地偏好（AI 日记是否参与检索）也在首帧前装配好：
+  // 与字体同理，避免设置页首次点击开关时才发现 store 没就绪。
+  final settingsStore = await SettingsStore.open();
+  final settings = await settingsStore.load();
 
   // vault 元数据也在 runApp 之前读。
   //
@@ -38,6 +45,7 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         fontServiceProvider.overrideWithValue(fonts),
+        settingsStoreProvider.overrideWithValue(settingsStore),
         vaultBootstrapProvider.overrideWithValue(
           VaultBootstrap(
             storage: storage,
@@ -47,7 +55,7 @@ Future<void> main() async {
           ),
         ),
       ],
-      child: const VaultApp(),
+      child: VaultApp(initialSettings: settings),
     ),
   );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/settings/local_settings_provider.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
@@ -50,6 +51,7 @@ class SettingsHubPage extends ConsumerWidget {
               subtitle: '三角色排版、预设与导入字体',
               onTap: () => _push(context, const FontsPage()),
             ),
+            _AiDiarySearchTile(),
             _SettingsTile(
               glyph: SketchGlyph.menu,
               title: '分类与标签',
@@ -136,6 +138,41 @@ class _SettingsTile extends StatelessWidget {
         ),
         const SketchDivider(),
       ],
+    );
+  }
+}
+
+
+/// docs/07 §6.1：AI 日记默认排除检索，这里提供用户显式开关。
+class _AiDiarySearchTile extends ConsumerWidget {
+  const _AiDiarySearchTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.sketch;
+    final settings = ref.watch(localSettingsProvider);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: SketchSpace.sm,
+        vertical: SketchSpace.xs,
+      ),
+      leading: SketchIcon(SketchGlyph.search, size: 18, color: p.ink),
+      title: Text(
+        '在搜索中包含 AI 日记',
+        style: TextStyle(fontSize: 13, color: p.ink),
+      ),
+      subtitle: Text(
+        settings.includeAiDiaryInSearch
+            ? '已开启：AI 生成的时间线也会出现在搜索结果里'
+            : '默认关闭，避免生成文本占据语义空间与搜索结果',
+        style: TextStyle(fontSize: 10.5, color: p.muted),
+      ),
+      trailing: Switch(
+        value: settings.includeAiDiaryInSearch,
+        onChanged: (bool value) => ref
+            .read(localSettingsProvider.notifier)
+            .setIncludeAiDiaryInSearch(value),
+      ),
     );
   }
 }

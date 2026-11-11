@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/settings/local_settings_provider.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
@@ -68,7 +69,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     // 先算 Future 再 setState：箭头闭包返回 Future 会被 Flutter 断言拦下。
     final next = trimmed.isEmpty
         ? Future<List<EntrySummary>>.value(const <EntrySummary>[])
-        : repo.searchHybrid(trimmed, nowMs: DateTime.now().millisecondsSinceEpoch, limit: 50);
+        : repo.searchHybrid(trimmed, nowMs: DateTime.now().millisecondsSinceEpoch,
+        includeAiDiary: ref.read(localSettingsProvider).includeAiDiaryInSearch,
+        limit: 50);
     setState(() {
       _results = next;
     });

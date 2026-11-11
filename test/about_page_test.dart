@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/features/settings/about_page.dart';
@@ -7,10 +8,15 @@ import 'package:vault/features/settings/settings_hub_page.dart';
 /// docs/09 §10 上架材料：关于与隐私声明必须在 App 内可读。
 void main() {
   Future<void> pumpPage(WidgetTester tester, Widget page) async {
-    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.physicalSize = const Size(900, 2600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: page)));
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(home: Scaffold(body: page)),
+    ));
     await tester.pump(const Duration(milliseconds: 250));
   }
 

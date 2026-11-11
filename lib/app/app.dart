@@ -2,17 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/fonts/font_providers.dart';
+import 'settings/local_settings.dart';
+import 'settings/local_settings_provider.dart';
 import 'session/vault_gate.dart';
 import 'theme/sketch_palette.dart';
 import 'theme/sketch_theme.dart';
 import 'theme/sketch_typography.dart';
 
 class VaultApp extends ConsumerWidget {
-  const VaultApp({super.key});
+  const VaultApp({super.key, this.initialSettings});
+
+  /// main() 在 runApp 前从磁盘读出的本地偏好；空则从默认状态开始。
+  final LocalSettings? initialSettings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fonts = ref.watch(fontServiceProvider);
+    final initial = initialSettings;
+    if (initial != null &&
+        ref.read(localSettingsProvider) == const LocalSettings() &&
+        initial != const LocalSettings()) {
+      // 只在首次 build 注入已加载的偏好，不覆盖用户后续切换。
+      ref.read(localSettingsProvider.notifier).initialize(initial);
+    }
 
     // 字体变化时重建 MaterialApp —— 主题里的 fontFamily 与 textTheme
     // 都来自 typography，改字体等于换主题。

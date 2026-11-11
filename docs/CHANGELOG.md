@@ -4,6 +4,31 @@
 
 ---
 
+## v0.89 · 2026-11-11
+
+### M7：AI 日记检索开关与本地偏好持久化（已验证）
+
+- 新增 `local_settings.dart` / `local_settings_provider.dart`：
+  `<appSupport>/settings.json` 存纯本地偏好（不参与同步、不加密、
+  不含敏感值），默认「AI 日记不参与检索」（docs/07 §6.1）
+- `SettingsHubPage` 提供显式开关；`SearchPage` / `RecordsPage` 的
+  `searchHybrid` 从硬编码 false 改为读取该偏好
+- `main()` 在 runApp 前装配 `SettingsStore` 并经 `VaultApp` 注入已加载
+  偏好；测试可注入临时目录
+- 测试：`local_settings_test.dart` 2 条（JSON 往返/坏文件兜底、
+  Notifier 切换持久化）→ 全量 **706 → 708**
+
+**边界**：仅此一项偏好持久化，其余设置仍无磁盘状态；向量通道仍缺，
+开关只影响 FTS 结果。M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**708/708 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 84）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.88 · 2026-11-11
 
 ### M2：删除分类确认文案补齐受影响条目数（已验证）

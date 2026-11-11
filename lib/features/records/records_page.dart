@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/settings/local_settings_provider.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
 import '../../app/theme/sketch_theme.dart';
@@ -83,7 +84,9 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
   Future<List<EntrySummary>> _compute() async {
     final repo = ref.read(entryRepositoryProvider);
     final List<EntrySummary> rows = _query.trim().isNotEmpty
-        ? await repo.searchHybrid(_query, nowMs: DateTime.now().millisecondsSinceEpoch, limit: 50)
+        ? await repo.searchHybrid(_query, nowMs: DateTime.now().millisecondsSinceEpoch,
+        includeAiDiary: ref.read(localSettingsProvider).includeAiDiaryInSearch,
+        limit: 50)
         : await repo.list(kind: _kind);
 
     Set<String>? allowed;
