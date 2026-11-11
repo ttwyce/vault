@@ -23,6 +23,7 @@ import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
+import '../../core/sync/sync_checkpoint.dart';
 import '../../core/sync/sync_state_machine.dart' show SyncPhase;
 import '../../core/sync/sync_status_ui.dart';
 import '../../data/agent/rollup_service.dart';
@@ -318,8 +319,14 @@ class DiagnosticsPage extends ConsumerWidget {
                   style: TextStyle(fontSize: 10.5, color: p.muted),
                 ),
                 Text(
+                  '预算 200 请求耗尽时保存分片游标（已完成不重复入列）；'
+                  '水位一致且 7 天内才续跑，否则保守重跑。',
+                  style: TextStyle(fontSize: 10.5, color: p.muted),
+                ),
+                Text(
                   '映射层已就绪 · 当前默认 '
-                  '${resolveSyncBanner(phase: SyncPhase.idle).tone.name}',
+                  '${resolveSyncBanner(phase: SyncPhase.idle).tone.name} · '
+                  '分片续跑 ${CheckpointResume.resume.name}',
                   style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),
               ],

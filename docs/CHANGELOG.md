@@ -4,6 +4,29 @@
 
 ---
 
+## v1.03 · 2026-11-12
+
+### M3 预备：同步分片游标（已验证）
+
+- 新增 `sync_checkpoint.dart`（docs/04 §10）：预算 200 请求耗尽时
+  生成可落库游标（阶段 / 待处理路径 / 已完成路径 / 水位 / 时间戳），
+  已完成不重复入列、待处理保持顺序、JSON 往返校验
+- `planCheckpointResume`：仅当云端水位一致且游标 7 天内才续跑；
+  水位前进 / 过期 / 无待处理一律保守重跑，避免重复推或漏推
+- `DiagnosticsPage` 展示规则；真实落库由 `SyncWorkspaceStore` 后续接
+- 测试：`sync_checkpoint_test.dart` 3 条 → 全量 **743 → 746**
+
+**边界**：判定层未接 SyncEngine 真实预算耗尽路径，也未落库；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**746/746 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 98）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.02 · 2026-11-12
 
 ### M3 预备：同步状态 → UI 映射（已验证）
