@@ -10,6 +10,7 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
+import '../../data/search/search_suggestions.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
@@ -183,10 +184,52 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         }
         final rows = snapshot.data ?? const <EntrySummary>[];
         if (rows.isEmpty) {
+          // docs/06 §8.2：无结果给 3 个改写建议；本项目尚无向量通道，
+          // 因此只显示「关键词匹配」降级提示，不谎称已启用语义检索。
+          final hint = planEmptySearchHint(
+            rawQuery: trimmed,
+            ftsHadResults: false,
+            vectorHadResults: false,
+          );
           return Center(
-            child: Text(
-              '没有找到「$trimmed」',
-              style: TextStyle(fontSize: 12.5, height: 1.6, color: p.muted),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: SketchSpace.lg,
+                vertical: SketchSpace.xl,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    '没有找到「$trimmed」',
+                    style: TextStyle(
+                        fontSize: 12.5, height: 1.6, color: p.muted),
+                  ),
+                  const SizedBox(height: SketchSpace.md),
+                  Text(hint.headline,
+                      style: TextStyle(fontSize: 12, color: p.ink)),
+                  const SizedBox(height: SketchSpace.sm),
+                  Wrap(
+                    spacing: SketchSpace.sm,
+                    runSpacing: SketchSpace.sm,
+                    children: <Widget>[
+                      for (final suggestion in hint.suggestions)
+                        GestureDetector(
+                          onTap: () {
+                            _controller.text = suggestion;
+                            _onChanged(suggestion);
+                          },
+                          child: SketchTag(suggestion, tone: SketchTone.plain),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: SketchSpace.md),
+                  Text(
+                    hint.modelTip,
+                    style: TextStyle(fontSize: 10.5, color: p.blue),
+                  ),
+                ],
+              ),
             ),
           );
         }
