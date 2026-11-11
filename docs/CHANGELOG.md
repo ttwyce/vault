@@ -4,6 +4,25 @@
 
 ---
 
+## v0.98 · 2026-11-11
+
+### M7：对话空状态 3 个示例问题（已验证）
+
+- `ChatPage` 空消息区按 docs/07 §10.3 显示 3 个示例问题 chips，
+  点击填入输入框；**不自动发送**，端侧模型未接入前不假装有回复
+- 测试：`conversation_writer_test.dart` +1 条（三问可见、点击回填、
+  不落库）→ 全量 **730 → 731**
+
+**边界**：真实模型回复与自动提问仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**731/731 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 93）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.97 · 2026-11-11
 
 ### M7：System Prompt 与输出强制约束（已验证）

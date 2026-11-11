@@ -185,4 +185,30 @@ void main() {
       isEmpty,
     );
   });
+
+  testWidgets('首次进入显示 3 个示例问题，点击填入输入框且不自动发消息',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: const MaterialApp(home: Scaffold(body: ChatPage())),
+    ));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('我上个月记过关于同步冲突的内容吗？'), findsOneWidget);
+    expect(find.text('帮我看看这周都做了什么'), findsOneWidget);
+    expect(find.text('有哪些网页已经打不开了？'), findsOneWidget);
+
+    await tester.tap(find.text('帮我看看这周都做了什么'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      tester.widget<TextField>(find.byType(TextField).last).controller?.text,
+      '帮我看看这周都做了什么',
+    );
+    expect(await app.db.select(app.db.messages).get(), isEmpty);
+  });
 }

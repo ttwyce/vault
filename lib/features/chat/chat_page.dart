@@ -193,15 +193,39 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     final messages = snap.data ??
                         const <ConversationMessageView>[];
                     if (messages.isEmpty) {
+                      // docs/07 §10.3：首次进入显示 3 个示例问题，点击即填入
+                      // 输入框（不自动发送，端侧模型未接入前不假装有回复）。
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: SketchSpace.xl,
                         ),
-                        child: Text(
-                          _draft.hasDraft
-                              ? '新的草稿会话，发出第一条消息后才会保存。'
-                              : '还没有消息，说点什么吧。',
-                          style: TextStyle(fontSize: 12, color: palette.muted),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              _draft.hasDraft
+                                  ? '新的草稿会话，发出第一条消息后才会保存。'
+                                  : '还没有消息，说点什么吧。',
+                              style: TextStyle(
+                                  fontSize: 12, color: palette.muted),
+                            ),
+                            const SizedBox(height: SketchSpace.md),
+                            for (final question in kExampleQuestions)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: SketchSpace.sm,
+                                ),
+                                child: GestureDetector(
+                                  onTap: () => setState(
+                                    () => _input.text = question,
+                                  ),
+                                  child: SketchTag(
+                                    question,
+                                    tone: SketchTone.plain,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     }
@@ -395,3 +419,11 @@ class _InputBar extends StatelessWidget {
     );
   }
 }
+
+
+/// docs/07 §10.3 空状态示例问题。
+const List<String> kExampleQuestions = <String>[
+  '我上个月记过关于同步冲突的内容吗？',
+  '帮我看看这周都做了什么',
+  '有哪些网页已经打不开了？',
+];
