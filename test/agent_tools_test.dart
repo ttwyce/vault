@@ -44,8 +44,8 @@ void main() {
         entryKind: entryKind,
       );
 
-  test('注册表导出 4 个工具的 schema', () {
-    expect(registry.length, 4);
+  test('注册表导出 12 个工具的 schema', () {
+    expect(registry.length, 12);
     final names = registry.schemas()
         .map((Map<String, Object?> s) => s['name'] as String)
         .toSet();
@@ -54,6 +54,14 @@ void main() {
       'search_entries',
       'get_entry',
       'create_note',
+      'list_categories',
+      'list_tags',
+      'entries_by_category',
+      'entries_by_tags',
+      'uncategorized_entries',
+      'diary_for_month',
+      'entry_history',
+      'credential_smart_groups',
     });
   });
 
@@ -151,5 +159,45 @@ void main() {
     );
     expect(denied.isError, isTrue);
     expect(await app.db.select(app.db.entries).get(), hasLength(1));
+  });
+
+  test('分类/标签/分组/日记只读工具接真实仓库', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'e1',
+      kind: EntryKind.diary,
+      title: '日记',
+      meta: '{"diary_date":"2026-11-08"}',
+    ));
+    final categories = await invokeTool(
+      registry,
+      'list_categories',
+      ctx(),
+    );
+    expect(categories.content, contains('还没有分类'),
+        reason: '空库返回明确文案而不是假装成功');
+
+    final tags = await invokeTool(registry, 'list_tags', ctx());
+    expect(tags.content, contains('还没有标签'));
+
+    final uncategorized = await invokeTool(
+      registry,
+      'uncategorized_entries',
+      ctx(),
+    );
+    expect(uncategorized.content, contains('未分类条目'));
+
+    final diary = await invokeTool(
+      registry,
+      'diary_for_month',
+      ctx(args: const <String, Object?>{'year': 2026, 'month': 11}),
+    );
+    expect(diary.content, contains('用户日记'));
+
+    final groups = await invokeTool(
+      registry,
+      'credential_smart_groups',
+      ctx(args: const <String, Object?>{'now_ms': 1731052800000}),
+    );
+    expect(groups.content, contains('已泄露'));
   });
 }

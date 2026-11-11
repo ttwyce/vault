@@ -4,6 +4,31 @@
 
 ---
 
+## v0.73 · 2026-11-11
+
+### M7：工具集补齐到 12 个（已验证）
+
+- `buildDefaultToolRegistry` 从 4 个扩到 12 个：新增
+  `list_categories` / `list_tags` / `entries_by_category` /
+  `entries_by_tags` / `uncategorized_entries` / `diary_for_month` /
+  `entry_history` / `credential_smart_groups`，全部本地只读、
+  auto / L1，统一过 `checkToolCall` 闸门
+- `AgentToolDeps.taxonomy` 可选注入历史仓库；缺装配时明确返回不可用
+- `DiagnosticsPage` 工具数从 4 改为 12
+- 测试：`agent_tools_test.dart` +1 条（分类/标签/分组/日记真实执行）
+  → 全量 **670 → 671**
+
+**边界**：仍无 OpenAI 兼容客户端 / 流式回复 / 云端模型；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**671/671 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 68）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.72 · 2026-11-11
 
 ### M6：账号详情脱敏与改密码入口（已验证）

@@ -7,6 +7,8 @@ library;
 
 import '../db/tables/entry_tables.dart';
 import '../entry/entry_repository.dart';
+import '../taxonomy/taxonomy_repository.dart';
+import '../vault/credential_groups.dart';
 import '../vault/credential_repository.dart';
 import '../write/write_gateway.dart';
 import 'agent_policy.dart';
@@ -17,11 +19,15 @@ class AgentToolDeps {
     required this.entries,
     required this.credentials,
     required this.gateway,
+    this.taxonomy,
   });
 
   final EntryRepository entries;
   final CredentialRepository credentials;
   final WriteGateway gateway;
+
+  /// 分类 / 标签 / 回收站只读仓库（可选，缺省时相关工具返回不可用）。
+  final TaxonomyRepository? taxonomy;
 }
 
 /// 统一调用：先过闸门，再执行。返回可直接给模型的结果文本。
@@ -49,7 +55,15 @@ AgentToolRegistry buildDefaultToolRegistry(AgentToolDeps deps) =>
       ..register(_CredentialHealthTool(deps))
       ..register(_SearchEntriesTool(deps))
       ..register(_GetEntryTool(deps))
-      ..register(_CreateNoteTool(deps));
+      ..register(_CreateNoteTool(deps))
+      ..register(_ListCategoriesTool(deps))
+      ..register(_ListTagsTool(deps))
+      ..register(_EntriesByCategoryTool(deps))
+      ..register(_EntriesByTagsTool(deps))
+      ..register(_UncategorizedTool(deps))
+      ..register(_DiaryForMonthTool(deps))
+      ..register(_EntryHistoryTool(deps))
+      ..register(_CredentialGroupsTool(deps));
 
 /// credential_health：只返回聚合统计（docs/07 §4.3）。
 class _CredentialHealthTool extends _BaseTool {
@@ -189,4 +203,183 @@ abstract class _BaseTool implements AgentTool {
         'type': 'object',
         'properties': <String, Object?>{},
       };
+}
+
+
+/// 以下工具只做本地只读聚合，全部 auto / L1，且统一过闸门。
+abstract class _ReadOnlyTool extends _BaseTool {
+  const _ReadOnlyTool(this.deps);
+
+  final AgentToolDeps deps;
+
+  @override
+  RiskLevel get risk => RiskLevel.auto;
+
+  @override
+  PrivacyLevel get maxPrivacy => PrivacyLevel.l1;
+}
+
+class _ListCategoriesTool extends _ReadOnlyTool {
+  const _ListCategoriesTool(super.deps);
+
+  @override
+  String get name => 'list_categories';
+
+  @override
+  String get description => '列出两级分类树（不含三级）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final rows = await deps.entries.categories();
+    if (rows.isEmpty) return const ToolResult('还没有分类');
+    return ToolResult(<String>[
+      '共 ${rows.length} 个分类：',
+      for (final row in rows.take(20)) '- ${row.name} (${row.id})',
+    ].join('\n'));
+  }
+}
+
+class _ListTagsTool extends _ReadOnlyTool {
+  const _ListTagsTool(super.deps);
+
+  @override
+  String get name => 'list_tags';
+
+  @override
+  String get description => '列出标签及使用次数';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final rows = await deps.entries.tags();
+    if (rows.isEmpty) return const ToolResult('还没有标签');
+    return ToolResult(<String>[
+      '共 ${rows.length} 个标签：',
+      for (final row in rows.take(20)) '- ${row.name} × ${row.count}',
+    ].join('\n'));
+  }
+}
+
+class _EntriesByCategoryTool extends _ReadOnlyTool {
+  const _EntriesByCategoryTool(super.deps);
+
+  @override
+  String get name => 'entries_by_category';
+
+  @override
+  String get description => '按分类列出条目数（含子分类）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final id = (args['category_id'] as String?) ?? '';
+    if (id.isEmpty) return const ToolResult('缺少 category_id', isError: true);
+    final ids = await deps.entries.entryIdsForCategory(id);
+    return ToolResult('分类 $id 下共 ${ids.length} 条条目');
+  }
+}
+
+class _EntriesByTagsTool extends _ReadOnlyTool {
+  const _EntriesByTagsTool(super.deps);
+
+  @override
+  String get name => 'entries_by_tags';
+
+  @override
+  String get description => '多标签 AND 检索（不是 OR）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final raw = args['tag_ids'];
+    final ids = raw is List
+        ? raw.map((Object? v) => v.toString()).toList()
+        : <String>[];
+    if (ids.isEmpty) return const ToolResult('缺少 tag_ids', isError: true);
+    final found = await deps.entries.entryIdsWithAllTags(ids);
+    return ToolResult('同时带 ${ids.length} 个标签的条目共 ${found.length} 条');
+  }
+}
+
+class _UncategorizedTool extends _ReadOnlyTool {
+  const _UncategorizedTool(super.deps);
+
+  @override
+  String get name => 'uncategorized_entries';
+
+  @override
+  String get description => '统计未分类条目';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final ids = await deps.entries.uncategorizedEntryIds();
+    return ToolResult('未分类条目共 ${ids.length} 条');
+  }
+}
+
+class _DiaryForMonthTool extends _ReadOnlyTool {
+  const _DiaryForMonthTool(super.deps);
+
+  @override
+  String get name => 'diary_for_month';
+
+  @override
+  String get description => '按月列出用户日记（不含 AI 日记）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final year = (args['year'] as num?)?.toInt() ?? DateTime.now().year;
+    final month = (args['month'] as num?)?.toInt() ?? DateTime.now().month;
+    final byDay = await deps.entries.diaryForMonth(year, month);
+    final total = byDay.values.fold<int>(0, (int n, list) => n + list.length);
+    return ToolResult('$year-$month 用户日记共 $total 条，分布在 ${byDay.length} 天');
+  }
+}
+
+class _EntryHistoryTool extends _ReadOnlyTool {
+  const _EntryHistoryTool(super.deps);
+
+  @override
+  String get name => 'entry_history';
+
+  @override
+  String get description => '列出条目的历史版本数';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final id = (args['id'] as String?) ?? '';
+    final taxonomy = deps.taxonomy;
+    if (taxonomy == null || id.isEmpty) {
+      return const ToolResult('历史仓库未装配或缺少 id', isError: true);
+    }
+    final versions = await taxonomy.history(id);
+    return ToolResult('条目 $id 有 ${versions.length} 个历史版本');
+  }
+}
+
+class _CredentialGroupsTool extends _ReadOnlyTool {
+  const _CredentialGroupsTool(super.deps);
+
+  @override
+  String get name => 'credential_smart_groups';
+
+  @override
+  String get description => '账号智能分组计数（收藏/未分组/泄露/重复/超期）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final nowMs = (args['now_ms'] as num?)?.toInt() ??
+        DateTime.now().millisecondsSinceEpoch;
+    final health = await deps.credentials.samples();
+    final ids = <String>[
+      for (final row in await deps.credentials
+          .db
+          .select(deps.credentials.db.credentials)
+          .get())
+        row.id,
+    ];
+    final samples = samplesForGroups(health, ids);
+    final buckets = groupCredentials(samples, nowMs: nowMs);
+    return ToolResult(<String>[
+      for (final bucket in buckets)
+        '${bucket.label} ${bucket.ids.length}',
+    ].join(' · '));
+  }
 }
