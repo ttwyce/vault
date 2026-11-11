@@ -4,6 +4,29 @@
 
 ---
 
+## v0.78 · 2026-11-11
+
+### M9：同步回归 26 用例清单与门禁（已验证）
+
+- 新增 `sync_regression_matrix.dart`：docs/04 §9 的 T01~T20 +
+  docs/09 §12 的 T21~T26 共 26 条，逐条记录场景 / 期望 / 验证状态
+- 明确「本地单测覆盖 ≠ 三套服务器全绿」：11 条纯语义标 localVerified，
+  15 条标 requiresRealServer；`allPassed` 直到真实环境注入结果才可能为真
+- `runReleaseAudit` 追加 A10 同步回归门禁；`DiagnosticsPage` 展示
+  本地/待真实环境计数
+- 测试：`sync_regression_matrix_test.dart` 4 条 → 全量 **679 → 683**
+
+**边界**：真实 Nextcloud / mod_dav / 坚果云三套环境、强杀重启、
+20MB blob、5000 条性能仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**683/683 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§11/§12）、14（Day 73）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.77 · 2026-11-11
 
 ### M7：双模型路由四分支（已验证）

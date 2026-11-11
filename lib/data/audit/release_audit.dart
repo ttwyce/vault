@@ -17,6 +17,7 @@ import '../backup/security_audit.dart';
 import '../platform/platform_capabilities.dart';
 import '../vault/credential_models.dart';
 import 'performance_baseline.dart';
+import 'sync_regression_matrix.dart';
 import '../search/embedding_manifest.dart';
 
 class AuditCheck {
@@ -199,7 +200,18 @@ ReleaseAuditReport runReleaseAudit(ReleaseAuditInput input) {
               .join(' · '),
     ));
 
-    // ⑨ 上架材料：外部审核无法在纯 Dart 里验证，默认标未通过。
+    // ⑨ 同步回归 26 用例：需三套服务器环境，未跑不算通过。
+    final regression = auditSyncRegression();
+    checks.add(AuditCheck(
+      id: 'A10',
+      title: '同步回归 26 用例全绿',
+      passed: regression.allPassed,
+      detail: '本地已验证 ${regression.localVerified} 条 · '
+          '需真实服务器 ${regression.pendingRealServer} 条 '
+          '(${regression.pendingIds().take(4).join(', ')}…)',
+    ));
+
+    // ⑪ 上架材料：外部审核无法在纯 Dart 里验证，默认标未通过。
     checks.add(const AuditCheck(
       id: 'A9',
       title: '三端上架材料与审核通过',

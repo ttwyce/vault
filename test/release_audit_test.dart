@@ -92,11 +92,12 @@ void main() {
       toolRegistry: AgentToolRegistry(),
       checkExternalGates: true,
     ));
-    expect(report.checks, hasLength(9));
+    expect(report.checks, hasLength(10));
     expect(report.passed, isFalse);
-    expect(report.failures().length, 3);
+    expect(report.failures().length, 4);
     expect(report.failures().join(), contains('A7'));
     expect(report.failures().join(), contains('A8'));
     expect(report.failures().join(), contains('A9'));
+    expect(report.failures().join(), contains('A10'));
   });
 }
