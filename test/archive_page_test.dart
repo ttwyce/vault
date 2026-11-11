@@ -185,4 +185,43 @@ void main() {
     expect(find.text('RFC 6578'), findsOneWidget);
     expect(find.text('GitHub Actions'), findsNothing);
   });
+
+  testWidgets('归档网址按钮：合法 URL 落 kind=5 条目，非法 URL 不落库',
+      (WidgetTester tester) async {
+    await pumpArchive(tester);
+
+    await tester.tap(find.text('归档网址'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(
+      find.byType(TextField).last,
+      'https://www.Example.com/post/1',
+    );
+    await tester.tap(find.text('确定'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await (app.db.select(app.db.entries)
+          ..where((t) => t.kind.equals(EntryKind.bookmark.code)))
+        .get();
+    expect(rows, hasLength(1));
+    final meta = ArchiveMeta.fromMetaString(rows.single.meta,
+        fallbackUrl: 'https://www.Example.com/post/1');
+    expect(meta.site, 'example.com');
+    expect(meta.status, ArchiveStatus.metadata);
+    expect(find.textContaining('1 个'), findsWidgets);
+
+    // 非法 URL 被 ArchiveMeta.siteOf 拒绝，不产生第二条。
+    await tester.tap(find.text('归档网址'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(find.byType(TextField).last, 'ftp://x/y');
+    await tester.tap(find.text('确定'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      await (app.db.select(app.db.entries)
+            ..where((t) => t.kind.equals(EntryKind.bookmark.code)))
+          .get(),
+      hasLength(1),
+    );
+  });
 }

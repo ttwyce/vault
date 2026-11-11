@@ -4,6 +4,30 @@
 
 ---
 
+## v0.46 · 2026-11-11
+
+### 归档 / 密码「新增」按钮接真实写入（已验证）
+
+- `ArchivePage`「归档网址」：弹窗输入 URL → `ArchiveMeta.siteOf` 校验 →
+  经 `WriteGateway` 建 kind=5 entry（只持久化 L1 元数据层，真实抓取留给
+  平台层）→ 刷新列表；非法 scheme 明确提示且不落库
+- `VaultPage`「新增」：改 `ConsumerStatefulWidget`，弹窗输入名称 →
+  `WriteGateway` 建 kind=6 entry + credential 空行 → 真实列表与统计刷新
+- 测试：`archive_page_test.dart` +1 条（合法 URL 落库 / 非法 URL 不落库）、
+  `vault_page_test.dart` 2 条（空库无假账号 / 新增真实写表）
+  → 全量 **583 → 586**
+
+**边界**：只建元数据层，不做网页抓取 / 密码字段编辑 / TOTP / 剪贴板；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**586/586 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字）、14（Day 41）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.45 · 2026-11-11
 
 ### 记录页 / 全库搜索页接 searchHybrid（已验证）

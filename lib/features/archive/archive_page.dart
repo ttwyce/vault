@@ -10,7 +10,10 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_repository.dart';
+import '../../app/session/vault_session.dart';
 import '../../data/archive/archive_repository_provider.dart';
+import '../../data/db/tables/entry_tables.dart';
+import '../../data/write/write_gateway.dart';
 
 /// 归档网站总览（docs/11 §3.2）。
 ///
@@ -30,11 +33,65 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
   String _query = '';
   final TextEditingController _search = TextEditingController();
   Future<_ArchiveData>? _future;
+  final TextEditingController _newUrl = TextEditingController();
 
   @override
   void dispose() {
+    _newUrl.dispose();
     _search.dispose();
     super.dispose();
+  }
+
+  /// 新建归档：只持久化 L1 元数据层（URL / site / 状态），真实抓取、
+  /// readability 注入与 PDF 生成由 M4 平台层按策略补上。
+  Future<void> _addArchiveUrl() async {
+    final url = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('归档网址'),
+        content: TextField(
+          controller: _newUrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'https://example.com/post'),
+          onSubmitted: (String value) =>
+              Navigator.of(dialogContext).pop(value),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(_newUrl.text),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    final trimmed = url?.trim() ?? '';
+    if (trimmed.isEmpty || !mounted) return;
+    final ArchiveMeta meta;
+    try {
+      meta = ArchiveMeta(
+        url: trimmed,
+        site: ArchiveMeta.siteOf(trimmed),
+        status: ArchiveStatus.metadata,
+        policy: RecheckPolicy.monthly,
+      );
+    } on FormatException catch (e) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
+    await ref.read(writeGatewayProvider).writeEntry(EntryWrite.create(
+          kind: EntryKind.bookmark,
+          title: trimmed,
+          meta: meta.toJsonString(),
+        ));
+    _newUrl.clear();
+    setState(() {
+      _future = _load(ref.read(archiveRepositoryProvider));
+    });
   }
 
   @override
@@ -107,7 +164,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
               glyph: SketchGlyph.plus,
               tone: SketchTone.primary,
               dense: true,
-              onPressed: () {},
+              onPressed: _addArchiveUrl,
             ),
           ],
           child: snapshot.connectionState == ConnectionState.waiting

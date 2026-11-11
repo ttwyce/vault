@@ -8,7 +8,11 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
+import '../../app/session/vault_session.dart';
+import '../../data/db/tables/entry_tables.dart';
+import '../../data/db/vault_database.dart';
 import '../../data/vault/credential_repository_provider.dart';
+import '../../data/write/write_gateway.dart';
 
 /// 密码库。
 ///
@@ -19,11 +23,63 @@ import '../../data/vault/credential_repository_provider.dart';
 ///
 /// 顶部健康提示与 subtitle 走 `CredentialRepository` 的真实聚合统计，
 /// 不再显示写死的假数据。
-class VaultPage extends ConsumerWidget {
+class VaultPage extends ConsumerStatefulWidget {
   const VaultPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VaultPage> createState() => _VaultPageState();
+}
+
+class _VaultPageState extends ConsumerState<VaultPage> {
+  final TextEditingController _name = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addCredential() async {
+    final title = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('新增账号'),
+        content: TextField(
+          controller: _name,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '账号名称'),
+          onSubmitted: (String value) =>
+              Navigator.of(dialogContext).pop(value),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(_name.text),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    final trimmed = title?.trim() ?? '';
+    if (trimmed.isEmpty || !mounted) return;
+    final gateway = ref.read(writeGatewayProvider);
+    final created = await gateway.writeEntry(EntryWrite.create(
+      kind: EntryKind.credential,
+      title: trimmed,
+    ));
+    final db = ref.read(vaultDatabaseProvider);
+    await db.into(db.credentials).insert(
+          CredentialsCompanion.insert(id: created.snapshot.id),
+        );
+    _name.clear();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final p = context.sketch;
     final repo = ref.watch(credentialRepositoryProvider);
     final summaries = repo.listSummaries();
@@ -43,7 +99,7 @@ class VaultPage extends ConsumerWidget {
       title: '密码',
       subtitle: '${health.total} 个 · 弱 ${health.weak} · 重复 ${health.reused} · 超期 ${health.outdated}',
       actions: <Widget>[
-        SketchButton(label: '新增', dense: true, onPressed: () {}),
+        SketchButton(label: '新增', dense: true, onPressed: _addCredential),
       ],
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
