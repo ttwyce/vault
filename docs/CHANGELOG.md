@@ -4,6 +4,29 @@
 
 ---
 
+## v0.97 · 2026-11-11
+
+### M7：System Prompt 与输出强制约束（已验证）
+
+- 新增 `system_prompt.dart`（docs/07 §9）：五段式 system prompt、
+  `buildPromptMessages` 永远把它放最前
+- `enforceOutputConstraints` 实现 §9.2 四道代码级关卡：假引用整句移除
+  （真引用保留）、密码命中整段 `[已隐藏]`、300 字截断、token 预算；
+  6 轮上限直接复用 `AgentLoopLimits`，避免两处常量漂移
+- `DiagnosticsPage` 展示约束说明
+- 测试：`system_prompt_test.dart` 4 条 → 全量 **726 → 730**
+
+**边界**：无真实模型回复，约束层只在「有输出文本时」由平台层调用；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**730/730 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 92）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.96 · 2026-11-11
 
 ### M5：检索降级四态计划（已验证）

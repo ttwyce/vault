@@ -19,6 +19,7 @@ import '../../data/agent/agent_policy.dart'
     show AgentLoopLimits, PolicyAction, PolicyDecision;
 import '../../data/agent/agent_loop.dart' show LoopStop;
 import '../../data/agent/openai_compat.dart';
+import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
@@ -264,6 +265,9 @@ class DiagnosticsPage extends ConsumerWidget {
                   '（${VectorDecision.discard.name}）\n'
                   '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
                   '云端任务未授权降级端侧\n'
+                  'System Prompt 五段结构 + 输出四道关卡'
+                  '（假引用整句移除 / 密码整段隐藏 / 300 字 / token 预算，'
+                  '${kSystemPrompt.split('\n').length} 行提示词）\n'
                   'OpenAI 兼容 ${kDefaultEndpoints.length} 家服务商 / '
                   'SSE 增量 / 6 轮上下文裁剪 / 脱敏日志（不记 body/Key）\n'
                   'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮 / '
