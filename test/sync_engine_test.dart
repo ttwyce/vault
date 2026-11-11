@@ -212,7 +212,7 @@ class _Harness {
   SyncEngine engine({int budgetLimit = 200, SingleFlightLock? lock}) =>
       SyncEngine(
         backend: backend,
-        codec: codec,
+        codec: SyncPayloadCodecAdapter(codec),
         budgetLimit: budgetLimit,
         lock: lock,
       );

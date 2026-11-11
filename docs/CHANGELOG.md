@@ -4,6 +4,76 @@
 
 ---
 
+## v0.18 · 2026-11-11
+
+### M3 第三批交接：加密载荷与 DB 工作区（部分落地 / 已验证）
+
+按「写交接文档并推送」整理 M3 第三批中断状态：把 #13 真实加密 codec 与
+#14 数据库工作区 / 事务落库代码提交，明确 #15 / #16 未完成；仍不新增依赖、
+不改 `pubspec.yaml`、不接真实 HTTP、不执行构建。
+
+**改了什么**
+- 新增 `lib/core/sync/encrypted_sync_codec.dart`：
+  - `K_name` HMAC 文件名、`K_item` entry / tombstone / taxonomy 信封、
+    `K_meta` `/vault/meta.enc` 校验载荷；设备水位按设计保持明文
+  - 解码交叉校验信封头、实体、id、rev 与 `content_hash`
+- 修改 `lib/core/sync/sync_payloads.dart` / `sync_engine.dart`：
+  - 引入 `AsyncSyncPayloadCodec` / `SyncPayloadCodecAdapter` /
+    `SyncEntityPayloadCodec` / `SyncEnvelopeHeader`
+  - `SyncPendingOp.rawPayload` 让 oplog 信封字节原样 PUT
+  - `SyncRunResult` 记录 `quarantinePayloads` / `nextHlc` /
+    `cloudAppliedEntryIds`，供 DB 侧安全标记 `applied=1`
+- 新增 `lib/data/sync/sync_workspace_store.dart`：
+  - 从 `sync_state` / `device_watermark` / `entries` / oplog 装配
+    `SyncWorkspace`，并 `load → SyncEngine.run → applySyncRun`
+- 修改 `lib/data/write/write_gateway.dart`：
+  - `applySyncRun()` 在一个事务里落实体、历史、回收站、FTS、oplog、
+    `sync_state`、`device_watermark`、`sync_log` 与隔离区
+  - `sync_quarantine` 用原生 SQL 建表，避免 drift codegen /
+    `schemaVersion` 升级
+  - 预备 `recordEntityPushes()` / `applyRemoteTaxonomySnapshots()` 落库入口
+- `CloudLayout` 新增 `/vault/entities/<shard>/` 独立命名空间；
+  `SyncEntity` 新增 `sync_meta` / `tombstone`
+- 新增 `test/encrypted_sync_codec_test.dart` 7 条；
+  `test/sync_engine_test.dart` 改用 `SyncPayloadCodecAdapter`
+- 新增 `docs/20-交接文档.md`，同步 README / 09 / 14 / CHANGELOG
+
+**关键决策**
+- **交接不等于第三批完成**：#14 代码已落地但专用数据库集成测试未补；
+  taxonomy 独立通道与 30 天清理墓碑联动仍未做
+- **中断半成品全部撤回**：短暂出现的 `entity_sync_engine.dart` /
+  `retention_policy.dart` 与 `write_gateway.dart` 半编辑已删除 / 还原
+- **oplog 信封字节原样上传**：避免为了同步再解一次密文、制造额外明文窗口
+- **远端确认才标 `applied=1`**：`cloudAppliedEntryIds` 防止本地未推编辑被静默吃掉
+- **M3 硬门槛不变**：26 个同步用例不全通过，不进 M4
+
+**尚未完成**
+- `DbSyncWorkspaceStore` / `applySyncRun()` 专用数据库集成测试与原子回滚断言
+- taxonomy 独立同步通道、30 天回收站清理与墓碑联动、墓碑 90 天 TTL 分离判定
+- 真实 WebDAV 客户端、M0 A5 结论、26 个集成用例与真机 / 计时 / 强杀重启 /
+  大 blob / 5000 条性能验收
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | 通过：**376/376 passed**（369 + 新增 7） |
+| 定向 #13 测试 | 通过：`+28: All tests passed!` |
+| `flutter build` | **未执行**（硬规则：未允许绝不构建） |
+
+默认并发全量测试时 `kdf_perf_probe_test.dart` 因机器负载出现
+`5662 ms > 5000 ms` 的性能抖动；单独复跑 `2610 ms` 通过，串行全量复跑全绿。
+
+**工作方式**：全程主控串行，未开并行子代理；验证命令带
+`NO_PROXY=127.0.0.1,localhost`；`pubspec.yaml` 未改动，未新增依赖。
+临时测试日志提交前清理。按用户要求创建 GitHub 私有仓库
+`ttwyce/bbbjjj` 并推送本次交接提交。
+
+**影响文档**：20（新增交接文档）、09（§5 第三批交接状态）、README（进度 /
+数字 / 目录 / 下一步）、14（Day 13）、CHANGELOG（本条）
+
+---
+
 ## v0.17 · 2026-11-10
 
 ### M3 第二批：无依赖接入抽象与 SyncEngine 编排（已验证）

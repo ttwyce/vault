@@ -36,8 +36,18 @@ class CloudLayout {
 
   static String itemsDir(String shard) => '$root/items/$shard';
 
+  /// 非 entry 实体（category / tag / entry_taxonomy）的独立命名空间。
+  ///
+  /// 仍用同样的 HMAC 文件名和 16 分片，但不与 `/vault/items/` 混放：
+  /// 正文同步器只 L2 扫描 items，taxonomy 由独立通道按实体应用，
+  /// 不会把 category 信封误当成 `EntrySnapshot` 去跑 merge3。
+  static String entitiesDir(String shard) => '$root/entities/$shard';
+
   static String itemPath(String hashedName) =>
       '${itemsDir(shardOf(hashedName))}/$hashedName';
+
+  static String entityItemPath(String hashedName) =>
+      '${entitiesDir(shardOf(hashedName))}/$hashedName';
 
   static String tombstonePath(String hashedName) =>
       '$root/tombstones/${_requireItemName(hashedName)}';

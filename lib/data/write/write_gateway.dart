@@ -9,6 +9,7 @@ import '../../core/crypto/secret_bytes.dart';
 import '../../core/crypto/vault_keys.dart';
 import '../../core/identity/uuid_v7.dart';
 import '../../core/sync/hlc.dart';
+import '../../core/sync/sync_engine.dart';
 import '../db/tables/entry_tables.dart';
 import '../db/tables/log_tables.dart';
 import '../db/vault_database.dart';
@@ -125,6 +126,47 @@ class EntryWriteResult {
   /// 空操作**不写 oplog** —— 否则一次误触就会把一条无意义的变更
   /// 推送到所有设备，制造出根本不存在的新版本。
   final bool changed;
+}
+
+/// 一次非 entry 实体推送成功后要落库的进度。
+class SyncedOplogPush {
+  const SyncedOplogPush({
+    required this.oplogSeq,
+    required this.path,
+    required this.etag,
+  });
+
+  final int oplogSeq;
+  final String path;
+  final String etag;
+}
+
+/// 隔离区里的一条坏文件记录。
+class SyncQuarantineRecord {
+  const SyncQuarantineRecord({
+    required this.path,
+    required this.bytes,
+    required this.reason,
+    required this.createdAt,
+  });
+
+  final String path;
+  final Uint8List bytes;
+  final String reason;
+  final int createdAt;
+}
+
+/// 一个已解密、等待应用落库的远端 taxonomy 信封。
+class RemoteTaxonomyFile {
+  const RemoteTaxonomyFile({
+    required this.path,
+    required this.etag,
+    required this.snapshot,
+  });
+
+  final String path;
+  final String etag;
+  final TaxonomySnapshot snapshot;
 }
 
 /// 全项目**唯一的写入入口**。
@@ -401,6 +443,7 @@ class WriteGateway {
     EntrySnapshot? previous,
     bool toTrash = false,
     bool fromTrash = false,
+    bool applied = false,
   }) async {
     // ② 旧状态进历史（三方合并的 base）
     if (previous != null) {
@@ -426,6 +469,7 @@ class WriteGateway {
             op: op.code,
             payload: Value<Uint8List>(envelope.encode()),
             baseRev: Value<int?>(baseRev),
+            applied: Value<int>(applied ? 1 : 0),
             createdAt: snapshot.updatedAt,
           ),
         );
@@ -1376,6 +1420,7 @@ class WriteGateway {
     required OplogOp op,
     required SecretBytes key,
     required Future<void> Function() apply,
+    bool applied = false,
   }) async {
     final envelope = await ItemEnvelope.seal(
       key: key,
@@ -1392,6 +1437,7 @@ class WriteGateway {
             entityId: snapshot.id,
             op: op.code,
             payload: Value<Uint8List>(envelope.encode()),
+            applied: Value<int>(applied ? 1 : 0),
             createdAt: snapshot.updatedAt,
           ),
         );
@@ -1549,6 +1595,435 @@ class WriteGateway {
         <Object?>[id, id],
       );
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 同步结果落库（唯一写入口）
+  // ---------------------------------------------------------------------------
+
+  /// 把一次 `SyncEngine` 的结果原子落库。
+  ///
+  /// 实体写入、历史、回收站、FTS、oplog、sync_state、device_watermark、
+  /// sync_log 和隔离区都在同一个事务里。任何一条快照校验失败都会整体回滚，
+  /// 不会出现「entry 改了但 oplog 没写」这种同步最害怕的半写状态。
+  Future<void> applySyncRun(
+    SyncRunResult result, {
+    String trigger = 'manual',
+  }) {
+    return _db.transaction(() async {
+      await _ensureQuarantineTable();
+      final key = await _keys.item();
+      final snapshots = result.entries.values.toList(growable: false);
+      for (final snapshot in snapshots) {
+        _validateEntrySnapshot(snapshot);
+      }
+
+      for (final snapshot in snapshots) {
+        _observeSnapshotHlc(snapshot.hlc);
+        final existing = await _loadEntry(snapshot.id);
+        final previous =
+            existing == null ? null : EntrySnapshot.fromRow(existing);
+        if (previous != null && _sameEntrySnapshot(previous, snapshot)) {
+          continue;
+        }
+        await _commit(
+          snapshot: snapshot,
+          op: _remoteEntryOp(previous, snapshot),
+          baseRev: previous?.rev,
+          key: key,
+          previous: previous,
+          toTrash: previous != null && !previous.deleted && snapshot.deleted,
+          fromTrash: previous != null && previous.deleted && !snapshot.deleted,
+          applied: result.cloudAppliedEntryIds.contains(snapshot.id),
+        );
+      }
+
+      await _replaceSyncState(result.syncState);
+      await _markAppliedOps(result.appliedOps);
+      await _writeQuarantinePayloads(result.quarantinePayloads);
+      if (result.watermarkPublished) {
+        await _persistPublishedWatermark(result.nextHlc);
+      }
+      await _writeSyncLogRecord(
+        trigger: trigger,
+        outcome: result.isFailed
+            ? 'failed'
+            : (result.isBackoff || result.budgetExceeded || result.skipped
+                ? 'partial'
+                : 'ok'),
+        pulled: result.diff.pullCount,
+        pushed: result.pushedPaths.length,
+        conflicts: result.conflicts,
+        requestCount: result.requestCount,
+        errorCode: result.state.error?.name,
+        errorMsg: result.isFailed || result.isBackoff ? result.reason : null,
+      );
+    });
+  }
+
+  /// taxonomy 独立通道推送成功后，把 oplog 与远端 ETag 一起落库。
+  Future<void> recordEntityPushes(
+    Iterable<SyncedOplogPush> pushes, {
+    String trigger = 'entity_push',
+  }) {
+    return _db.transaction(() async {
+      final list = pushes.toList(growable: false);
+      for (final push in list) {
+        await (_db.update(_db.oplogs)..where((t) => t.seq.equals(push.oplogSeq)))
+            .write(const OplogsCompanion(applied: Value<int>(1)));
+        await _upsertSyncState(push.path, push.etag);
+      }
+      await _writeSyncLogRecord(
+        trigger: trigger,
+        outcome: 'ok',
+        pushed: list.length,
+        requestCount: list.length,
+      );
+    });
+  }
+
+  /// 应用远端 taxonomy 信封。
+  ///
+  /// 每次实体变更仍走 [_commitTaxonomy]，不会绕过 oplog；远端已经确认，
+  /// 所以这些新 oplog 直接标为 `applied=1`，下次同步不会重复推送。
+  Future<void> applyRemoteTaxonomySnapshots(
+    Iterable<RemoteTaxonomyFile> files, {
+    String trigger = 'entity_pull',
+  }) {
+    return _db.transaction(() async {
+      await _ensureQuarantineTable();
+      final key = await _keys.item();
+      var applied = 0;
+      for (final file in files) {
+        final snapshot = file.snapshot;
+        if (!_isTaxonomyEntity(snapshot.entity)) {
+          throw WriteException(
+            'invalid',
+            '远端 taxonomy 实体 ${snapshot.entity} 不在白名单内',
+          );
+        }
+        _observeSnapshotHlc(snapshot.hlc);
+        final latest = await _latestTaxonomy(snapshot.entity, snapshot.id);
+        if (latest != null && latest.rev >= snapshot.rev) {
+          await _upsertSyncState(file.path, file.etag);
+          continue;
+        }
+        await _commitTaxonomy(
+          snapshot: snapshot,
+          op: _taxonomyOp(latest, snapshot),
+          key: key,
+          apply: () => _applyTaxonomySnapshot(snapshot),
+          applied: true,
+        );
+        await _upsertSyncState(file.path, file.etag);
+        applied++;
+      }
+      await _writeSyncLogRecord(
+        trigger: trigger,
+        outcome: 'ok',
+        pulled: applied,
+        requestCount: files.length,
+      );
+    });
+  }
+
+  /// 隔离区记录。表用原生 SQL 创建，避免为了诊断表做一次 drift codegen。
+  Future<List<SyncQuarantineRecord>> quarantine() async {
+    await _ensureQuarantineTable();
+    final rows = await _db
+        .customSelect(
+          'SELECT path, payload, reason, created_at FROM sync_quarantine '
+          'ORDER BY created_at DESC, path;',
+        )
+        .get();
+    return <SyncQuarantineRecord>[
+      for (final row in rows)
+        SyncQuarantineRecord(
+          path: row.read<String>('path'),
+          bytes: Uint8List.fromList(row.read<Uint8List>('payload')),
+          reason: row.read<String>('reason'),
+          createdAt: row.read<int>('created_at'),
+        ),
+    ];
+  }
+
+  Future<void> _ensureQuarantineTable() => _db.customStatement(
+        'CREATE TABLE IF NOT EXISTS sync_quarantine ('
+        ' path TEXT PRIMARY KEY,'
+        ' payload BLOB NOT NULL,'
+        ' reason TEXT NOT NULL,'
+        ' created_at INTEGER NOT NULL'
+        ');',
+      );
+
+  Future<void> _writeQuarantinePayloads(
+    Map<String, List<int>> payloads,
+  ) async {
+    for (final entry in payloads.entries) {
+      await _db.customStatement(
+        'INSERT OR REPLACE INTO sync_quarantine'
+        '(path, payload, reason, created_at) VALUES (?, ?, ?, ?);',
+        <Object?>[
+          entry.key,
+          Uint8List.fromList(entry.value),
+          'E_CORRUPT：解密或 content_hash 校验失败，不覆盖本地',
+          _now(),
+        ],
+      );
+    }
+  }
+
+  Future<void> _replaceSyncState(Map<String, String?> syncState) async {
+    await (_db.delete(_db.syncStates)).go();
+    for (final entry in syncState.entries) {
+      await _db.into(_db.syncStates).insert(
+            SyncStatesCompanion.insert(
+              path: entry.key,
+              etag: Value<String?>(entry.value),
+              updatedAt: Value<int?>(_now()),
+            ),
+          );
+    }
+  }
+
+  Future<void> _upsertSyncState(String path, String? etag) =>
+      _db.into(_db.syncStates).insertOnConflictUpdate(
+            SyncStatesCompanion.insert(
+              path: path,
+              etag: Value<String?>(etag),
+              updatedAt: Value<int?>(_now()),
+            ),
+          );
+
+  Future<void> _markAppliedOps(Iterable<String> appliedOps) async {
+    for (final id in appliedOps) {
+      if (!id.startsWith('oplog:')) continue;
+      final seq = int.tryParse(id.substring('oplog:'.length));
+      if (seq == null) continue;
+      await (_db.update(_db.oplogs)..where((t) => t.seq.equals(seq)))
+          .write(const OplogsCompanion(applied: Value<int>(1)));
+    }
+  }
+
+  Future<void> _persistPublishedWatermark(String nextHlc) async {
+    final parsed = Hlc.tryParse(nextHlc);
+    if (parsed != null) _clock.observe(parsed);
+    await _persistClock();
+  }
+
+  Future<void> _writeSyncLogRecord({
+    required String trigger,
+    required String outcome,
+    int pulled = 0,
+    int pushed = 0,
+    int conflicts = 0,
+    int requestCount = 0,
+    String? errorCode,
+    String? errorMsg,
+  }) {
+    return _db.into(_db.syncLogs).insert(
+          SyncLogsCompanion.insert(
+            startedAt: Value<int?>(_now()),
+            finishedAt: Value<int?>(_now()),
+            trigger: Value<String?>(trigger),
+            result: Value<String?>(outcome),
+            pulled: Value<int?>(pulled),
+            pushed: Value<int?>(pushed),
+            conflicts: Value<int?>(conflicts),
+            errorCode: Value<String?>(errorCode),
+            errorMsg: Value<String?>(errorMsg),
+            requestCount: Value<int?>(requestCount),
+          ),
+        );
+  }
+
+  void _validateEntrySnapshot(EntrySnapshot snapshot) {
+    final expected = EntrySnapshot.computeContentHash(
+      kind: snapshot.kind,
+      title: snapshot.title,
+      body: snapshot.body,
+      meta: snapshot.meta,
+    );
+    if (snapshot.contentHash != expected) {
+      throw WriteException(
+        'invalid',
+        '同步快照 ${snapshot.id} 的 content_hash 不匹配，整次落库回滚',
+      );
+    }
+  }
+
+  void _observeSnapshotHlc(String encoded) {
+    final parsed = Hlc.tryParse(encoded);
+    if (parsed != null) _clock.observe(parsed);
+  }
+
+  bool _sameEntrySnapshot(EntrySnapshot a, EntrySnapshot b) =>
+      a.id == b.id &&
+      a.kind == b.kind &&
+      a.title == b.title &&
+      a.body == b.body &&
+      a.meta == b.meta &&
+      a.createdAt == b.createdAt &&
+      a.updatedAt == b.updatedAt &&
+      a.hlc == b.hlc &&
+      a.rev == b.rev &&
+      a.contentHash == b.contentHash &&
+      a.deleted == b.deleted &&
+      a.deletedAt == b.deletedAt;
+
+  OplogOp _remoteEntryOp(EntrySnapshot? previous, EntrySnapshot next) {
+    if (previous == null) return OplogOp.create;
+    if (next.deleted && !previous.deleted) return OplogOp.delete;
+    if (!next.deleted && previous.deleted) return OplogOp.restore;
+    return OplogOp.update;
+  }
+
+  OplogOp _taxonomyOp(TaxonomySnapshot? previous, TaxonomySnapshot next) {
+    if (previous == null) return OplogOp.create;
+    if (next.deleted && !previous.deleted) return OplogOp.delete;
+    if (!next.deleted && previous.deleted) return OplogOp.restore;
+    return OplogOp.update;
+  }
+
+  bool _isTaxonomyEntity(String entity) =>
+      entity == SyncEntity.category ||
+      entity == SyncEntity.tag ||
+      entity == SyncEntity.entryTaxonomy;
+
+  Future<void> _applyTaxonomySnapshot(TaxonomySnapshot snapshot) async {
+    switch (snapshot.entity) {
+      case SyncEntity.category:
+        await _applyCategorySnapshot(snapshot);
+        return;
+      case SyncEntity.tag:
+        await _applyTagSnapshot(snapshot);
+        return;
+      case SyncEntity.entryTaxonomy:
+        await _applyEntryTaxonomySnapshot(snapshot);
+        return;
+      default:
+        throw WriteException('invalid', '不支持的 taxonomy 实体 ${snapshot.entity}');
+    }
+  }
+
+  Future<void> _applyCategorySnapshot(TaxonomySnapshot snapshot) async {
+    final name = _stringField(snapshot.fields, 'name') ?? '';
+    final kind = _intField(snapshot.fields, 'kind', EntryKind.note.code);
+    final parentId = _stringField(snapshot.fields, 'parent_id');
+    final sortOrder = _intField(snapshot.fields, 'sort_order', 0);
+    await _db.into(_db.categories).insertOnConflictUpdate(
+          CategoriesCompanion(
+            id: Value<String>(snapshot.id),
+            kind: Value<int>(kind),
+            parentId: Value<String?>(parentId),
+            name: Value<String>(name),
+            sortOrder: Value<int>(sortOrder),
+            createdAt: Value<int?>(snapshot.updatedAt),
+            updatedAt: Value<int?>(snapshot.updatedAt),
+            hlc: Value<String>(snapshot.hlc),
+            deleted: Value<int>(snapshot.deleted ? 1 : 0),
+          ),
+        );
+    if (!snapshot.deleted) return;
+
+    final affected = await _db.customSelect(
+      'SELECT entry_id FROM entry_category WHERE category_id = ?;',
+      variables: <Variable<Object>>[Variable<String>(snapshot.id)],
+    ).get();
+    await (_db.delete(_db.entryCategories)
+          ..where((t) => t.categoryId.equals(snapshot.id)))
+        .go();
+    for (final row in affected) {
+      await _rebuildEntrySearch(row.read<String>('entry_id'));
+    }
+  }
+
+  Future<void> _applyTagSnapshot(TaxonomySnapshot snapshot) async {
+    final name = _stringField(snapshot.fields, 'name') ?? '';
+    await _db.into(_db.tags).insertOnConflictUpdate(
+          TagsCompanion(
+            id: Value<String>(snapshot.id),
+            name: Value<String>(name),
+            createdAt: Value<int?>(snapshot.updatedAt),
+            updatedAt: Value<int?>(snapshot.updatedAt),
+            hlc: Value<String>(snapshot.hlc),
+            deleted: Value<int>(snapshot.deleted ? 1 : 0),
+          ),
+        );
+    if (!snapshot.deleted) {
+      await _rebuildEntriesForTag(snapshot.id);
+      return;
+    }
+    final affected = await _entriesForTag(snapshot.id);
+    await (_db.delete(_db.entryTags)..where((t) => t.tagId.equals(snapshot.id)))
+        .go();
+    await _recountTags(<String>{snapshot.id});
+    for (final entryId in affected) {
+      await _rebuildEntrySearch(entryId);
+    }
+  }
+
+  Future<void> _applyEntryTaxonomySnapshot(
+    TaxonomySnapshot snapshot,
+  ) async {
+    final entryId = snapshot.id;
+    final oldTagRows = await (_db.select(_db.entryTags)
+          ..where((t) => t.entryId.equals(entryId)))
+        .get();
+    final oldCatRows = await (_db.select(_db.entryCategories)
+          ..where((t) => t.entryId.equals(entryId)))
+        .get();
+    final oldTagIds = <String>{for (final row in oldTagRows) row.tagId};
+    final oldCategoryIds = <String>{
+      for (final row in oldCatRows) row.categoryId,
+    };
+
+    final rawTags = snapshot.fields['tag_ids'];
+    final nextTagIds = rawTags is List
+        ? rawTags.whereType<String>().toList(growable: false)
+        : const <String>[];
+    final categoryId = snapshot.deleted
+        ? null
+        : _stringField(snapshot.fields, 'category_id');
+
+    await (_db.delete(_db.entryCategories)
+          ..where((t) => t.entryId.equals(entryId)))
+        .go();
+    await (_db.delete(_db.entryTags)..where((t) => t.entryId.equals(entryId)))
+        .go();
+    if (!snapshot.deleted && categoryId != null) {
+      await _db.into(_db.entryCategories).insert(
+            EntryCategoriesCompanion.insert(
+              entryId: entryId,
+              categoryId: categoryId,
+            ),
+          );
+    }
+    if (!snapshot.deleted) {
+      for (final tagId in nextTagIds) {
+        await _db.into(_db.entryTags).insert(
+              EntryTagsCompanion.insert(entryId: entryId, tagId: tagId),
+            );
+      }
+    }
+    await _recountTags(<String>{...oldTagIds, ...nextTagIds});
+    await _recountCategories(<String>{
+      ...oldCategoryIds,
+      ?categoryId,
+    });
+    await _rebuildEntrySearch(entryId);
+  }
+
+  String? _stringField(Map<String, Object?> fields, String key) {
+    final value = fields[key];
+    return value is String ? value : null;
+  }
+
+  int _intField(Map<String, Object?> fields, String key, int fallback) {
+    final value = fields[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return fallback;
   }
 
   static Map<String, Object?> _decodeJson(List<int> bytes) {

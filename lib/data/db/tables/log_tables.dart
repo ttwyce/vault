@@ -127,4 +127,13 @@ abstract final class SyncEntity {
   static const String message = 'message';
   static const String blob = 'blob';
   static const String meta = 'meta';
+
+  /// 云端 `/vault/meta.enc` 的同步校验载荷。
+  ///
+  /// 与本地解锁用的 `meta.enc` 不是同一份文件：这里只含
+  /// `vault_id` / `schema`，且用 `HKDF(meta)` 子密钥加密。
+  static const String syncMeta = 'sync_meta';
+
+  /// `/vault/tombstones/<hmac>.enc`。
+  static const String tombstone = 'tombstone';
 }

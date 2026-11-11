@@ -1,6 +1,6 @@
 /// M3 同步编排器：把纯判定层串成一次可测试的同步。
 ///
-/// 它只依赖 [WebDavBackend] 抽象与 [SyncPayloadCodec]，不碰 drift、
+/// 它只依赖 [WebDavBackend] 抽象与 [AsyncSyncPayloadCodec]，不碰 drift、
 /// 不碰真实 HTTP 客户端、不新增依赖。真实落地时把 codec 换成加密实现、
 /// 把 backend 换成 WebDAV 客户端、把 `SyncWorkspace` 换成数据库事务即可。
 library;
@@ -34,9 +34,12 @@ class SyncRunResult {
     required this.syncState,
     required this.deletedEntries,
     required this.quarantined,
+    required this.quarantinePayloads,
+    required this.nextHlc,
     required this.pushedPaths,
     required this.conflictCopyIds,
     required this.appliedOps,
+    required this.cloudAppliedEntryIds,
     required this.tombstonesWritten,
     required this.preconditionAttempts,
     required this.reason,
@@ -59,9 +62,12 @@ class SyncRunResult {
       syncState: Map<String, String?>.from(workspace.syncState),
       deletedEntries: _deletedNames(workspace),
       quarantined: const <String>{},
+      quarantinePayloads: const <String, List<int>>{},
+      nextHlc: workspace.nextHlc,
       pushedPaths: const <String>[],
       conflictCopyIds: const <String>{},
       appliedOps: const <String>{},
+      cloudAppliedEntryIds: const <String>{},
       tombstonesWritten: const <String>{},
       preconditionAttempts: const <String, int>{},
       reason: '单飞锁被占用：本次跳过，不排队',
@@ -82,9 +88,17 @@ class SyncRunResult {
   final Map<String, String?> syncState;
   final Set<String> deletedEntries;
   final Set<String> quarantined;
+  final Map<String, List<int>> quarantinePayloads;
+  final String nextHlc;
   final List<String> pushedPaths;
   final Set<String> conflictCopyIds;
   final Set<String> appliedOps;
+
+  /// 这一轮已经由云端确认的 entry id。
+  ///
+  /// DB 落库时这些快照对应的 oplog 可以标为 `applied=1`；其余合并结果
+  /// 必须保留 `applied=0`，否则还没推上去的本地编辑会被静默吃掉。
+  final Set<String> cloudAppliedEntryIds;
   final Set<String> tombstonesWritten;
   final Map<String, int> preconditionAttempts;
   final String reason;
@@ -124,11 +138,14 @@ class _RunContext {
   final List<SyncTombstone> tombstones = <SyncTombstone>[];
   final Map<String, EntrySnapshot> remoteEntries = <String, EntrySnapshot>{};
   final Map<String, String> remoteEtags = <String, String>{};
+  final Map<String, List<int>> remoteRawBytes = <String, List<int>>{};
   final List<SyncPendingOp> generatedOps = <SyncPendingOp>[];
   final Set<String> quarantined = <String>{};
+  final Map<String, List<int>> quarantinePayloads = <String, List<int>>{};
   final List<String> pushedPaths = <String>[];
   final Set<String> conflictCopyIds = <String>{};
   final Set<String> appliedOps = <String>{};
+  final Set<String> cloudAppliedEntryIds = <String>{};
   final Set<String> tombstonesWritten = <String>{};
   final Set<String> resurrectedEntryIds = <String>{};
   final Map<String, int> preconditionAttempts = <String, int>{};
@@ -172,9 +189,17 @@ class _RunContext {
         syncState: Map<String, String?>.from(workspace.syncState),
         deletedEntries: _deletedNames(workspace),
         quarantined: Set<String>.unmodifiable(quarantined),
+        quarantinePayloads: Map<String, List<int>>.unmodifiable(
+          <String, List<int>>{
+            for (final entry in quarantinePayloads.entries)
+              entry.key: List<int>.unmodifiable(entry.value),
+          },
+        ),
+        nextHlc: workspace.nextHlc,
         pushedPaths: List<String>.unmodifiable(pushedPaths),
         conflictCopyIds: Set<String>.unmodifiable(conflictCopyIds),
         appliedOps: Set<String>.unmodifiable(appliedOps),
+        cloudAppliedEntryIds: Set<String>.unmodifiable(cloudAppliedEntryIds),
         tombstonesWritten: Set<String>.unmodifiable(tombstonesWritten),
         preconditionAttempts:
             Map<String, int>.unmodifiable(preconditionAttempts),
@@ -194,7 +219,7 @@ class SyncEngine {
   }) : _lock = lock ?? SingleFlightLock();
 
   final WebDavBackend backend;
-  final SyncPayloadCodec codec;
+  final AsyncSyncPayloadCodec codec;
   final int budgetLimit;
   final SingleFlightLock _lock;
 
@@ -236,7 +261,7 @@ class SyncEngine {
           ctx.advance(SyncEvent.discoverDone);
           final pulled = await _pull(ctx);
           if (!pulled) return ctx.result();
-          _merge(ctx);
+          await _merge(ctx);
         }
       }
 
@@ -316,10 +341,11 @@ class SyncEngine {
       }
       try {
         ctx.remoteWatermarks.add(
-          codec.decodeWatermark(get.bytes, etag: get.etag),
+          await codec.decodeWatermark(get.bytes, etag: get.etag),
         );
       } catch (_) {
         ctx.quarantined.add(listing.path);
+        ctx.quarantinePayloads[listing.path] = List<int>.from(get.bytes);
         ctx.forceL2 = true;
       }
     }
@@ -396,10 +422,11 @@ class SyncEngine {
         throw const _SyncFatal(SyncErrorCode.quota, '读取墓碑时请求预算不足');
       }
       try {
-        ctx.tombstones.add(codec.decodeTombstone(get.bytes));
+        ctx.tombstones.add(await codec.decodeTombstone(get.bytes));
         ctx.workspace.syncState[listing.path] = get.etag;
       } catch (_) {
         ctx.quarantined.add(listing.path);
+        ctx.quarantinePayloads[listing.path] = List<int>.from(get.bytes);
       }
     }
 
@@ -415,9 +442,11 @@ class SyncEngine {
     }
     final SyncVaultMeta meta;
     try {
-      meta = codec.decodeMeta(metaGet.bytes);
+      meta = await codec.decodeMeta(metaGet.bytes);
     } catch (_) {
       ctx.quarantined.add(CloudLayout.metaPath);
+      ctx.quarantinePayloads[CloudLayout.metaPath] =
+          List<int>.from(metaGet.bytes);
       throw const _SyncFatal(SyncErrorCode.corrupt, 'meta.enc 损坏或解密失败');
     }
     ctx.workspace.syncState[CloudLayout.metaPath] = metaGet.etag;
@@ -446,15 +475,17 @@ class SyncEngine {
         throw const _SyncFatal(SyncErrorCode.quota, '拉取条目时请求预算不足');
       }
       try {
-        final snapshot = codec.decodeEntry(get.bytes);
+        final snapshot = await codec.decodeEntry(get.bytes);
         if (snapshot.contentHash != _hash(snapshot)) {
           throw const FormatException('content_hash 不匹配');
         }
         ctx.remoteEntries[path] = snapshot;
         ctx.remoteEtags[path] = get.etag;
+        ctx.remoteRawBytes[path] = List<int>.from(get.bytes);
         ctx.workspace.syncState[path] = get.etag;
       } catch (_) {
         ctx.quarantined.add(path);
+        ctx.quarantinePayloads[path] = List<int>.from(get.bytes);
       }
     }
 
@@ -462,7 +493,7 @@ class SyncEngine {
     return true;
   }
 
-  void _merge(_RunContext ctx) {
+  Future<void> _merge(_RunContext ctx) async {
     for (final remoteEntry in ctx.remoteEntries.entries) {
       final path = remoteEntry.key;
       final remote = remoteEntry.value;
@@ -480,6 +511,7 @@ class SyncEngine {
         case ConflictAction.overwriteLocal:
         case ConflictAction.resurrectRemoteEdit:
           ctx.workspace.entries[hashedName] = remote;
+          ctx.cloudAppliedEntryIds.add(remote.id);
           if (decision.action == ConflictAction.resurrectRemoteEdit) {
             ctx.resurrectedEntryIds.add(remote.id);
           }
@@ -487,7 +519,7 @@ class SyncEngine {
 
         case ConflictAction.keepLocal:
         case ConflictAction.pushLocal:
-          if (local != null) _addUpsert(ctx, local);
+          if (local != null) await _addUpsert(ctx, local);
           break;
 
         case ConflictAction.resurrectLocalEdit:
@@ -498,7 +530,7 @@ class SyncEngine {
               ctx: ctx,
             );
             ctx.workspace.entries[hashedName] = revived;
-            _addUpsert(ctx, revived);
+            await _addUpsert(ctx, revived);
           }
           break;
 
@@ -511,18 +543,19 @@ class SyncEngine {
             context: _mergeContext(ctx),
           );
           ctx.workspace.entries[hashedName] = merged.merged;
-          _addUpsert(ctx, merged.merged);
+          await _addUpsert(ctx, merged.merged);
           if (merged.isConflict) ctx.conflicts++;
           final copy = merged.conflictCopy;
           if (copy != null) {
-            ctx.workspace.entries[codec.hashedName(copy.id)] = copy;
+            final copyName = await codec.hashedName(copy.id);
+            ctx.workspace.entries[copyName] = copy;
             ctx.conflictCopyIds.add(copy.id);
-            _addUpsert(ctx, copy);
+            await _addUpsert(ctx, copy);
           }
           break;
 
         case ConflictAction.writeTombstone:
-          if (local != null) _addDelete(ctx, local, baseRev);
+          if (local != null) await _addDelete(ctx, local, baseRev);
           break;
 
         case ConflictAction.softDeleteLocal:
@@ -531,6 +564,7 @@ class SyncEngine {
               deleted: true,
               deletedAt: ctx.workspace.nowMs,
             );
+            ctx.cloudAppliedEntryIds.add(local.id);
           }
           break;
 
@@ -539,11 +573,15 @@ class SyncEngine {
 
         case ConflictAction.quarantine:
           ctx.quarantined.add(path);
+          ctx.quarantinePayloads.putIfAbsent(
+            path,
+            () => List<int>.from(ctx.remoteRawBytes[path] ?? const <int>[]),
+          );
           break;
       }
     }
 
-    _applyTombstones(ctx);
+    await _applyTombstones(ctx);
     ctx.advance(
       ctx.conflicts > 0
           ? SyncEvent.mergeDoneWithConflicts
@@ -551,7 +589,7 @@ class SyncEngine {
     );
   }
 
-  void _applyTombstones(_RunContext ctx) {
+  Future<void> _applyTombstones(_RunContext ctx) async {
     for (final tombstone in ctx.tombstones) {
       if (ctx.resurrectedEntryIds.contains(tombstone.entryId)) {
         // 远端编辑已经通过规则 9 复活，不能再被同一轮墓碑软删回去。
@@ -582,6 +620,7 @@ class SyncEngine {
           )) {
         ctx.workspace.entries[hashedName] = remoteEdit;
         ctx.resurrectedEntryIds.add(tombstone.entryId);
+        ctx.cloudAppliedEntryIds.add(remoteEdit.id);
         continue;
       }
 
@@ -597,12 +636,15 @@ class SyncEngine {
           ctx: ctx,
         );
         ctx.workspace.entries[hashedName] = revived;
-        _addUpsert(ctx, revived);
+        await _addUpsert(ctx, revived);
       } else if (action == TombstoneAction.apply && local != null) {
         ctx.workspace.entries[hashedName] = local.copyWith(
           deleted: true,
           deletedAt: ctx.workspace.nowMs,
         );
+        ctx.cloudAppliedEntryIds.add(local.id);
+      } else if (action == TombstoneAction.alreadyDeleted) {
+        ctx.cloudAppliedEntryIds.add(tombstone.entryId);
       }
       // alreadyDeleted：幂等清理，不重复写墓碑。
     }
@@ -636,6 +678,7 @@ class SyncEngine {
     SyncPendingOp op,
   ) async {
     var snapshot = op.snapshot!;
+    var payload = op.rawPayload ?? await codec.encodeEntry(snapshot);
     final path = CloudLayout.itemPath(op.hashedName);
     var condition = _conditionFor(ctx, path);
     var attempts = 0;
@@ -647,7 +690,7 @@ class SyncEngine {
           'PUT $path',
           () => backend.put(
             path,
-            codec.encodeEntry(snapshot),
+            payload,
             condition: condition,
           ),
         );
@@ -659,6 +702,7 @@ class SyncEngine {
         ctx.workspace.syncState[path] = put.etag;
         ctx.pushedPaths.add(path);
         ctx.appliedOps.add(op.id);
+        ctx.cloudAppliedEntryIds.add(snapshot.id);
         return _PushOutcome.completed;
       } on WebDavException catch (e) {
         if (!e.isPreconditionFailed) return _handlePushError(ctx, e);
@@ -680,7 +724,7 @@ class SyncEngine {
 
         EntrySnapshot? remote;
         try {
-          remote = codec.decodeEntry(get.bytes);
+          remote = await codec.decodeEntry(get.bytes);
           if (remote.contentHash != _hash(remote)) {
             throw const FormatException('412 后拉取的远端 hash 不匹配');
           }
@@ -688,6 +732,7 @@ class SyncEngine {
           ctx.workspace.syncState[path] = get.etag;
         } catch (_) {
           ctx.quarantined.add(path);
+          ctx.quarantinePayloads[path] = List<int>.from(get.bytes);
         }
 
         if (attempts <= ctx.workspace.maxPreconditionRetries) {
@@ -699,11 +744,13 @@ class SyncEngine {
               context: _mergeContext(ctx),
             );
             snapshot = merged.merged;
+            payload = await codec.encodeEntry(snapshot);
             op.snapshot = snapshot;
             if (merged.isConflict) ctx.conflicts++;
             final copy = merged.conflictCopy;
             if (copy != null) {
-              ctx.workspace.entries[codec.hashedName(copy.id)] = copy;
+              final copyName = await codec.hashedName(copy.id);
+              ctx.workspace.entries[copyName] = copy;
               ctx.conflictCopyIds.add(copy.id);
               await _pushConflictCopy(ctx, copy);
             }
@@ -727,7 +774,8 @@ class SyncEngine {
           context: _mergeContext(ctx),
         );
         final copy = conflict.conflictCopy!;
-        ctx.workspace.entries[codec.hashedName(copy.id)] = copy;
+        final copyName = await codec.hashedName(copy.id);
+        ctx.workspace.entries[copyName] = copy;
         ctx.conflictCopyIds.add(copy.id);
         ctx.conflicts++;
         ctx.advance(SyncEvent.pullDone);
@@ -753,13 +801,14 @@ class SyncEngine {
       deviceId: ctx.workspace.selfDeviceId,
       rev: op.rev,
     );
+    final tombstoneBytes = await codec.encodeTombstone(tombstone);
 
     try {
       final put = await ctx.request<WebDavPutResult>(
         'PUT $tombstonePath',
         () => backend.put(
           tombstonePath,
-          codec.encodeTombstone(tombstone),
+          tombstoneBytes,
           condition: _conditionFor(ctx, tombstonePath),
         ),
       );
@@ -771,6 +820,7 @@ class SyncEngine {
       ctx.workspace.syncState[tombstonePath] = put.etag;
       ctx.tombstonesWritten.add(tombstonePath);
       ctx.pushedPaths.add(tombstonePath);
+      ctx.cloudAppliedEntryIds.add(op.entryId);
 
       final itemEtag = ctx.workspace.syncState[itemPath] ?? '*';
       final deleted = await ctx.request<bool>(
@@ -797,18 +847,21 @@ class SyncEngine {
     _RunContext ctx,
     EntrySnapshot copy,
   ) async {
-    final copyPath = CloudLayout.itemPath(codec.hashedName(copy.id));
+    final copyName = await codec.hashedName(copy.id);
+    final copyPath = CloudLayout.itemPath(copyName);
+    final payload = await codec.encodeEntry(copy);
     final put = await ctx.request<WebDavPutResult>(
       'PUT $copyPath',
       () => backend.put(
         copyPath,
-        codec.encodeEntry(copy),
+        payload,
         condition: const WebDavCondition.createOnly(),
       ),
     );
     if (put == null) return;
     ctx.workspace.syncState[copyPath] = put.etag;
     ctx.pushedPaths.add(copyPath);
+    ctx.cloudAppliedEntryIds.add(copy.id);
   }
 
   _PushOutcome _handlePushError(_RunContext ctx, WebDavException error) {
@@ -858,11 +911,12 @@ class SyncEngine {
       schema: ctx.workspace.schema,
       etag: existing,
     );
+    final watermarkBytes = await codec.encodeWatermark(watermark);
     final put = await ctx.request<WebDavPutResult>(
       'PUT $path',
       () => backend.put(
         path,
-        codec.encodeWatermark(watermark),
+        watermarkBytes,
         condition: existing == null
             ? const WebDavCondition.createOnly()
             : WebDavCondition.ifMatch(existing),
@@ -877,23 +931,27 @@ class SyncEngine {
     ctx.watermarkPublished = true;
   }
 
-  void _addUpsert(_RunContext ctx, EntrySnapshot snapshot) {
+  Future<void> _addUpsert(_RunContext ctx, EntrySnapshot snapshot) async {
     final id = 'generated:upsert:${snapshot.id}';
     if (ctx.generatedOps.any((SyncPendingOp op) => op.id == id)) return;
     ctx.generatedOps.add(SyncPendingOp.upsert(
       id: id,
-      hashedName: codec.hashedName(snapshot.id),
+      hashedName: await codec.hashedName(snapshot.id),
       snapshot: snapshot,
       baseRev: ctx.workspace.baseRevs[snapshot.id] ?? 0,
     ));
   }
 
-  void _addDelete(_RunContext ctx, EntrySnapshot snapshot, int baseRev) {
+  Future<void> _addDelete(
+    _RunContext ctx,
+    EntrySnapshot snapshot,
+    int baseRev,
+  ) async {
     final id = 'generated:delete:${snapshot.id}';
     if (ctx.generatedOps.any((SyncPendingOp op) => op.id == id)) return;
     ctx.generatedOps.add(SyncPendingOp.delete(
       id: id,
-      hashedName: codec.hashedName(snapshot.id),
+      hashedName: await codec.hashedName(snapshot.id),
       entryId: snapshot.id,
       rev: snapshot.rev,
       baseRev: baseRev,

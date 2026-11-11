@@ -1,13 +1,15 @@
 /// 同步编排器的输入输出模型与载荷编解码边界。
 ///
 /// 这里只定义「本地内存工作区长什么样」以及「加密/JSON 字节怎么换成对象」。
-/// 真实实现会把 `SyncPayloadCodec` 换成 DEK 派生密钥的加密 codec；
-/// 测试用纯 JSON codec，于是整条同步链路不需要网络、数据库或新依赖。
+/// 真实实现使用 DEK 派生密钥的加密 codec；测试用纯 JSON codec，
+/// 于是整条同步链路不需要网络、数据库或新依赖。
 library;
 
 import 'device_watermark.dart';
 import 'hlc.dart';
 
+import '../../data/db/tables/log_tables.dart';
+import '../../data/taxonomy/taxonomy_models.dart';
 import '../../data/write/entry_snapshot.dart';
 
 /// `/vault/meta.enc` 解密后的最小校验信息。
@@ -98,6 +100,19 @@ class SyncTombstone {
   }
 }
 
+/// `ItemEnvelope` 的明文头。同步层可以只读头做 rev 判定，不必先解密正文。
+class SyncEnvelopeHeader {
+  const SyncEnvelopeHeader({
+    required this.entity,
+    required this.entityId,
+    required this.rev,
+  });
+
+  final String entity;
+  final String entityId;
+  final int rev;
+}
+
 enum SyncPendingOpKind { upsert, delete }
 
 /// 一条待推送的 oplog 操作。编排器也会用它表达「合并结果 / 冲突副本 / 墓碑」。
@@ -107,10 +122,13 @@ class SyncPendingOp {
     required this.hashedName,
     required EntrySnapshot snapshot,
     required this.baseRev,
+    List<int>? rawPayload,
   })  : kind = SyncPendingOpKind.upsert,
         entryId = snapshot.id,
+        entity = SyncEntity.entry,
         snapshot = snapshot,
-        rev = snapshot.rev;
+        rev = snapshot.rev,
+        rawPayload = rawPayload == null ? null : List<int>.from(rawPayload);
 
   SyncPendingOp.delete({
     required this.id,
@@ -119,15 +137,25 @@ class SyncPendingOp {
     required this.rev,
     required this.baseRev,
   })  : kind = SyncPendingOpKind.delete,
-        snapshot = null;
+        entity = SyncEntity.entry,
+        snapshot = null,
+        rawPayload = null;
 
   final String id;
   final String hashedName;
   final String entryId;
+  final String entity;
   final SyncPendingOpKind kind;
 
   /// 412 重试后可能被合并结果替换，所以不是 final。
   EntrySnapshot? snapshot;
+
+  /// 直接复用 oplog 里的信封字节。
+  ///
+  /// docs/04 §2 要求 oplog payload 与云端 item 文件完全一致；非空时
+  /// `SyncEngine` 会原样 PUT，不重新加密，也就不制造额外明文窗口。
+  final List<int>? rawPayload;
+
   final int rev;
   final int baseRev;
 }
@@ -210,4 +238,85 @@ abstract interface class SyncPayloadCodec {
 
   List<int> encodeWatermark(DeviceWatermark watermark);
   DeviceWatermark decodeWatermark(List<int> bytes, {String? etag});
+}
+
+/// 真实加密 codec 的异步边界。
+///
+/// `ItemEnvelope.seal/open` 与 HKDF 都是异步的，不能把真实密钥实现硬塞进
+/// [SyncPayloadCodec] 的同步签名。纯测试仍用同步接口，再通过
+/// [SyncPayloadCodecAdapter] 适配到 `SyncEngine`。
+abstract interface class AsyncSyncPayloadCodec {
+  Future<String> hashedName(String entryId);
+
+  Future<List<int>> encodeEntry(EntrySnapshot snapshot);
+  Future<EntrySnapshot> decodeEntry(List<int> bytes);
+
+  Future<List<int>> encodeMeta(SyncVaultMeta meta);
+  Future<SyncVaultMeta> decodeMeta(List<int> bytes);
+
+  Future<List<int>> encodeTombstone(SyncTombstone tombstone);
+  Future<SyncTombstone> decodeTombstone(List<int> bytes);
+
+  /// 设备水位按 docs/04 §2 保持明文；ETag 来自 WebDAV 响应头，不进文件。
+  Future<List<int>> encodeWatermark(DeviceWatermark watermark);
+  Future<DeviceWatermark> decodeWatermark(List<int> bytes, {String? etag});
+}
+
+/// 非 entry 实体的独立载荷边界。
+///
+/// category / tag / entry_taxonomy 共享同一套 `ItemEnvelope`，但文件名
+/// 用 `HMAC(K_name, entity/id)` 做域分离，避免与正文条目撞名；
+/// 它们不进 `merge3`，由写入网关按实体直接落库。
+abstract interface class SyncEntityPayloadCodec {
+  Future<String> hashedEntityName(String entity, String id);
+
+  Future<SyncEnvelopeHeader> peekEntity(List<int> bytes);
+
+  Future<List<int>> encodeTaxonomy(TaxonomySnapshot snapshot);
+  Future<TaxonomySnapshot> decodeTaxonomy(List<int> bytes);
+}
+
+/// 把已有的同步 codec 包成异步接口，供内存后端测试与简单适配器复用。
+class SyncPayloadCodecAdapter implements AsyncSyncPayloadCodec {
+  const SyncPayloadCodecAdapter(this.inner);
+
+  final SyncPayloadCodec inner;
+
+  @override
+  Future<String> hashedName(String entryId) async => inner.hashedName(entryId);
+
+  @override
+  Future<List<int>> encodeEntry(EntrySnapshot snapshot) async =>
+      inner.encodeEntry(snapshot);
+
+  @override
+  Future<EntrySnapshot> decodeEntry(List<int> bytes) async =>
+      inner.decodeEntry(bytes);
+
+  @override
+  Future<List<int>> encodeMeta(SyncVaultMeta meta) async =>
+      inner.encodeMeta(meta);
+
+  @override
+  Future<SyncVaultMeta> decodeMeta(List<int> bytes) async =>
+      inner.decodeMeta(bytes);
+
+  @override
+  Future<List<int>> encodeTombstone(SyncTombstone tombstone) async =>
+      inner.encodeTombstone(tombstone);
+
+  @override
+  Future<SyncTombstone> decodeTombstone(List<int> bytes) async =>
+      inner.decodeTombstone(bytes);
+
+  @override
+  Future<List<int>> encodeWatermark(DeviceWatermark watermark) async =>
+      inner.encodeWatermark(watermark);
+
+  @override
+  Future<DeviceWatermark> decodeWatermark(
+    List<int> bytes, {
+    String? etag,
+  }) async =>
+      inner.decodeWatermark(bytes, etag: etag);
 }
