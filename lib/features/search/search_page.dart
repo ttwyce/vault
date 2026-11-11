@@ -10,6 +10,7 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
+import '../../data/db/tables/entry_tables.dart';
 import '../../data/search/search_suggestions.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/entry/entry_models.dart';
@@ -319,9 +320,36 @@ class _SearchTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
+            const SizedBox(height: SketchSpace.xs),
+            Wrap(
+              spacing: SketchSpace.sm,
+              children: <Widget>[
+                Text(
+                  _kindLabel(entry.kind),
+                  style: TextStyle(fontSize: 10.5, color: p.muted),
+                ),
+                Text(
+                  '命中：关键词',
+                  style: TextStyle(fontSize: 10.5, color: p.blue),
+                ),
+                if (entry.kind == EntryKind.bookmark)
+                  const SketchTag('归档', tone: SketchTone.plain, dense: true),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 }
+
+
+/// 结果卡片的类型标签（docs/06 §8.1）。
+String _kindLabel(EntryKind kind) => switch (kind) {
+      EntryKind.note => '笔记',
+      EntryKind.thought => '想法',
+      EntryKind.diary => '日记',
+      EntryKind.aiDiary => 'AI 日记',
+      EntryKind.bookmark => '书签',
+      EntryKind.credential => '密码',
+    };
