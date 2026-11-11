@@ -209,4 +209,24 @@ void main() {
           reason: 'activity 不在 SyncEntity 列表里，绝不能被推送出去');
     });
   });
+
+  test('搜索词夹带已知密码明文时不落 activity 表', () async {
+    final guarded = ActivityLogger(
+      db: db,
+      deviceId: 'devA',
+      now: () => nowMillis,
+      knownSecrets: const <String>{'UniquePass!2026'},
+    );
+    await guarded.recordSearch('我的密码 UniquePass!2026');
+    await guarded.recordSearch('正常的同步笔记');
+
+    final rows = await db.select(db.activities).get();
+    final queries = rows
+        .where((row) => row.kind == ActivityKind.search.code)
+        .map((row) => row.query)
+        .whereType<String>()
+        .toList();
+    expect(queries, <String>['正常的同步笔记']);
+    expect(jsonEncode(queries), isNot(contains('UniquePass')));
+  });
 }

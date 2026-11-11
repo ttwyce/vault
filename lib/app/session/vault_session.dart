@@ -13,6 +13,7 @@ import '../../data/activity/activity_logger.dart';
 import '../../data/db/database_key.dart';
 import '../../data/db/database_opener.dart';
 import '../../data/db/vault_database.dart';
+import '../../data/vault/credential_repository.dart';
 import '../../data/write/write_gateway.dart';
 import 'vault_storage.dart';
 
@@ -422,7 +423,15 @@ class VaultSession extends Notifier<VaultSessionState> {
       deviceId: _deviceId,
       uuid: UuidV7(),
     );
-    final activity = ActivityLogger(db: database, deviceId: _deviceId);
+    // 搜索埋点的敏感值集合在解锁时一次性取好；后续新增密码由下次
+    // 解锁重新装配覆盖。这样写入热路径不需要每条都解密全表。
+    final knownSecrets = await CredentialRepository(database, gateway)
+        .knownSecretValues();
+    final activity = ActivityLogger(
+      db: database,
+      deviceId: _deviceId,
+      knownSecrets: knownSecrets,
+    );
 
     state = VaultSessionState(
       status: VaultStatus.unlocked,

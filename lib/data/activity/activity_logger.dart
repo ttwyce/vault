@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../db/tables/log_tables.dart';
+import '../backup/security_audit.dart';
 import '../db/vault_database.dart';
 
 /// 活动埋点。
@@ -46,6 +47,7 @@ class ActivityLogger {
     this.viewWindow = const Duration(minutes: 30),
     this.editWindow = const Duration(minutes: 5),
     this.searchWindow = const Duration(seconds: 60),
+    this.knownSecrets = const <String>{},
   })  : _db = db,
         _now = now ?? _defaultNow;
 
@@ -59,6 +61,10 @@ class ActivityLogger {
   final Duration viewWindow;
   final Duration editWindow;
   final Duration searchWindow;
+
+  /// 已知敏感值（密码 / TOTP / secret 字段）。由会话装配层注入，
+  /// 用于在搜索词落库之前做代码级拦截。
+  final Set<String> knownSecrets;
 
   static int _defaultNow() => DateTime.now().millisecondsSinceEpoch;
 
@@ -115,6 +121,13 @@ class ActivityLogger {
   Future<void> recordSearch(String query, {int? resultCount}) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return Future<void>.value();
+    // docs/09 §11：密码 / TOTP / secret 字段的明文绝不写进任何日志。
+    // 搜索框是用户最容易无意夹带明文的地方，这里在落库之前拦住。
+    final findings = scanForPlaintextLeaks(AuditInput(
+      text: trimmed,
+      secrets: knownSecrets,
+    ));
+    if (findings.isNotEmpty) return Future<void>.value();
     return _recordCoalescing(
       kind: ActivityKind.search,
       query: trimmed,

@@ -4,6 +4,29 @@
 
 ---
 
+## v0.60 · 2026-11-11
+
+### M9：搜索埋点明文泄露硬拦截（已验证）
+
+- `ActivityLogger` 增加可注入 `knownSecrets`；`recordSearch` 在**落库之前**
+  过 `scanForPlaintextLeaks`，夹带密码 / TOTP / secret 字段明文的搜索词
+  直接不记录，绝不写进 `activity.query`
+- `VaultSession._activate` 解锁时一次性用 `CredentialRepository`
+  .knownSecretValues() 装配该集合，写入热路径不重复解密全表
+- 测试：`activity_logger_test.dart` +1 条（拦截 + 正常搜索仍记）
+  → 全量 **628 → 629**
+
+**边界**：只对搜索词做拦截；其它 extra 字段的扫描与真实日志导出审计
+仍留后续；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**629/629 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§11）、14（Day 55）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.59 · 2026-11-11
 
 ### M7：会话 FTS 索引与结果分区展示（已验证）
