@@ -129,4 +129,21 @@ void main() {
     final rows = await app.repo.list(kind: EntryKind.note);
     expect(rows.single.title, '第一行');
   });
+
+  testWidgets('预览按钮切换到实时预览并保留原文', (WidgetTester tester) async {
+    await pumpEditor(tester);
+    await tester.enterText(
+      find.byType(TextField).last,
+      '# 标题\n- [x] 完成项',
+    );
+    await tester.tap(find.text('预览'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('标题'), findsWidgets);
+    expect(find.text('完成项'), findsOneWidget);
+    expect(find.byIcon(Icons.check_box_outlined), findsOneWidget);
+
+    await tester.tap(find.text('编辑'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('预览'), findsOneWidget);
+  });
 }

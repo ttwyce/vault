@@ -4,6 +4,30 @@
 
 ---
 
+## v0.82 · 2026-11-11
+
+### M2：Markdown 实时预览（已验证）
+
+- 新增 `markdown_preview.dart`：逐行归类标题 1~3 / 列表 / 任务勾选 /
+  引用 / 代码围栏 / 图片 / 段落；围栏内不二次解析，未闭合也保留内容；
+  `previewPlainText` 去标记给列表用
+- 新增 `MarkdownPreview` 面板（纯 Flutter Text，不引第三方渲染器），
+  `EditorPage` 加「预览 / 编辑」切换，补上 docs/09 §4 记录的
+  「Markdown 编辑器无实时预览」缺口
+- 测试：`markdown_preview_test.dart` 4 条、`editor_page_test.dart` +1 条
+  → 全量 **694 → 699**
+
+**边界**：轻量核对，不是完整 CommonMark；不渲染 HTML / 表格 / 脚注。
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**699/699 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 77）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.81 · 2026-11-11
 
 ### M5：搜索空结果改写建议（已验证）

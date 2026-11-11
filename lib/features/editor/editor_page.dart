@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'widgets/markdown_preview_view.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/session/vault_session.dart';
@@ -54,6 +56,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   /// 日记日期等扩展字段都住在 meta 里，不传回就等于把扩展字段清掉。
   String? _existingMeta;
 
+  bool _preview = false;
   bool _loading = false;
   bool _saving = false;
   String? _error;
@@ -387,6 +390,11 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         ),
         actions: <Widget>[
           SketchButton(
+            label: _preview ? '编辑' : '预览',
+            dense: true,
+            onPressed: () => setState(() => _preview = !_preview),
+          ),
+          SketchButton(
             label: _saving ? '保存中…' : '保存',
             tone: SketchTone.primary,
             glyph: SketchGlyph.plus,
@@ -447,23 +455,26 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           _buildTaxonomyRow(),
           _buildMarkdownBar(),
           Expanded(
-            child: TextField(
-              controller: _body,
-              enabled: !_saving,
-              expands: true,
-              maxLines: null,
-              minLines: null,
-              textAlignVertical: TextAlignVertical.top,
-              keyboardType: TextInputType.multiline,
-              style: TextStyle(fontSize: 14, height: 1.8, color: p.ink),
-              cursorColor: p.red,
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: '开始写…',
-                hintStyle:
-                    TextStyle(fontSize: 14, height: 1.8, color: p.muted),
-              ),
-            ),
+            child: _preview
+                ? MarkdownPreview(source: _body.text)
+                : TextField(
+                    controller: _body,
+                    enabled: !_saving,
+                    expands: true,
+                    maxLines: null,
+                    minLines: null,
+                    textAlignVertical: TextAlignVertical.top,
+                    keyboardType: TextInputType.multiline,
+                    style:
+                        TextStyle(fontSize: 14, height: 1.8, color: p.ink),
+                    cursorColor: p.red,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: '开始写…',
+                      hintStyle: TextStyle(
+                          fontSize: 14, height: 1.8, color: p.muted),
+                    ),
+                  ),
           ),
           const SizedBox(height: SketchSpace.md),
         ],
