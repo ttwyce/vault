@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -210,5 +211,65 @@ void main() {
       '帮我看看这周都做了什么',
     );
     expect(await app.db.select(app.db.messages).get(), isEmpty);
+  });
+
+  testWidgets('AI 消息显示可点击引用，工具消息默认折叠',
+      (WidgetTester tester) async {
+    final conv = await app.db.into(app.db.conversations).insertReturning(
+          ConversationsCompanion.insert(
+            id: 'conv-ui',
+            hlc: '0000000000000001:0000:devA',
+            title: const Value<String?>('引用会话'),
+            createdAt: const Value<int?>(1731052800000),
+            updatedAt: const Value<int?>(1731052800000),
+          ),
+        );
+    // 直接写 message 行，带 citations JSON 与一条工具结果。
+    await app.db.into(app.db.messages).insert(
+          MessagesCompanion.insert(
+            id: 'm-assistant',
+            conversationId: conv.id,
+            role: 2,
+            content: const Value<String?>('这是回答'),
+            citations: const Value<String?>('["e1"]'),
+            createdAt: const Value<int?>(1731052800001),
+            hlc: '0000000000000001:0000:devA',
+          ),
+        );
+    await app.db.into(app.db.messages).insert(
+          MessagesCompanion.insert(
+            id: 'm-tool',
+            conversationId: conv.id,
+            role: 3,
+            content: const Value<String?>('检索了 3 条笔记'),
+            createdAt: const Value<int?>(1731052800002),
+            hlc: '0000000000000001:0000:devA',
+          ),
+        );
+
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: const MaterialApp(home: Scaffold(body: ChatPage())),
+    ));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    // 打开抽屉选中该会话
+    await tester.tap(find.byTooltip('对话列表'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('引用会话').last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('这是回答'), findsOneWidget);
+    expect(find.text('见：e1'), findsOneWidget);
+    expect(find.textContaining('工具调用 · 点击展开'), findsOneWidget);
+    await tester.tap(find.textContaining('工具调用 · 点击展开'));
+    await tester.pump();
+    expect(find.textContaining('检索了 3 条笔记'), findsOneWidget);
   });
 }

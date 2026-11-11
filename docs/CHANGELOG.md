@@ -4,6 +4,27 @@
 
 ---
 
+## v1.00 · 2026-11-12
+
+### M7：引用卡片与工具调用折叠卡（已验证）
+
+- `ChatPage` 消息流按 docs/07 §10.1 补两处 UI：
+  AI 回答下方渲染 `citations` 引用 chip（点击跳 EditorPage 直达条目），
+  `role=3` 工具结果默认折叠为「🔍 工具调用 · 点击展开」
+- 测试：`conversation_writer_test.dart` +1 条（引用 chip 可见、
+  工具卡默认收起 / 展开可见）→ 全量 **733 → 734**
+
+**边界**：消息分页加载 / 90 天前会话归档为摘要（R15）仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**734/734 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 95）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.99 · 2026-11-11
 
 ### M7：无模型 / 无 API Key 的诚实引导（C5，已验证）

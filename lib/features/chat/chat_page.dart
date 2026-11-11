@@ -19,6 +19,7 @@ import '../../data/chat/conversation_repository_provider.dart';
 import '../../data/agent/model_availability_provider.dart';
 import '../../data/agent/model_status.dart';
 import '../../data/chat/conversation_writer.dart';
+import '../editor/editor_page.dart';
 import 'widgets/conversation_drawer.dart';
 
 /// 聊天首页。
@@ -246,17 +247,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         for (final message in messages) ...<Widget>[
-                          message.isUser
-                              ? _UserMessage(text: message.content)
-                              : _AiMessage(
-                                  child: Text(
+                          if (message.role == 3)
+                            _ToolCallCard(content: message.content)
+                          else if (message.isUser)
+                            _UserMessage(text: message.content)
+                          else
+                            _AiMessage(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
                                     message.content,
                                     style: TextStyle(
                                       fontSize: 13.5,
                                       color: palette.ink,
                                     ),
                                   ),
-                                ),
+                                  if (message.citations.isNotEmpty)
+                                    _CitationChips(ids: message.citations),
+                                ],
+                              ),
+                            ),
                           const SizedBox(height: SketchSpace.lg),
                         ],
                       ],
@@ -440,3 +451,58 @@ const List<String> kExampleQuestions = <String>[
   '帮我看看这周都做了什么',
   '有哪些网页已经打不开了？',
 ];
+
+
+/// docs/07 §10.1：工具调用折叠卡，默认收起。
+class _ToolCallCard extends StatefulWidget {
+  const _ToolCallCard({required this.content});
+
+  final String content;
+
+  @override
+  State<_ToolCallCard> createState() => _ToolCallCardState();
+}
+
+class _ToolCallCardState extends State<_ToolCallCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: SketchTag(
+        _expanded ? '🔍 ${widget.content}' : '🔍 工具调用 · 点击展开',
+        tone: SketchTone.plain,
+      ),
+    );
+  }
+}
+
+/// 引用以卡片形式嵌在回答里，点击直达条目详情（docs/07 §10.1）。
+class _CitationChips extends StatelessWidget {
+  const _CitationChips({required this.ids});
+
+  final List<String> ids;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: SketchSpace.sm),
+      child: Wrap(
+        spacing: SketchSpace.sm,
+        runSpacing: SketchSpace.sm,
+        children: <Widget>[
+          for (final id in ids)
+            GestureDetector(
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => EditorPage(entryId: id),
+                ),
+              ),
+              child: SketchTag('见：$id', tone: SketchTone.blue),
+            ),
+        ],
+      ),
+    );
+  }
+}
