@@ -2109,6 +2109,13 @@ class WriteGateway {
     for (final row in affected) {
       await _rebuildEntrySearch(row.read<String>('entry_id'));
     }
+
+    // T23：远端删除分类与本地 `_deleteCategory` 必须对称 ——
+    // 子分类提升为一级，否则 parent_id 指向已删分类的孤儿会在两级树
+    // 重建时「神秘消失」，用户会以为分类连同子分类一起没了。
+    await (_db.update(_db.categories)
+          ..where((t) => t.parentId.equals(snapshot.id)))
+        .write(const CategoriesCompanion(parentId: Value<String?>(null)));
   }
 
   Future<void> _applyTagSnapshot(TaxonomySnapshot snapshot) async {

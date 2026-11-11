@@ -4,6 +4,35 @@
 
 ---
 
+## v0.26 · 2026-11-11
+
+### T23：远端删除分类与本地路径对称（已验证）
+
+`WriteGateway._deleteCategory()`（本地）删除分类时会把子分类提升为一级并
+各自写 oplog，但 `_applyCategorySnapshot()`（远端 taxonomy 通道）被删除时
+只清 `entry_category` 关联，**没有提升子分类** —— 会留下 `parent_id` 指向
+已删分类的孤儿，两级树重建时它们会「神秘消失」，正是 docs/09 T23 要防的。
+
+**改了什么**
+- `_applyCategorySnapshot` 在删除分支末尾把该分类下所有子分类的
+  `parent_id` 置空，与本地路径对称；条目关联清除、FTS 重建保持不变
+- `test/entity_sync_engine_test.dart` +1 条 T23：远端删除信封落库后
+  条目数不变、关联清空、子分类成为活的一级分类 → 全量 **438 → 439**
+- 测试里先把本地 outbox 标记已推，避免本地 `create` 信封按同一
+  `hashedName` PUT 到同一 path 覆盖测试预置的删除文件（夹具冲突，非产品 bug）
+
+**关键决策**：删除分类绝不删条目，子分类只能提升不能级联删除；
+本地 / 远端两条写入路径必须对称，否则跨设备结果不一致。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**439/439 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+**M3 硬门槛不变**：26 个真实集成用例未通过，不进 M4。
+
+**影响文档**：README（数字 / 决策表）、09（§5 / §12 T23）、14（Day 21）、
+CHANGELOG（本条）
+
+---
+
 ## v0.25 · 2026-11-11
 
 ### T21：两设备同名标签在独立通道自动合并（已验证）

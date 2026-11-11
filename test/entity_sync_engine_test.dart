@@ -524,6 +524,73 @@ void main() {
       expect(remoteRow, isNull, reason: '保留本地时远端 id 不能复活成活标签');
     });
 
+    test('T23：远端删除分类后条目回未分类、条目数不变、子分类提升为一级',
+        () async {
+      final parent = await env.gateway.writeCategory(
+        CategoryWrite.create(id: 'cat-parent', name: '工作'),
+      );
+      await env.gateway.writeCategory(
+        CategoryWrite.create(
+          id: 'cat-child',
+          name: '子分类',
+          parentId: 'cat-parent',
+        ),
+      );
+      final entry = await env.gateway.writeEntry(
+        EntryWrite.create(id: 'note-t23', title: '归属工作'),
+      );
+      await env.gateway.setEntryTaxonomy(
+        entryId: entry.snapshot.id,
+        categoryId: 'cat-parent',
+      );
+      expect(parent.changed, isTrue);
+      // 本用例只验证「远端删除信封」的落库语义：先把本地 outbox 标记已推，
+      // 否则通道会按同一 hashedName 把本地 create 信封 PUT 到同一 path，
+      // 覆盖掉测试预置的删除文件。
+      await env.gateway.markApplied(
+        (await env.gateway.pending()).map((row) => row.seq),
+      );
+
+      final deleted = TaxonomySnapshot(
+        entity: SyncEntity.category,
+        id: 'cat-parent',
+        rev: 5,
+        hlc: Hlc(millis: _now, counter: 0, node: 'devB').encode(),
+        updatedAt: _now,
+        deleted: true,
+        fields: <String, Object?>{
+          'name': '工作',
+          'kind': 1,
+          'parent_id': null,
+          'sort_order': 0,
+        },
+      );
+      final path = await _path(env.codec, deleted);
+      final backend = _FakeBackend()
+        ..add(path, await env.codec.encodeTaxonomy(deleted));
+
+      await EntitySyncEngine(
+        backend: backend,
+        codec: env.codec,
+        port: env.port,
+      ).run();
+
+      final entries = await env.db.select(env.db.entries).get();
+      expect(entries, hasLength(1), reason: '删除分类绝不删条目');
+      final links = await env.db.select(env.db.entryCategories).get();
+      expect(links, isEmpty, reason: '条目回到未分类');
+      final child = await (env.db.select(env.db.categories)
+            ..where((t) => t.id.equals('cat-child')))
+          .getSingle();
+      expect(child.parentId, isNull, reason: '子分类必须提升为一级');
+      expect(child.deleted, 0);
+      final alive = await (env.db.select(env.db.categories)
+            ..where((t) => t.deleted.equals(0)))
+          .get();
+      expect(alive.map((row) => row.id), contains('cat-child'));
+      expect(alive.map((row) => row.id), isNot(contains('cat-parent')));
+    });
+
     test('部分分片扫描不推断删除，其它通道的 sync_state 不被清掉', () async {
       await env.db.into(env.db.syncStates).insert(
             SyncStatesCompanion.insert(
