@@ -4,6 +4,32 @@
 
 ---
 
+## v0.31 · 2026-11-11
+
+### GET ETag 兜底与重定向防护（已验证）
+
+**改了什么**
+- `get()` 与 `put()` 对称：GET 成功但响应无 ETag 时用 HEAD 回读，
+  绝不把空条件交给 `SyncEngine` 写进 `syncState`
+- `request.followRedirects = false`：条件写被 3xx 重定向到登录页时，
+  自动跟随会把 `If-Match` 丢掉却返回 200 —— 静默丢数据
+- `_send` 把 3xx 统一映射成 `WebDavException(401 → E_AUTH)`，
+  由状态机停止同步并禁用自动重试（docs/04 §7）
+- `test/http_webdav_backend_test.dart` +2 条真实 TCP 场景：
+  GET 无 ETag → HEAD 回读；302 登录页 → E_AUTH
+  → 全量 **452 → 454**
+
+**关键决策**：宁可让会话过期显式失败，也不能把「重定向后的 200」
+当成条件写成功。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**454/454 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+真实 HTTP 后端**仍未接生产路径、M0 A5 未过**，M3 硬门槛不变。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 26）、CHANGELOG（本条）
+
+---
+
 ## v0.30 · 2026-11-11
 
 ### 并发限流与真实运行时装配门面（已验证）

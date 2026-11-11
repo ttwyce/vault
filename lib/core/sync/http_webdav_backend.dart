@@ -81,15 +81,22 @@ class HttpClientWebDavBackend implements WebDavBackend {
       final request = await _client
           .openUrl(method, _uri(path))
           .timeout(config.connectTimeout);
+      // 条件写被 3xx 重定向到登录页时，自动跟随会把 If-Match 丢掉却
+      // 返回 200 —— 用户以为写成功，实际什么都没发生。原样交给状态机。
+      request.followRedirects = false;
       _headers(headers).forEach((String key, String value) {
         request.headers.set(key, value);
       });
       if (body != null) request.add(body);
       final response = await request.close().timeout(config.connectTimeout);
-      if (response.statusCode >= 400) {
+      if (response.statusCode >= 300) {
         await response.drain<void>();
+        // 3xx 常见于「会话过期 → 302 登录页」。不能当成成功：
+        // 条件写被重定向后 If-Match 已丢失，返回 200 会静默丢数据。
         throw WebDavException(
-          statusCode: response.statusCode,
+          statusCode: response.statusCode >= 400
+              ? response.statusCode
+              : 401,
           method: method,
           path: path,
         );
@@ -272,10 +279,19 @@ class HttpClientWebDavBackend implements WebDavBackend {
   @override
   Future<WebDavGetResult> get(String path) async {
     final response = await _send('GET', path);
-    return WebDavGetResult(
-      bytes: await _bytes(response),
-      etag: _header(response, 'etag') ?? '',
-    );
+    var etag = _header(response, 'etag') ?? '';
+    final bytes = await _bytes(response);
+    if (etag.isEmpty) {
+      // 与 PUT 对称：GET 无 ETag 时 HEAD 回读，绝不把空条件写进 syncState。
+      try {
+        final head = await _send('HEAD', path);
+        await head.drain<void>();
+        etag = _header(head, 'etag') ?? '';
+      } on WebDavException {
+        // HEAD 不被支持时留空，由调用方隔离该载荷。
+      }
+    }
+    return WebDavGetResult(bytes: bytes, etag: etag);
   }
 
   @override

@@ -28,6 +28,9 @@ class _DavServer {
   /// 模拟「PUT 成功但不返回 ETag」的服务商行为。
   bool noPutEtag = false;
 
+  /// 模拟「GET 成功但不返回 ETag」的服务商行为。
+  bool noGetEtag = false;
+
   static Future<_DavServer> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final dav = _DavServer(server);
@@ -76,7 +79,7 @@ class _DavServer {
           await response.close();
           return;
         }
-        response.headers.set('ETag', entry.etag);
+        if (!noGetEtag) response.headers.set('ETag', entry.etag);
         response.add(entry.bytes);
         await response.close();
         return;
@@ -536,6 +539,48 @@ void main() {
     } finally {
       limited.close();
       await serverHttp.close();
+    }
+  });
+
+  test('GET 无响应 ETag 时用 HEAD 回读，不把空条件传给调用方', () async {
+    const String path = '/vault/items/0/11111111111111111111111111111111.enc';
+    await backend.put(path, utf8.encode('内容'),
+        condition: const WebDavCondition.createOnly());
+    server.noGetEtag = true;
+
+    final got = await backend.get(path);
+    expect(utf8.decode(got.bytes), '内容');
+    expect(got.etag, isNotEmpty);
+    expect(server.calls, contains('HEAD $path'));
+  });
+
+  test('302 登录页重定向不被当成写成功，映射为 E_AUTH', () async {
+    final redirect = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    redirect.listen((HttpRequest r) async {
+      await r.drain<void>();
+      r.response.statusCode = HttpStatus.found;
+      r.response.headers.set(HttpHeaders.locationHeader, '/login');
+      await r.response.close();
+    });
+    final b = HttpClientWebDavBackend(
+      HttpWebDavConfig(rootUrl: 'http://127.0.0.1:${redirect.port}'),
+    );
+    try {
+      await expectLater(
+        b.put(
+          '/vault/items/0/22222222222222222222222222222222.enc',
+          utf8.encode('载荷'),
+          condition: const WebDavCondition.createOnly(),
+        ),
+        throwsA(isA<WebDavException>().having(
+          (WebDavException e) => e.syncErrorCode,
+          'errorCode',
+          SyncErrorCode.auth,
+        )),
+      );
+    } finally {
+      b.close();
+      await redirect.close(force: true);
     }
   });
 
