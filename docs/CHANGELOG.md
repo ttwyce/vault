@@ -4,6 +4,34 @@
 
 ---
 
+## v0.41 · 2026-11-11
+
+### 发布前确定性检查清单与会话仓库接线（已验证）
+
+**改了什么**
+- 新增 `lib/data/audit/release_audit.dart`：M9 发布前六项可复现检查
+  A1 日志/prompt 明文零泄露、A2 密码/AI 日记不向量化、
+  A3 模型 manifest 配置坑、A4 CredentialGuard 密码边界、
+  A5 混合检索预处理烟测、A6 secret 自定义字段脱敏；
+  `releaseAuditToJson()` 可直接写进 CI 产物 / sync_log
+- 新增 `ConversationRepository` + provider：把真实 `conversation` 表接进
+  docs/12 的分组逻辑，已删除会话不出现、用户分组优先
+  （消除了会话判定层「只有测试用」的死代码）
+- 测试：`release_audit_test.dart` 4 条、
+  `conversation_repository_test.dart` 2 条 → 全量 **564 → 570**
+
+**边界**：这只是确定性检查清单，**不冒充** 26 个真实集成用例与 5000 条
+性能基线；M3 硬门槛未过，M4~M9 均未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**570/570 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§11）、14（Day 36）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.40 · 2026-11-11
 
 ### M8/M9 预备层与 M5 判定层接线（已验证）
