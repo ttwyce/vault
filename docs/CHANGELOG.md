@@ -4,6 +4,39 @@
 
 ---
 
+## v0.42 · 2026-11-11
+
+### 会话抽屉 / 密码健康报告 UI 真实接线（已验证）
+
+**改了什么**
+- 新增 `ConversationDrawer`（docs/12 §3 / §5）：搜索框、今天/昨天/本周/更早
+  与用户分组、当前会话便签黄底 + 左红条 + 多歪一点的高亮、新建对话
+- `ChatPage` 两处 TODO 落地：左上三横杠用**独立路由**打开抽屉
+  （不进 PageScaffold 布局树，主区零重排；路由自带 Material 祖先），
+  右上「开启新对话」进 `ConversationDraftState` 草稿态（T26 首条消息前不落库）
+- 新增 `CredentialRepository` + provider：按真实 `credential` 表列
+  （`breached=2` 才算泄露、`passwordChangedAt` 算超期）算聚合统计，
+  **只返回统计不返回任何明文**；`VaultPage` 的写死「42 个 · 安全评分 72」
+  与假泄露横幅改为真实数据
+- 测试：`chat_drawer_test.dart` 3 条（打开/关闭、草稿态不落库、真实会话选中）、
+  `credential_repository_test.dart` 3 条 → 全量 **570 → 576**
+
+**接线踩坑**：抽屉最初塞进 PageScaffold 的 child 布局树，导致
+`Expanded > ListView` 高度约束被破坏（RenderFlex 溢出）与 TextField
+缺 Material 祖先；最终改为独立路由 + 抽屉根包 Material，两个问题一起消失。
+
+**边界**：抽屉不发真实消息、密码页不做 TOTP / 剪贴板 / HIBP 网络请求；
+M3 硬门槛未过，M4~M9 均未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**576/576 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§9）、14（Day 37）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.41 · 2026-11-11
 
 ### 发布前确定性检查清单与会话仓库接线（已验证）

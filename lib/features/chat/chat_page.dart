@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_theme.dart';
@@ -6,21 +7,77 @@ import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/chat/conversation_models.dart';
+import 'widgets/conversation_drawer.dart';
 
 /// 聊天首页。
 ///
 /// 定位见 docs/12：首页是「会话列表 + 当前会话」的聊天骨架，
-/// 不是分类目录。左上三横杠打开会话抽屉（待实现），
-/// 右上「开启新对话」进入空白草稿会话（待实现）。
-class ChatPage extends StatefulWidget {
+/// 不是分类目录。左上三横杠用独立 Overlay 路由打开会话抽屉（主区零重排），
+/// 右上「开启新对话」进入草稿态（T26：首条消息前不落库）。
+class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  ConsumerState<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _input = TextEditingController();
+  ConversationDraftState _draft = ConversationDraftState.initial;
+
+  /// 抽屉用 OverlayEntry 挂在根 Overlay 上：不进 PageScaffold 的布局树，
+  /// 因此不会改变主区尺寸，也不会与 Expanded / ListView 的高度约束打架。
+  bool _drawerOpen = false;
+
+  void _openDrawer() {
+    if (_drawerOpen) return;
+    _drawerOpen = true;
+    // 用独立路由而不是把抽屉塞进 PageScaffold 的布局树：
+    // 主区布局零变化，且路由自带 Material 祖先（TextField 不会报错）。
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '关闭对话抽屉',
+      barrierColor: context.sketch.scrim,
+      pageBuilder: (
+        BuildContext dialogContext,
+        Animation<double> animation,
+        Animation<double> secondaryAnimation,
+      ) =>
+          Align(
+        alignment: Alignment.centerLeft,
+        child: SizedBox(
+          width: 320,
+          child: ConversationDrawer(
+            currentId: _draft.currentId,
+            onSelect: _selectConversation,
+            onNewDraft: _startDraft,
+            onClose: _closeDrawer,
+          ),
+        ),
+      ),
+    ).whenComplete(() => _drawerOpen = false);
+  }
+
+  void _closeDrawer() {
+    if (!_drawerOpen) return;
+    _drawerOpen = false;
+    if (context.mounted) Navigator.of(context).maybePop();
+  }
+
+  void _startDraft() {
+    setState(() {
+      _draft = _draft.startDraft();
+      _input.clear();
+    });
+    _closeDrawer();
+  }
+
+  void _selectConversation(String id) {
+    setState(() => _draft = _draft.selectExisting(id));
+    _closeDrawer();
+  }
 
   @override
   void dispose() {
@@ -38,12 +95,7 @@ class _ChatPageState extends State<ChatPage> {
       leading: SketchIconButton(
         glyph: SketchGlyph.menu,
         tooltip: '对话列表',
-        onPressed: () {
-          // TODO(M7): 打开会话抽屉
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('会话抽屉将在 M7 实现')),
-          );
-        },
+        onPressed: _openDrawer,
       ),
       actions: <Widget>[
         SketchButton(
@@ -51,12 +103,7 @@ class _ChatPageState extends State<ChatPage> {
           glyph: SketchGlyph.plus,
           tone: SketchTone.primary,
           dense: true,
-          onPressed: () {
-            // TODO(M7): 进入草稿态会话
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('新建草稿会话将在 M7 实现')),
-            );
-          },
+          onPressed: _startDraft,
         ),
       ],
       child: Column(
