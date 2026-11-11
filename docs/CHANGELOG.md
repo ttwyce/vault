@@ -4,6 +4,25 @@
 
 ---
 
+## v0.49 · 2026-11-11
+
+### 关于与隐私页（docs/09 §10 上架材料，已验证）
+
+- 新增 `AboutPage`：零后端 / 端到端加密 / 密码与 AI 绝对边界 /
+  无遥测 / 字体 SIL OFL 1.1 与 Gemma-Qwen3 许可提示 /
+  恢复码警告，六段声明在 App 内可读
+- `SettingsHubPage` 加「关于与隐私」入口
+- 测试：`about_page_test.dart` 2 条 → 全量 **591 → 593**
+- 用 Dart 常量承载说明文本，**不新增 asset、不改 pubspec.yaml**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**593/593 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+边界不变：M3 硬门槛未过，M4~M9 未完成。
+
+**影响文档**：README（数字）、14（Day 44）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.48 · 2026-11-11
 
 ### 设置中心「诊断与备份」入口（已验证）
