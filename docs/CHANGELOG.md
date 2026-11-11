@@ -4,6 +4,31 @@
 
 ---
 
+## v0.34 · 2026-11-11
+
+### 响应体大小上限硬化（已验证）
+
+docs/README「关键预算」写「单条目正文 ≤ 1 MB / blob ≤ 20 MB」，但 HTTP 层
+此前会把任意大小的响应全读进内存：损坏或被篡改的云端文件可直接撑爆峰值
+内存预算，且半个载荷会被当成「损坏条目」去解密。
+
+**改了什么**
+- `HttpWebDavConfig.maxResponseBytes`（默认 1 MB，blob 按需下载可显式调大）
+- `_bytes()` 先按 `Content-Length` 快速拒绝，chunked 响应边读边累计，
+  超限抛 `WebDavException(507 → E_QUOTA)`，**绝不静默截断或返回半个载荷**
+- 超限分支刻意不 `drain()`：`HttpClientResponse` 是单订阅流，drain 后再
+  `await for` 会抛 `StateError` 把真正的 E_QUOTA 掩盖掉（实现时踩过）
+- `test/http_webdav_backend_test.dart` +1 条：64 B 上限下 2 KB 载荷 →
+  E_QUOTA，调大到 4 KB 后完整读回 → 全量 **457 → 458**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**458/458 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+真实 HTTP 后端**仍未接生产路径、M0 A5 未过**，M3 硬门槛不变。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 29）、CHANGELOG（本条）
+
+---
+
 ## v0.33 · 2026-11-11
 
 ### 真实认证断言与 T15 强杀重启确定性覆盖（已验证）

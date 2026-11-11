@@ -28,7 +28,9 @@ class HttpWebDavConfig {
     this.connectTimeout = const Duration(seconds: 15),
     this.userAgent = 'vault/0.1',
     this.maxConcurrentRequests = 3,
-  }) : assert(maxConcurrentRequests > 0);
+    this.maxResponseBytes = 1024 * 1024,
+  })  : assert(maxConcurrentRequests > 0),
+        assert(maxResponseBytes > 0);
 
   final String rootUrl;
   final String? username;
@@ -38,6 +40,10 @@ class HttpWebDavConfig {
 
   /// docs/04 §10：全局最多 3 个在途 HTTP 请求。
   final int maxConcurrentRequests;
+
+  /// 单条目正文上限（docs/README 关键预算：1 MB）。
+  /// blob 按需下载时可显式调大；超限绝不静默截断。
+  final int maxResponseBytes;
 }
 
 class HttpClientWebDavBackend implements WebDavBackend {
@@ -131,9 +137,37 @@ class HttpClientWebDavBackend implements WebDavBackend {
     }
   }
 
-  Future<Uint8List> _bytes(HttpClientResponse response) async {
+  Future<Uint8List> _bytes(
+    HttpClientResponse response, {
+    required String method,
+    required String path,
+  }) async {
+    final declared = response.contentLength;
+    if (declared > 0 && declared > config.maxResponseBytes) {
+      // 不调用 drain()：HttpClientResponse 是单订阅流，drain 之后再
+      // await for 会抛「Stream has already been listened to」，把真正的
+      // E_QUOTA 掩盖掉。超限直接抛，连接由 SDK 自行回收。
+      throw WebDavException(
+        statusCode: 507,
+        method: method,
+        path: path,
+        message: '响应体 ${declared}B 超过上限 ${config.maxResponseBytes}B',
+      );
+    }
     final builder = BytesBuilder(copy: false);
+    var total = 0;
     await for (final chunk in response) {
+      total += chunk.length;
+      if (total > config.maxResponseBytes) {
+        // chunked 响应没有 Content-Length，必须边读边挡；
+        // 超限不返回半个载荷（半个载荷会被当成损坏条目去解密）。
+        throw WebDavException(
+          statusCode: 507,
+          method: method,
+          path: path,
+          message: '响应体超过上限 ${config.maxResponseBytes}B',
+        );
+      }
       builder.add(chunk);
     }
     return builder.takeBytes();
@@ -168,7 +202,10 @@ class HttpClientWebDavBackend implements WebDavBackend {
       },
       body: utf8.encode(body),
     );
-    final xml = utf8.decode(await _bytes(response), allowMalformed: true);
+    final xml = utf8.decode(
+      await _bytes(response, method: 'PROPFIND', path: path),
+      allowMalformed: true,
+    );
     return _parseMultiStatus(xml, path);
   }
 
@@ -256,7 +293,10 @@ class HttpClientWebDavBackend implements WebDavBackend {
       },
       body: utf8.encode(body),
     );
-    final xml = utf8.decode(await _bytes(response), allowMalformed: true);
+    final xml = utf8.decode(
+      await _bytes(response, method: 'REPORT', path: path),
+      allowMalformed: true,
+    );
     final listings = _parseMultiStatus(xml, path);
     final changed = <String, String?>{};
     final deleted = <String>{};
@@ -280,7 +320,7 @@ class HttpClientWebDavBackend implements WebDavBackend {
   Future<WebDavGetResult> get(String path) async {
     final response = await _send('GET', path);
     var etag = _header(response, 'etag') ?? '';
-    final bytes = await _bytes(response);
+    final bytes = await _bytes(response, method: 'GET', path: path);
     if (etag.isEmpty) {
       // 与 PUT 对称：GET 无 ETag 时 HEAD 回读，绝不把空条件写进 syncState。
       try {

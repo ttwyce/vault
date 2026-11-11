@@ -125,6 +125,7 @@
 | D48 | **3xx 绝不自动跟随** | **关闭重定向并把 3xx 映射成 E_AUTH** | 会话过期重定向到登录页时，自动跟随会丢掉 If-Match 却返回 200 |
 | D49 | **重试必须重新装配 workspace** | **`SyncCoordinator` 每轮重试重新 `load()`** | 复用旧对象会带着上一轮已落库的 sync_state / token 重复发请求 |
 | D50 | **重启无需额外恢复逻辑** | **`applied=0` 的 oplog + 原子事务就是恢复点** | T15 落盘重开验证；任何额外「恢复表」都会引入第二个事实来源 |
+| D51 | **超限载荷不进内存** | **默认 1 MB 上限，超限抛 E_QUOTA 而非静默截断** | 半个载荷会被当成损坏条目去解密；chunked 响应也要边读边挡 |
 
 ---
 
@@ -194,7 +195,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（457/457 已验证）；M3 硬门槛未过**。
+**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（458/458 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -237,8 +238,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **457 条全绿**
-（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7 + 超时 1 + ETag 2 + 限流/装配 3 + HTTP 兼容 2 + 重试贯通 1 + 认证/T15 2）。慢机器上建议继续用 `--concurrency=1`：
+`flutter analyze` 无告警，`flutter test --concurrency=1` **458 条全绿**
+（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7 + 超时 1 + ETag 2 + 限流/装配 3 + HTTP 兼容 2 + 重试贯通 1 + 认证/T15 2 + 响应体上限 1）。慢机器上建议继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑

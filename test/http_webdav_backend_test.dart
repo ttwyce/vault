@@ -625,6 +625,41 @@ void main() {
     }
   });
 
+  test('响应体超过上限时抛 E_QUOTA，绝不返回半个载荷', () async {
+    const String path = '/vault/items/0/33333333333333333333333333333333.enc';
+    // 测试服务器把 PUT 的 bytes 原样 GET 回来；放 2 KB 超过 64 B 上限。
+    await backend.put(
+      path,
+      List<int>.filled(2048, 7),
+      condition: const WebDavCondition.createOnly(),
+    );
+    final small = HttpClientWebDavBackend(
+      HttpWebDavConfig(rootUrl: server.rootUrl, maxResponseBytes: 64),
+    );
+    try {
+      await expectLater(
+        small.get(path),
+        throwsA(isA<WebDavException>().having(
+          (WebDavException e) => e.syncErrorCode,
+          'errorCode',
+          SyncErrorCode.quota,
+        )),
+      );
+      // 调大上限后同一载荷可读回完整字节。
+      final large = HttpClientWebDavBackend(
+        HttpWebDavConfig(rootUrl: server.rootUrl, maxResponseBytes: 4096),
+      );
+      try {
+        final got = await large.get(path);
+        expect(got.bytes, hasLength(2048));
+      } finally {
+        large.close();
+      }
+    } finally {
+      small.close();
+    }
+  });
+
   test('parseMultiStatus 兼容无命名空间前缀与绝对 URL href', () {
     const String xml = '<?xml version="1.0"?><multistatus>'
         '<response><href>http://dav.example.com/vault/items/0/a.enc</href>'
