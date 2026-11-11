@@ -4,6 +4,37 @@
 
 ---
 
+## v0.32 · 2026-11-11
+
+### 统一调度接入退避重试驱动（已验证）
+
+`RetryScheduler`（v0.22）此前只被自己的单测覆盖，`SyncCoordinator` 仍然
+「正文跑一次就结束」：E_NET / E_RATE 进入 BACKOFF 后整轮就停，没有任何
+东西真正等一会儿再跑。本轮把两者接通。
+
+**改了什么**
+- `SyncCoordinator` 新增可选 `retryScheduler`（默认 `RetryScheduler()`），
+  正文阶段改为 `load → run → commit` 的重试闭环
+- **每次重试都重新装配 `SyncWorkspace`**：上一轮可能已经把 `sync_state` /
+  `syncToken` 落库，复用旧对象会重复发同一批请求
+- 只有 BACKOFF 才重试；超过总尝试次数仍 BACKOFF 则按「正文不完整」跳过
+  taxonomy / 清理阶段（保守闸门不变）
+- `test/sync_coordinator_test.dart`：现有用例注入假 `sleep`（原来真睡
+  1s→2s→4s 累计 17 秒），新增 1 条
+  「E_NET 退避 → 重试成功 → 仍继续 taxonomy 与清理」的贯通测试
+  → 全量 **454 → 455**
+
+**关键决策**：生产默认 `Future.delayed`，测试注入零等待；不排队触发、
+不无限重试（总尝试次数封顶），与 D24 / D38 一致。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**455/455 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+真实 HTTP 后端**仍未接生产路径、M0 A5 未过**，M3 硬门槛不变。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 27）、CHANGELOG（本条）
+
+---
+
 ## v0.31 · 2026-11-11
 
 ### GET ETag 兜底与重定向防护（已验证）

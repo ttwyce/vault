@@ -6,6 +6,7 @@ import 'package:vault/core/sync/device_watermark.dart';
 import 'package:vault/core/sync/entity_sync_engine.dart';
 import 'package:vault/core/sync/hlc.dart';
 import 'package:vault/core/sync/retention_policy.dart';
+import 'package:vault/core/sync/retry_scheduler.dart';
 import 'package:vault/core/sync/sync_coordinator.dart';
 import 'package:vault/core/sync/sync_engine.dart';
 import 'package:vault/core/sync/sync_payloads.dart';
@@ -159,6 +160,22 @@ class _Codec implements SyncPayloadCodec {
 }
 
 /// 让正文链路直接返回指定结果，不必再搭一整套内存后端。
+/// 按给定序列返回结果的正文引擎替身。
+class _SequenceEntryEngine extends SyncEngine {
+  _SequenceEntryEngine(this.results)
+      : super(backend: _Backend(), codec: SyncPayloadCodecAdapter(_Codec()));
+
+  final List<SyncRunResult> results;
+  int runs = 0;
+
+  @override
+  Future<SyncRunResult> run(SyncWorkspace workspace) async {
+    final result = results[runs.clamp(0, results.length - 1)];
+    runs++;
+    return result;
+  }
+}
+
 class _EntryEngine extends SyncEngine {
   _EntryEngine(this.result) : super(backend: _Backend(), codec: SyncPayloadCodecAdapter(_Codec()));
 
@@ -269,6 +286,7 @@ SyncRunResult _entryResult({
   bool backoff = false,
   bool budgetExceeded = false,
   bool watermarkPublished = true,
+  SyncErrorCode? retryCode,
 }) {
   final state = failed
       ? const SyncState(SyncPhase.failed, error: SyncErrorCode.auth)
@@ -299,6 +317,7 @@ SyncRunResult _entryResult({
     preconditionAttempts: const <String, int>{},
     reason: '测试构造',
     diff: SyncDiff.empty,
+    retryCode: retryCode,
   );
 }
 
@@ -348,6 +367,10 @@ SyncCoordinator _coordinator({
     now: () => _now,
     retentionBudgetLimit: budgetLimit,
     lock: lock,
+    // 测试不能真睡 1s→2s→4s；生产默认用 Future.delayed。
+    retryScheduler: RetryScheduler(
+      sleep: (Duration _) async {},
+    ),
   );
 }
 
@@ -507,6 +530,41 @@ void main() {
         reason: '清理阶段的部分完成不推翻已成功的两条同步链路');
     expect(report.retention.deletedTombstonePaths, isEmpty);
     expect(report.retention.reason, contains('部分完成'));
+  });
+
+  test('正文 E_NET 退避后重试成功，仍继续 taxonomy 与清理阶段', () async {
+    final firstBackoff = _entryResult(
+      backoff: true,
+      retryCode: SyncErrorCode.net,
+    );
+    final ok = _entryResult(skipped: false);
+    // 第一次 BACKOFF、第二次 IDLE：用可切换结果的 SyncEngine。
+    final engine = _SequenceEntryEngine(<SyncRunResult>[firstBackoff, ok]);
+    final backend = _Backend();
+    final purge = _PurgeRunner(<String>['purged']);
+    final lister = _TombstoneLister(<TombstoneRecord>[]);
+    final coordinator = SyncCoordinator(
+      entryEngine: engine,
+      entityEngine: _EntityEngine(_entityResult()),
+      purgeRunner: purge,
+      tombstoneLister: lister,
+      backend: backend,
+      workspaceLoader: () async => _workspace(),
+      commitEntryRun: (SyncRunResult _) async {},
+      commitQuarantine: (Map<String, List<int>> _) async {},
+      syncState: () async => <String, String?>{},
+      now: () => _now,
+      retryScheduler: RetryScheduler(sleep: (Duration _) async {}),
+    );
+
+    final report = await coordinator.run();
+
+    expect(report, isNotNull);
+    expect(engine.runs, 2, reason: 'BACKOFF 必须真的重试一次');
+    expect(report!.entry.isIdle, isTrue);
+    expect(report.completed, isTrue);
+    expect(purge.calls, 1, reason: '重试成功后不能跳过清理');
+    expect(report.retention.purgedEntryIds, <String>['purged']);
   });
 
   test('顶层单飞锁忙时整轮跳过，不执行任何子阶段', () async {

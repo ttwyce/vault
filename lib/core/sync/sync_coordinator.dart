@@ -10,6 +10,7 @@
 library;
 
 import 'entity_sync_engine.dart';
+import 'retry_scheduler.dart';
 import 'retention_policy.dart';
 import 'sync_engine.dart';
 import 'sync_payloads.dart';
@@ -101,7 +102,9 @@ class SyncCoordinator {
     required this.now,
     SingleFlightLock? lock,
     this.retentionBudgetLimit = 32,
-  }) : _lock = lock ?? SingleFlightLock();
+    RetryScheduler? retryScheduler,
+  })  : _lock = lock ?? SingleFlightLock(),
+        _retry = retryScheduler ?? const RetryScheduler();
 
   /// 正文同步引擎。
   final SyncEngine entryEngine;
@@ -130,6 +133,9 @@ class SyncCoordinator {
   final int retentionBudgetLimit;
   final SingleFlightLock _lock;
 
+  /// 正文同步的退避重试驱动。只有 BACKOFF 才重试，注入的 sleep 可替换。
+  final RetryScheduler _retry;
+
   Future<SyncRunReport?> run({String trigger = 'coordinator'}) {
     return _lock.run(
       () => _run(trigger: trigger),
@@ -138,10 +144,16 @@ class SyncCoordinator {
   }
 
   Future<SyncRunReport> _run({required String trigger}) async {
-    // ① 正文：load → run → 原子落库。
-    final workspace = await workspaceLoader();
-    final entryResult = await entryEngine.run(workspace);
-    await commitEntryRun(entryResult);
+    // ① 正文：load → run（含退避重试）→ 原子落库。
+    // 每次重试都要重新装配 workspace：上一轮可能已经把 sync_state /
+    // syncToken 落库，用旧对象会重复发同一批请求。
+    final retryReport = await _retry.run(() async {
+      final ws = await workspaceLoader();
+      final r = await entryEngine.run(ws);
+      await commitEntryRun(r);
+      return r;
+    });
+    final entryResult = retryReport.finalResult;
 
     if (!_entryComplete(entryResult)) {
       final reason = '正文同步未完成：跳过 taxonomy / 清理阶段'
