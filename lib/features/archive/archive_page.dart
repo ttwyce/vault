@@ -10,6 +10,7 @@ import '../../core/widgets/sketch_frame.dart';
 import 'archive_reader_page.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
+import '../../data/archive/archive_recheck_actions.dart';
 import '../../data/archive/archive_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/archive/archive_repository_provider.dart';
@@ -339,11 +340,14 @@ class _ArchiveTile extends StatelessWidget {
       if (meta.status == ArchiveStatus.metadata) ('仅元数据', SketchTone.plain),
       if (meta.changed) ('内容有变更', SketchTone.blue),
     ];
-    final trailing = meta.isDeadLink
-        ? '试 Wayback'
-        : meta.changed
-            ? '对比'
-            : '下次检查 ${meta.policy.wire}';
+    final wayback = planWaybackBadge(meta);
+    final trailing = wayback.visible
+        ? wayback.label
+        : meta.isDeadLink
+            ? '试 Wayback'
+            : meta.changed
+                ? '对比'
+                : '下次检查 ${meta.policy.wire}';
 
     return SketchCard(
       variant: meta.url.hashCode.abs() % 4,

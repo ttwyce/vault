@@ -39,6 +39,7 @@ void main() {
     int snapshotBytes = 0,
     String excerpt = '',
     bool changed = false,
+    String? waybackUrl,
   }) async {
     final meta = ArchiveMeta(
       url: url,
@@ -48,6 +49,7 @@ void main() {
       snapshotBytes: snapshotBytes,
       excerpt: excerpt,
       changed: changed,
+      waybackUrl: waybackUrl,
       lastCheckedAt: 1731052800000,
     );
     await app.gateway.writeEntry(EntryWrite.create(
@@ -223,5 +225,18 @@ void main() {
           .get(),
       hasLength(1),
     );
+  });
+
+  testWidgets('死链带 Wayback 存档 URL 时显示年份徽章', (WidgetTester tester) async {
+    await addArchive(
+      id: 'a-dead',
+      url: 'https://example.com/gone',
+      status: ArchiveStatus.dead,
+      title: '失效文章',
+      waybackUrl: 'https://web.archive.org/web/2019/https://example.com/gone',
+    );
+    await pumpArchive(tester);
+    expect(find.text('查看 2019 存档'), findsOneWidget);
+    expect(find.text('试 Wayback'), findsNothing);
   });
 }

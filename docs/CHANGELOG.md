@@ -4,6 +4,28 @@
 
 ---
 
+## v1.04 · 2026-11-12
+
+### M4：归档交互动作判定层（已验证）
+
+- 新增 `archive_recheck_actions.dart`（docs/11 §3.4 / docs/05 §6）：
+  单条重抓保留旧快照为历史版本、Wayback 年份徽章（死链且有存档 URL
+  才显示）、按 recheck_policy 到期的批量分批、配额清理复用最旧带快照优先
+- `ArchivePage` 死链条目显示「查看 2019 存档」而非泛泛的「试 Wayback」
+- 测试：`archive_recheck_actions_test.dart` 4 条、
+  `archive_page_test.dart` +1 条 → 全量 **746 → 751**
+
+**边界**：真实重抓 / Wayback availability API / 历史版本落库仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**751/751 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 99）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.03 · 2026-11-12
 
 ### M3 预备：同步分片游标（已验证）
