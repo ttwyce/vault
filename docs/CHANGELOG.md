@@ -4,6 +4,28 @@
 
 ---
 
+## v0.28 · 2026-11-11
+
+### 真实 HTTP 后端超时错误码修正（已验证）
+
+审查 `HttpClientWebDavBackend._send()` 时发现 `.timeout()` 抛出的
+`TimeoutException` 没有被捕获：会一路漏到 `SyncEngine` 的顶层 `catch`，
+被当成 `E_CORRUPT`（文件损坏）直接 FAILED，而不是 `E_NET`（网络不可用，
+可退避）。用户会看到完全错误的提示且不会重试。
+
+- `_send` 新增 `on TimeoutException` → `WebDavException(statusCode: 504)`，
+  `syncErrorCodeForStatus(>=500)` 映射到 `SyncErrorCode.net`
+- `test/http_webdav_backend_test.dart` +1 条：服务器故意延迟 + 80ms 客户端
+  超时，断言错误码是 `net` → 全量 **446 → 447**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**447/447 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+真实 HTTP 后端**仍未接生产路径、M0 A5 未过**，M3 硬门槛不变。
+
+**影响文档**：README（数字）、09（§5）、14（Day 23）、CHANGELOG（本条）
+
+---
+
 ## v0.27 · 2026-11-11
 
 ### 真实 HTTP WebDAV 后端（dart:io，无新增依赖，本地集成验证）

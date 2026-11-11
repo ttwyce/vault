@@ -7,6 +7,7 @@ import 'package:vault/core/sync/cloud_layout.dart';
 import 'package:vault/core/sync/device_watermark.dart';
 import 'package:vault/core/sync/hlc.dart';
 import 'package:vault/core/sync/http_webdav_backend.dart';
+import 'package:vault/core/sync/sync_state_machine.dart';
 import 'package:vault/core/sync/sync_engine.dart';
 import 'package:vault/core/sync/sync_payloads.dart';
 import 'package:vault/data/write/entry_snapshot.dart';
@@ -383,6 +384,37 @@ void main() {
     expect(result.requestCount, lessThanOrEqualTo(3));
     expect(server.files.containsKey(selfPath), isTrue,
         reason: '设备水位必须通过真实 PUT 落到服务器');
+  });
+
+  test('连接超时映射成 E_NET（可退避），不是 E_CORRUPT', () async {
+    // 服务器故意不响应，让客户端 connectTimeout 先到。
+    final slowServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    slowServer.listen((HttpRequest request) async {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      // ignore: unawaited_futures
+      request.response.close();
+    });
+    final slow = HttpClientWebDavBackend(
+      HttpWebDavConfig(
+        rootUrl: 'http://127.0.0.1:${slowServer.port}',
+        connectTimeout: const Duration(milliseconds: 80),
+      ),
+    );
+    try {
+      await expectLater(
+        slow.options('/vault/'),
+        throwsA(
+          isA<WebDavException>().having(
+            (WebDavException e) => e.syncErrorCode,
+            'errorCode',
+            SyncErrorCode.net,
+          ),
+        ),
+      );
+    } finally {
+      slow.close();
+      await slowServer.close(force: true);
+    }
   });
 
   test('parseMultiStatus 兼容无命名空间前缀与绝对 URL href', () {

@@ -188,7 +188,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（446/446 已验证）；M3 硬门槛未过**。
+**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（447/447 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -231,8 +231,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **446 条全绿**
-（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7）。慢机器上建议继续用 `--concurrency=1`：
+`flutter analyze` 无告警，`flutter test --concurrency=1` **447 条全绿**
+（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7 + 超时 1）。慢机器上建议继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑

@@ -11,6 +11,7 @@
 /// 由 `SyncEngine` 的状态机决定 FAILED / BACKOFF / 412 重试。
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -100,6 +101,16 @@ class HttpClientWebDavBackend implements WebDavBackend {
         method: method,
         path: path,
         message: e.message,
+      );
+    } on TimeoutException catch (e) {
+      // 超时必须映射成 E_NET（可退避），否则会被 SyncEngine 的顶层
+      // catch 当成 E_CORRUPT 直接 FAILED，用户看到「文件损坏」而不是
+      // 「网络不可用，稍后重试」。
+      throw WebDavException(
+        statusCode: 504,
+        method: method,
+        path: path,
+        message: e.message ?? 'connect timeout',
       );
     }
   }
