@@ -9,6 +9,7 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/audit/performance_baseline.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/activity/activity_logger.dart';
 import '../../data/agent/agent_policy.dart' show AgentLoopLimits;
@@ -180,6 +181,37 @@ class DiagnosticsPage extends ConsumerWidget {
                   '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
                   'MCP 适配器骨架已就位（transport 未连接）',
                   style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: SketchSpace.xl),
+          SketchCard(
+            variant: 3,
+            fill: p.noteAlt,
+            tilt: SketchTilt.none,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '性能基线（5000 条 / 真机）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                Text(
+                  '${PerfBudget.defaults.length} 项预算 · '
+                  '${evaluatePerformance(const <PerfMetric, num>{}).failures().length} 项未测 · '
+                  '发布门禁未通过',
+                  style: TextStyle(fontSize: 11, color: p.red),
+                ),
+                Text(
+                  '冷启动 < 1.2s、中文搜索 P95 < 150ms、混合检索 P95 < 300ms、'
+                  '1000 条 60fps、5000 条重建 < 8min。未测 ≠ 达标。',
+                  style: TextStyle(fontSize: 10.5, color: p.muted),
                 ),
               ],
             ),

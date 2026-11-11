@@ -4,6 +4,29 @@
 
 ---
 
+## v0.67 · 2026-11-11
+
+### M9：5000 条性能基线判定层（已验证）
+
+- 新增 `performance_baseline.dart`：9 项预算（冷启动 <1.2s、无变化同步
+  ≤3 请求、有变化 ≤200、5000 条重建 <8min、包体 <60MB、内存 <400MB、
+  中文搜索 P95 <150ms、混合检索 P95 <300ms、1000 条 60fps）
+- `evaluatePerformance` 把实测值映射到 pass/fail/unmeasured；**未测显式
+  不等于达标**，有未测项发布门禁就不通过；超标给出可执行建议
+- `DiagnosticsPage` 展示「9 项预算全未测 · 发布门禁未通过」
+- 测试：`performance_baseline_test.dart` 4 条 → 全量 **654 → 658**
+
+**边界**：真实真机测量、三套服务器 26 个集成用例、三端联调仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**658/658 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§11）、14（Day 62）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.66 · 2026-11-11
 
 ### M8：三端能力矩阵纯校验（已验证）
