@@ -4,6 +4,30 @@
 
 ---
 
+## v0.76 · 2026-11-11
+
+### M7：L2/L1 逐次授权弹窗（已验证）
+
+- 新增 `PrivacyAuthorizationSheet` / `requestPrivacyAuthorization`
+  （docs/07 §4.2）：显示「向哪个模型发送几条内容 / 多少字」，
+  明确仅授权本次、下次重新询问；密码/TOTP/日记永不出现在这类请求里
+- 授权结果只返回本次调用方，**不写设置、不落库、不缓存**；
+  `authorizationSummary` 只给计数不含内容本体
+- `DiagnosticsPage` 提供演示入口（明确不发送任何数据）
+- 测试：`privacy_authorization_sheet_test.dart` 3 条 → 全量
+  **675 → 678**
+
+**边界**：真实模型主循环把授权结果接进 `ToolCallContext` 仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**678/678 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 71）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.75 · 2026-11-11
 
 ### M7：工具确认卡片 UI（已验证）

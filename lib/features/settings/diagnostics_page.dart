@@ -9,6 +9,7 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../agent/widgets/privacy_authorization_sheet.dart';
 import '../agent/widgets/tool_confirmation_card.dart';
 import '../../data/audit/performance_baseline.dart';
 import '../../data/audit/release_audit.dart';
@@ -83,6 +84,29 @@ class DiagnosticsPage extends ConsumerWidget {
           SketchSpace.xxl,
         ),
         children: <Widget>[
+          SketchButton(
+            label: '预览 L1 逐次授权',
+            dense: true,
+            onPressed: () async {
+              final approved = await requestPrivacyAuthorization(
+                context: context,
+                level: 'L1 脱敏',
+                modelName: '云端模型（演示）',
+                entryCount: 3,
+                outgoingChars: 512,
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(approved
+                        ? '仅本次允许（演示，不发送任何数据）'
+                        : '已拒绝授权'),
+                  ),
+                );
+              }
+            },
+          ),
+          const SizedBox(height: SketchSpace.sm),
           SketchButton(
             label: '预览工具确认卡片',
             dense: true,
