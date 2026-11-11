@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/sketch_metrics.dart';
+import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
+import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/agent/agent_policy.dart';
 import '../../data/audit/release_audit.dart';
+import '../../data/activity/activity_logger.dart';
+import '../../data/agent/daily_summary_service.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/model_downloader.dart';
@@ -58,6 +62,34 @@ class DiagnosticsPage extends ConsumerWidget {
           SketchSpace.xxl,
         ),
         children: <Widget>[
+          SketchButton(
+            label: '生成昨日总结',
+            dense: true,
+            onPressed: () async {
+              final session = ref.read(vaultSessionProvider);
+              final db = session.database;
+              final gateway = session.gateway;
+              final activity = session.activity;
+              if (db == null || gateway == null || activity == null) return;
+              final yesterday = DateTime.now()
+                  .subtract(const Duration(days: 1));
+              final summary = await DailySummaryService(
+                logger: ActivityLogger(db: db, deviceId: 'local'),
+                gateway: gateway,
+                db: db,
+              ).buildAndStore(yesterday);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(summary == null
+                        ? '昨天没有活动记录'
+                        : '已生成：${summary.headline}'),
+                  ),
+                );
+              }
+            },
+          ),
+          const SizedBox(height: SketchSpace.lg),
           Text(
             '发布前确定性自检（不替代真实服务器集成用例）',
             style: TextStyle(fontSize: 12, color: p.muted),

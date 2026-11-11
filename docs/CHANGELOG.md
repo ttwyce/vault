@@ -4,6 +4,28 @@
 
 ---
 
+## v0.61 · 2026-11-11
+
+### M7：日总结流水线接真实活动埋点（已验证）
+
+- 新增 `DailySummaryService`：把 `ActivityLogger.summarizeDay` 的真实聚合
+  转成事实 headline + 时间线，用 `validateCitations` 剔除已删除/不存在的
+  引用，写成 kind=4 AI 日记条目；空的一天不写空条目
+- `DiagnosticsPage` 加「生成昨日总结」按钮，服务不再只有测试引用
+- 测试：`daily_summary_service_test.dart` 3 条（空天不写 / 真实活动落库 /
+  假引用剔除）→ 全量 **629 → 632**
+
+**边界**：不调端侧模型生成反思文本；kind=4 默认排除检索、不向量化。
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**632/632 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 56）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.60 · 2026-11-11
 
 ### M9：搜索埋点明文泄露硬拦截（已验证）
