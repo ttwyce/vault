@@ -265,4 +265,31 @@ void main() {
     expect(json, isNot(contains('Secret!2026')));
     expect(json, isNot(contains('xxxx-yyyy')));
   });
+
+  test('备注走字段级加密，且云端需逐次授权才可读', () async {
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-notes'),
+        );
+    await repo.setNotes('cred-notes', '这个账号用于公司 VPN');
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-notes')))
+        .getSingle();
+    expect(row.notes, isNotNull);
+    expect(row.notes, isNot(contains('公司 VPN')));
+    expect(await repo.notes('cred-notes'), '这个账号用于公司 VPN');
+    expect(
+      await repo.notesForCloud(
+        'cred-notes',
+        explicitlyAuthorized: false,
+      ),
+      isEmpty,
+    );
+    expect(
+      await repo.notesForCloud(
+        'cred-notes',
+        explicitlyAuthorized: true,
+      ),
+      '这个账号用于公司 VPN',
+    );
+  });
 }

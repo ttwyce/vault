@@ -4,6 +4,29 @@
 
 ---
 
+## v0.92 · 2026-11-11
+
+### M6：备注字段加密与 L0 端侧边界（已验证）
+
+- `CredentialRepository` 新增 `setNotes` / `notes` / `notesForCloud`：
+  备注也走 K_item 字段级加密，明文不落库；云端上下文必须
+  `explicitlyAuthorized: true` 才能取到，否则返回空串（docs/11 §4.4）
+- `VaultPage` 详情弹窗加备注 Markdown 编辑与保存，明确标注
+  「L0 端侧，不同步到云端上下文」
+- 测试：`credential_repository_test.dart` +1 条、
+  `vault_page_test.dart` +1 条 → 全量 **711 → 713**
+
+**边界**：备注里的加粗/列表目前只是 Markdown 文本，无富文本渲染；
+图片附件仍缺。M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**713/713 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 87）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.91 · 2026-11-11
 
 ### M8：导出与备份页（已验证）

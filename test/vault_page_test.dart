@@ -205,4 +205,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('安全账号'), findsOneWidget);
   });
+
+  testWidgets('详情弹窗可编辑备注且以密文落库', (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-notes-ui',
+      kind: EntryKind.credential,
+      title: '备注账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-notes-ui'),
+        );
+    await pumpVault(tester);
+    await tester.tap(find.text('备注账号'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('备注（L0 端侧'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '**重点** 公司 VPN');
+    await tester.tap(find.text('保存备注'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await repo.notes('cred-notes-ui'), '**重点** 公司 VPN');
+
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-notes-ui')))
+        .getSingle();
+    expect(row.notes, isNot(contains('公司 VPN')));
+  });
 }

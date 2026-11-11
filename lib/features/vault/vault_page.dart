@@ -156,9 +156,15 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     final repo = ref.read(credentialRepositoryProvider);
     final detail = await repo.detail(id);
     if (detail == null || !mounted) return;
+    final notes = await repo.notes(id);
+    final notesController = TextEditingController(text: notes);
     await showModalBottomSheet<void>(
+      // 上面已用 mounted 守住异步间隙。
+      // ignore: use_build_context_synchronously
       context: context,
-      builder: (BuildContext sheetContext) => SafeArea(
+      builder: (BuildContext sheetContext) => StatefulBuilder(
+        builder: (BuildContext sheetContext, StateSetter setSheetState) {
+          return SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(SketchSpace.lg),
           child: Column(
@@ -170,7 +176,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: context.sketch.ink,
+                  color: sheetContext.sketch.ink,
                 ),
               ),
               const SizedBox(height: SketchSpace.sm),
@@ -180,10 +186,36 @@ class _VaultPageState extends ConsumerState<VaultPage> {
               Text(detail.breached ? '状态：已泄露' : '状态：未发现泄露'),
               Text('secret 字段：${detail.secretFieldLabels.length} 个（掩码）'),
               Text(detail.healthSummary),
+              const SizedBox(height: SketchSpace.sm),
+              Text('备注（L0 端侧，不同步到云端上下文）',
+                  style: TextStyle(fontSize: 10.5, color: sheetContext.sketch.muted)),
+              TextField(
+                controller: notesController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  hintText: '加粗 / 列表用 Markdown 写',
+                ),
+              ),
+              const SizedBox(height: SketchSpace.xs),
+              SketchButton(
+                label: '保存备注',
+                dense: true,
+                onPressed: () async {
+                  await repo.setNotes(id, notesController.text);
+                  setSheetState(() {});
+                  if (sheetContext.mounted) {
+                    ScaffoldMessenger.of(sheetContext).showSnackBar(
+                      const SnackBar(content: Text('备注已加密保存')),
+                    );
+                  }
+                },
+              ),
               const SizedBox(height: SketchSpace.md),
               Text(
                 '密码与密钥以 K_item 密文存储，此页不展示明文。',
-                style: TextStyle(fontSize: 10.5, color: context.sketch.blue),
+                style: TextStyle(fontSize: 10.5, color: sheetContext.sketch.blue),
               ),
               const SizedBox(height: SketchSpace.md),
               SketchButton(
@@ -201,8 +233,11 @@ class _VaultPageState extends ConsumerState<VaultPage> {
             ],
           ),
         ),
+      );
+        },
       ),
     );
+    notesController.dispose();
   }
 
   @override

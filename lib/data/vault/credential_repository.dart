@@ -168,6 +168,7 @@ class CredentialRepository {
       password: field == 'password' ? Value<String?>(sealed) : const Value<String?>.absent(),
       totpSecret: field == 'totp_secret' ? Value<String?>(sealed) : const Value<String?>.absent(),
       customFields: field == 'custom_fields' ? Value<String?>(sealed) : const Value<String?>.absent(),
+      notes: field == 'notes' ? Value<String?>(sealed) : const Value<String?>.absent(),
       passwordChangedAt: updateChangedAt
           ? Value<int?>(DateTime.now().millisecondsSinceEpoch)
           : const Value<int?>.absent(),
@@ -189,6 +190,35 @@ class CredentialRepository {
   /// 写入自定义字段（含 secret:true 的项，整体加密）。
   Future<void> setCustomFields(String credentialId, CustomFields fields) =>
       _writeField(credentialId, 'custom_fields', fields.toJsonString());
+
+  /// 写入备注（L0 端侧，字段级加密）。
+  ///
+  /// docs/11 §4.4：备注虽然「允许 AI 读」，但默认只在端侧；
+  /// 云端上下文必须通过 [notesForCloud] 逐次授权后才可取。
+  Future<void> setNotes(String credentialId, String plaintext) =>
+      _writeField(credentialId, 'notes', plaintext);
+
+  /// 读回备注明文（仅本地展示 / 端侧模型使用）。
+  Future<String> notes(String credentialId) async {
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (row == null) return '';
+    return _openField(row, 'notes', row.notes);
+  }
+
+  /// 云端上下文本：未逐次授权一律返回空串，绝不悄悄带出备注。
+  Future<String> notesForCloud(
+    String credentialId, {
+    required bool explicitlyAuthorized,
+  }) async {
+    if (!CredentialGuard.allowNotesInCloud(
+      explicitlyAuthorized: explicitlyAuthorized,
+    )) {
+      return '';
+    }
+    return notes(credentialId);
+  }
 
   /// HIBP k-anonymity **离线判定**：平台层把 `/range/<prefix>` 的响应体
   /// 交给这里，完整哈希与密码明文都不出设备。返回是否泄露并更新缓存列。
