@@ -10,6 +10,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../organize/organize_page.dart';
 import '../quick/quick_capture_page.dart';
 import '../search/search_page.dart';
+import '../settings/diagnostics_page.dart';
 import '../settings/fonts_page.dart';
 import '../trash/trash_page.dart';
 
@@ -71,6 +72,12 @@ class SettingsHubPage extends ConsumerWidget {
               title: '快速记录',
               subtitle: '一句话存成想法',
               onTap: () => _push(context, const QuickCapturePage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.settings,
+              title: '诊断与备份',
+              subtitle: '六项发布前自检、加密备份包与 /backup/ 排期',
+              onTap: () => _push(context, const DiagnosticsPage()),
             ),
           ],
         ),

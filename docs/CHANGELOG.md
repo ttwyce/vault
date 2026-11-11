@@ -4,6 +4,27 @@
 
 ---
 
+## v0.48 · 2026-11-11
+
+### 设置中心「诊断与备份」入口（已验证）
+
+- 新增 `DiagnosticsPage`：跑 `runReleaseAudit` 六项确定性自检并逐项展示，
+  预览加密备份包 manifest、`/backup/` 路径与 7 天排期；明确标注
+  「不替代真实服务器集成用例」
+- `SettingsHubPage` 加入入口，M8/M9 判定层（release_audit / backup_models /
+  embedding_manifest / agent_policy）终于有生产 UI 落点
+- 测试：`diagnostics_page_test.dart` 2 条 → 全量 **589 → 591**
+
+**边界**：真实 zip 打包、WebDAV 上传、明文导出仍留平台层；M3 硬门槛未过。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**591/591 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字）、14（Day 43）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.47 · 2026-11-11
 
 ### 归档阅读器页面接线（已验证）
