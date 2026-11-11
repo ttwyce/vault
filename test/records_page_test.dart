@@ -103,4 +103,27 @@ void main() {
 
     expect(find.text('还没有内容，点右上角新建'), findsOneWidget);
   });
+
+  testWidgets('搜索结果默认排除 AI 日记（M5 判定层接进 UI）',
+      (WidgetTester tester) async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      kind: EntryKind.note,
+      title: '同步笔记',
+      body: '普通笔记也提到同步',
+    ));
+    await app.gateway.writeEntry(EntryWrite.create(
+      kind: EntryKind.aiDiary,
+      title: '同步 AI 日记',
+      body: '生成文本也提到同步',
+    ));
+    await pumpRecords(tester);
+
+    await tester.enterText(find.byType(TextField).first, '同步');
+    // 搜索框有防抖。
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('同步笔记'), findsOneWidget);
+    expect(find.text('同步 AI 日记'), findsNothing);
+  });
 }

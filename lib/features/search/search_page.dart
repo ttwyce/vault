@@ -66,7 +66,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     // 先算 Future 再 setState：箭头闭包返回 Future 会被 Flutter 断言拦下。
     final next = trimmed.isEmpty
         ? Future<List<EntrySummary>>.value(const <EntrySummary>[])
-        : repo.search(trimmed);
+        : repo.searchHybrid(trimmed, nowMs: DateTime.now().millisecondsSinceEpoch, limit: 50);
     setState(() {
       _results = next;
     });

@@ -83,7 +83,7 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
   Future<List<EntrySummary>> _compute() async {
     final repo = ref.read(entryRepositoryProvider);
     final List<EntrySummary> rows = _query.trim().isNotEmpty
-        ? await repo.search(_query)
+        ? await repo.searchHybrid(_query, nowMs: DateTime.now().millisecondsSinceEpoch, limit: 50)
         : await repo.list(kind: _kind);
 
     Set<String>? allowed;

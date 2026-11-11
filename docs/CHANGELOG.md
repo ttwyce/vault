@@ -4,6 +4,24 @@
 
 ---
 
+## v0.45 · 2026-11-11
+
+### 记录页 / 全库搜索页接 searchHybrid（已验证）
+
+- `RecordsPage` 与 `SearchPage` 的搜索调用从旧 `repo.search` 切到
+  `EntryRepository.searchHybrid`：时间意图、类型限定、停用词剥离、
+  时间衰减重排与「默认排除 AI 日记」现在真正在 UI 生效
+- 既有 10 条记录页/筛选测试保持全绿；新增 1 条 widget 测试验证
+  「同步」搜索结果里不出现 kind=4 的 AI 日记 → 全量 **582 → 583**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**583/583 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。边界不变：M3 硬门槛未过，M4~M9 未完成。
+
+**影响文档**：README（数字）、14（Day 40）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.44 · 2026-11-11
 
 ### 聊天页消息流真实落库（T25 / T26，已验证）
