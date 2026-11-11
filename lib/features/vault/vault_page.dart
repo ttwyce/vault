@@ -12,6 +12,7 @@ import '../../app/session/vault_session.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
 import '../../data/vault/credential_repository_provider.dart';
+import '../../data/vault/password_generator.dart';
 import '../../data/write/write_gateway.dart';
 
 /// 密码库。
@@ -40,27 +41,65 @@ class _VaultPageState extends ConsumerState<VaultPage> {
   }
 
   Future<void> _addCredential() async {
+    String? generated;
     final title = await showDialog<String>(
       context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('新增账号'),
-        content: TextField(
-          controller: _name,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '账号名称'),
-          onSubmitted: (String value) =>
-              Navigator.of(dialogContext).pop(value),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(_name.text),
-            child: const Text('确定'),
-          ),
-        ],
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext dialogContext, StateSetter setDialogState) {
+          return AlertDialog(
+            title: const Text('新增账号'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TextField(
+                  controller: _name,
+                  autofocus: true,
+                  decoration: const InputDecoration(hintText: '账号名称'),
+                  onSubmitted: (String value) =>
+                      Navigator.of(dialogContext).pop(value),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                TextButton(
+                  onPressed: () => setDialogState(
+                    () => generated = generatePassword(
+                      const PasswordPolicy(),
+                    ),
+                  ),
+                  child: const Text('生成强密码'),
+                ),
+                if (generated != null) ...<Widget>[
+                  SelectableText(
+                    generated!,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '请自行复制保管；密码字段落库需要 M6 字段级加密通道，'
+                    '当前不会把明文写进本地库。',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(dialogContext)
+                          .textTheme
+                          .bodySmall
+                          ?.color,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(_name.text),
+                child: const Text('确定'),
+              ),
+            ],
+          );
+        },
       ),
     );
     final trimmed = title?.trim() ?? '';

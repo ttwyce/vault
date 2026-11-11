@@ -57,4 +57,33 @@ void main() {
     expect(find.text('测试账号'), findsOneWidget);
     expect(find.textContaining('1 个'), findsWidgets);
   });
+
+  testWidgets('新增弹窗可生成强密码，且不把明文写进本地库',
+      (WidgetTester tester) async {
+    await pumpVault(tester);
+    await tester.tap(find.text('新增'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('生成强密码'));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.textContaining('请自行复制保管'), findsOneWidget);
+    final selectable = find.byType(SelectableText);
+    expect(selectable, findsOneWidget);
+    final generated = tester.widget<SelectableText>(selectable).data ?? '';
+    expect(generated.length, 20);
+    expect(generated, matches(RegExp(r'[A-Z]')));
+    expect(generated, matches(RegExp(r'[^A-Za-z0-9]')));
+    expect(find.textContaining('不会把明文写进本地库'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, '生成测试账号');
+    await tester.tap(find.text('确定'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final credentials = await app.db.select(app.db.credentials).get();
+    expect(credentials, hasLength(1));
+    expect(credentials.single.password, isNull,
+        reason: '字段级加密通道未接前绝不落明文');
+    expect(credentials.single.password.toString(), isNot(contains(generated)));
+  });
 }

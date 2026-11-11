@@ -4,6 +4,30 @@
 
 ---
 
+## v0.51 · 2026-11-11
+
+### M6：密码生成器落地并接进新增弹窗（已验证）
+
+- 新增 `lib/data/vault/password_generator.dart`：`Random.secure()` 密码学安全
+  随机，长度/四类字符集/排除易混字符可配，保证每个启用类至少一位后
+  Fisher-Yates 打乱；可注入随机源做确定性测试
+- `VaultPage` 新增弹窗加「生成强密码」按钮与只读可复制结果。
+  **明确不把生成明文写进本地库**：credential 的字段级加密通道尚未接通，
+  页面提示用户自行复制保管
+- 测试：`password_generator_test.dart` 4 条、`vault_page_test.dart` +1 条
+  （验证生成后 credential.password 仍为 null）→ 全量 **599 → 604**
+
+**边界**：字段级加密落库、剪贴板 30 秒清除、HIBP 网络请求仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**604/604 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 46）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.50 · 2026-11-11
 
 ### M6：RFC 6238 TOTP 落地并接进密码列表（已验证）
