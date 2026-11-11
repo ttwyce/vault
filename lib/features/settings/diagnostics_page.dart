@@ -55,6 +55,7 @@ class DiagnosticsPage extends ConsumerWidget {
       toolRegistry: toolRegistry,
       knownSecrets: const <String>[],
       nowMs: nowMs,
+      checkExternalGates: true,
     ));
     final manifest = BackupManifest(
       schema: 1,

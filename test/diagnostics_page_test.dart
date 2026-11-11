@@ -26,10 +26,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
   }
 
-  testWidgets('诊断页展示六项自检与加密备份 manifest',
+  testWidgets('诊断页展示九项自检与加密备份 manifest',
       (WidgetTester tester) async {
     await pumpPage(tester, const DiagnosticsPage());
-    expect(find.textContaining('自检通过'), findsWidgets);
+    expect(find.textContaining('自检有未通过项'), findsWidgets);
     expect(find.text('A1 · 日志 / prompt 明文零泄露'), findsOneWidget);
     expect(find.text('A6 · secret 自定义字段整体脱敏'), findsOneWidget);
     expect(find.textContaining('加密备份包'), findsOneWidget);
@@ -40,6 +40,8 @@ void main() {
     expect(find.textContaining('4 个 Agent 工具'), findsWidgets);
     expect(find.text('三端能力缺口（docs/08）'), findsOneWidget);
     expect(find.text('性能基线（5000 条 / 真机）'), findsOneWidget);
+    expect(find.textContaining('A7'), findsWidgets);
+    expect(find.textContaining('A9'), findsWidgets);
     expect(find.textContaining('源优先级'), findsOneWidget);
   });
 
@@ -51,6 +53,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('诊断与备份'), findsWidgets);
-    expect(find.textContaining('自检通过'), findsWidgets);
+    expect(find.textContaining('自检有未通过项'), findsWidgets);
   });
 }

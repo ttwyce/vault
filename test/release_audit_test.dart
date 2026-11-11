@@ -78,4 +78,25 @@ void main() {
       isFalse,
     );
   });
+
+  test('打开外部门禁时 A7/A8/A9 明确不通过，报告给出可执行摘要', () {
+    cleanInput(); // 确认构造器可用
+    final report = runReleaseAudit(ReleaseAuditInput(
+      logSamples: const <Map<String, Object?>>[
+        <String, Object?>{'event': 'ok'},
+      ],
+      modelSpecs: <EmbeddingModelSpec>[
+        for (final spec in kDefaultModelSpecs)
+          EmbeddingModelSpec.fromJson(spec),
+      ],
+      toolRegistry: AgentToolRegistry(),
+      checkExternalGates: true,
+    ));
+    expect(report.checks, hasLength(9));
+    expect(report.passed, isFalse);
+    expect(report.failures().length, 3);
+    expect(report.failures().join(), contains('A7'));
+    expect(report.failures().join(), contains('A8'));
+    expect(report.failures().join(), contains('A9'));
+  });
 }

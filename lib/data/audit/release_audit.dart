@@ -14,7 +14,9 @@ import '../../data/search/hybrid_search.dart';
 import '../agent/agent_policy.dart';
 import '../agent/daily_summary.dart';
 import '../backup/security_audit.dart';
+import '../platform/platform_capabilities.dart';
 import '../vault/credential_models.dart';
+import 'performance_baseline.dart';
 import '../search/embedding_manifest.dart';
 
 class AuditCheck {
@@ -59,6 +61,8 @@ class ReleaseAuditInput {
     this.knownSecrets = const <String>[],
     this.smokeQuery = '同步',
     this.nowMs = 1731052800000,
+    this.checkExternalGates = false,
+    this.performanceSamples = const <PerfMetric, num>{},
   });
 
   /// 待扫描的日志 payload 样本。
@@ -70,6 +74,11 @@ class ReleaseAuditInput {
   final Iterable<String> knownSecrets;
   final String smokeQuery;
   final int nowMs;
+
+  /// 是否把「需要真机 / 真实服务器 / 上架材料」的外部门禁也算进报告。
+  /// 默认关，保证纯确定性自检仍可独立全绿；UI 发布门禁应显式打开。
+  final bool checkExternalGates;
+  final Map<PerfMetric, num> performanceSamples;
 }
 
 ReleaseAuditReport runReleaseAudit(ReleaseAuditInput input) {
@@ -161,6 +170,44 @@ ReleaseAuditReport runReleaseAudit(ReleaseAuditInput input) {
     title: 'secret 自定义字段整体脱敏',
     passed: !jsonEncode(redacted).contains('xxxx-xxxx'),
   ));
+
+  if (input.checkExternalGates) {
+    // ⑦ 性能基线：未测 ≠ 达标。
+    final perf = evaluatePerformance(input.performanceSamples);
+    checks.add(AuditCheck(
+      id: 'A7',
+      title: '5000 条性能基线全部达标',
+      passed: perf.releaseReady,
+      detail: perf.failures().isEmpty
+          ? '9 项预算全部达标'
+          : perf.failures()
+              .map((PerfCheck c) => c.detail)
+              .join('；'),
+    ));
+
+    // ⑧ 三端原生能力：列出仍缺的原生模块。
+    final gaps = auditPlatformGaps();
+    checks.add(AuditCheck(
+      id: 'A8',
+      title: '三端原生能力齐备',
+      passed: gaps.allClear,
+      detail: gaps.allClear
+          ? '三端无原生缺口'
+          : PlatformKind.values
+              .map((PlatformKind p) =>
+                  '${p.name}: ${gaps.gapsFor(p).length} 项')
+              .join(' · '),
+    ));
+
+    // ⑨ 上架材料：外部审核无法在纯 Dart 里验证，默认标未通过。
+    checks.add(const AuditCheck(
+      id: 'A9',
+      title: '三端上架材料与审核通过',
+      passed: false,
+      detail: '隐私政策 / 加密声明 / 字体 OFL / Gemma Terms 已在 App 内可读，'
+          '但商店审核与 IPA/AAB 体积仍属外部验收',
+    ));
+  }
 
   return ReleaseAuditReport(List<AuditCheck>.unmodifiable(checks));
 }
