@@ -271,7 +271,96 @@ class ReembedPlan {
 }
 
 /// 下载中 / 构建中时检索降级为纯 FTS（docs/06 §6.3）。
+///
+/// 保留旧签名给「模型是否就绪」的快速判断；更精确的降级计划见
+/// [planSearchDegradation]。
 bool useVectorSearch(ModelState state) => state == ModelState.ready;
+
+/// 索引构建进度（已构建 / 总数）。
+class IndexBuildState {
+  const IndexBuildState({
+    required this.builtEntries,
+    required this.totalEntries,
+  });
+
+  final int builtEntries;
+  final int totalEntries;
+
+  bool get isComplete => totalEntries <= 0 || builtEntries >= totalEntries;
+
+  double get progress =>
+      totalEntries <= 0 ? 1.0 : (builtEntries / totalEntries).clamp(0.0, 1.0);
+
+}
+
+/// 检索降级计划（docs/06 §6.3 四行表）。
+class SearchDegradationPlan {
+  const SearchDegradationPlan({
+    required this.ftsEnabled,
+    required this.vectorEnabled,
+    required this.partialVectorOnly,
+    required this.uiHint,
+  });
+
+  final bool ftsEnabled;
+  final bool vectorEnabled;
+  final bool partialVectorOnly;
+  final String uiHint;
+}
+
+/// 任何情况下 FTS 都可用，只是向量质量不同：
+/// - 无模型 / 下载中 / 校验中 → 纯 FTS（下载中静默）
+/// - 索引构建中 → FTS + 已构建部分的向量，顶部细进度条
+/// - 索引完成 / ready → 完整混合检索，无提示
+SearchDegradationPlan planSearchDegradation({
+  required ModelState modelState,
+  IndexBuildState? indexState,
+  bool modelDownloaded = true,
+}) {
+  if (!modelDownloaded) {
+    return const SearchDegradationPlan(
+      ftsEnabled: true,
+      vectorEnabled: false,
+      partialVectorOnly: false,
+      uiHint: '下载模型可启用语义搜索',
+    );
+  }
+  if (modelState == ModelState.downloading ||
+      modelState == ModelState.checking ||
+      modelState == ModelState.verifying) {
+    return const SearchDegradationPlan(
+      ftsEnabled: true,
+      vectorEnabled: false,
+      partialVectorOnly: false,
+      uiHint: '',
+    );
+  }
+  if (modelState == ModelState.corrupt ||
+      modelState == ModelState.idle) {
+    return const SearchDegradationPlan(
+      ftsEnabled: true,
+      vectorEnabled: false,
+      partialVectorOnly: false,
+      uiHint: '下载模型可启用语义搜索',
+    );
+  }
+  final build = indexState;
+  if (build != null && !build.isComplete) {
+    return SearchDegradationPlan(
+      ftsEnabled: true,
+      vectorEnabled: true,
+      partialVectorOnly: true,
+      uiHint: '索引构建中 ${(build.progress * 100).floor()}%，'
+          '仅已构建部分参与语义检索',
+    );
+  }
+  return const SearchDegradationPlan(
+    ftsEnabled: true,
+    vectorEnabled: true,
+    partialVectorOnly: false,
+    uiHint: '',
+  );
+}
 
 /// 模型 manifest 的 disk_bytes 用于磁盘检查；顺手校验 spec 自身合法。
 int requiredDiskBytes(EmbeddingModelSpec spec) => (spec.diskBytes * 1.5).ceil();

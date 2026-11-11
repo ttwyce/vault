@@ -133,4 +133,50 @@ void main() {
     );
     expect(bad.allConfigured, isFalse);
   });
+
+  test('docs/06 §6.3 检索降级四态：任何情况 FTS 都可用', () {
+    final noModel = planSearchDegradation(
+      modelState: ModelState.ready,
+      modelDownloaded: false,
+    );
+    expect(noModel.ftsEnabled, isTrue);
+    expect(noModel.vectorEnabled, isFalse);
+    expect(noModel.uiHint, contains('下载模型'));
+
+    for (final state in <ModelState>[
+      ModelState.checking,
+      ModelState.downloading,
+      ModelState.verifying,
+    ]) {
+      final plan = planSearchDegradation(modelState: state);
+      expect(plan.ftsEnabled, isTrue);
+      expect(plan.vectorEnabled, isFalse);
+      expect(plan.uiHint, isEmpty, reason: '下载中静默');
+    }
+
+    final building = planSearchDegradation(
+      modelState: ModelState.ready,
+      indexState: const IndexBuildState(
+        builtEntries: 200,
+        totalEntries: 1000,
+      ),
+    );
+    expect(building.vectorEnabled, isTrue);
+    expect(building.partialVectorOnly, isTrue);
+    expect(building.uiHint, contains('20%'));
+
+    final done = planSearchDegradation(
+      modelState: ModelState.ready,
+      indexState: const IndexBuildState(
+        builtEntries: 1000,
+        totalEntries: 1000,
+      ),
+    );
+    expect(done.vectorEnabled, isTrue);
+    expect(done.partialVectorOnly, isFalse);
+    expect(done.uiHint, isEmpty);
+
+    expect(useVectorSearch(ModelState.ready), isTrue);
+    expect(useVectorSearch(ModelState.downloading), isFalse);
+  });
 }

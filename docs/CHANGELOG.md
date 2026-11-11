@@ -4,6 +4,27 @@
 
 ---
 
+## v0.96 · 2026-11-11
+
+### M5：检索降级四态计划（已验证）
+
+- `planSearchDegradation`（docs/06 §6.3）把四行策略表写成可测判定：
+  无模型/下载中/校验中 → 纯 FTS（下载中静默）；索引构建中 →
+  FTS + 已构建部分向量并显示进度提示；完成 → 完整混合检索
+- 任何状态 `ftsEnabled` 都为真，体现「降级可用」原则；
+  旧 `useVectorSearch` 保留为快速就绪判断
+- 测试：`model_downloader_test.dart` +1 条 → 全量 **725 → 726**
+
+**边界**：真实向量召回与进度条 UI 仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**726/726 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§5）、14（Day 91）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.95 · 2026-11-11
 
 ### M7：OpenAI 兼容客户端纯判定层（已验证）
