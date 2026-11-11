@@ -31,6 +31,9 @@ class _DavServer {
   /// 模拟「GET 成功但不返回 ETag」的服务商行为。
   bool noGetEtag = false;
 
+  String? lastAuthorization;
+  bool requireAuth = false;
+
   static Future<_DavServer> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final dav = _DavServer(server);
@@ -46,6 +49,12 @@ class _DavServer {
 
   Future<void> _handle(HttpRequest request) async {
     final path = request.uri.path;
+    lastAuthorization = request.headers.value(HttpHeaders.authorizationHeader);
+    if (requireAuth && lastAuthorization == null) {
+      request.response.statusCode = HttpStatus.unauthorized;
+      await request.response.close();
+      return;
+    }
     calls.add('${request.method} $path');
     final response = request.response;
     response.headers.set('DAV', '1, 3, sync-collection');
@@ -581,6 +590,38 @@ void main() {
     } finally {
       b.close();
       await redirect.close(force: true);
+    }
+  });
+
+  test('Basic 认证头真实发送，401 映射成 E_AUTH 并停止重试', () async {
+    final auth = HttpClientWebDavBackend(
+      HttpWebDavConfig(
+        rootUrl: server.rootUrl,
+        username: 'alice',
+        password: 'secret',
+      ),
+    );
+    try {
+      await auth.options('/vault/');
+      expect(server.lastAuthorization, isNotNull);
+      expect(server.lastAuthorization, startsWith('Basic '));
+      final decoded = utf8.decode(base64.decode(
+        server.lastAuthorization!.substring('Basic '.length),
+      ));
+      expect(decoded, 'alice:secret');
+
+      server.requireAuth = true;
+      // 不带凭据的后端必须拿到 401 → E_AUTH（不可重试）。
+      await expectLater(
+        backend.get('/vault/items/0/nope.enc'),
+        throwsA(isA<WebDavException>().having(
+          (WebDavException e) => e.syncErrorCode,
+          'errorCode',
+          SyncErrorCode.auth,
+        )),
+      );
+    } finally {
+      auth.close();
     }
   });
 

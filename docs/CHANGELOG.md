@@ -4,6 +4,34 @@
 
 ---
 
+## v0.33 · 2026-11-11
+
+### 真实认证断言与 T15 强杀重启确定性覆盖（已验证）
+
+**改了什么**
+- `test/http_webdav_backend_test.dart` +1 条：真实 TCP 校验 Basic 认证头
+  内容（`alice:secret` 的 base64），并断言 401 → `E_AUTH`（不可重试）
+- `test/db_sync_workspace_test.dart` +1 条 T15：用系统临时目录的
+  **落盘 SQLCipher 库**模拟「写入中途失败 → 关闭句柄 → 同文件重开」，
+  断言失败事务无半写、已提交数据仍在、`applied=0` 的 oplog 仍是待推、
+  被强杀的那次写入不留幽灵行 → 全量 **455 → 457**
+  - 测试用 `SqlitePragmas(journalMode: 'DELETE')` 避开 WAL 残留文件在
+    后台 isolate 重开时的环境限制
+  - `VaultDatabaseOpener.close()` 会 `destroy()` 密钥；生产重启重新派生，
+    测试里先复制一份 `DatabaseKey.bytes` 再重开（夹具问题，非产品 bug）
+
+**关键边界**：T15 只覆盖「本地事务原子 + 重启续跑」的确定性部分；
+真实强杀进程、跨设备最终一致仍需真机 / 26 个真实集成用例。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**457/457 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+真实 HTTP 后端**仍未接生产路径、M0 A5 未过**，M3 硬门槛不变。
+
+**影响文档**：README（数字 / 决策表）、09（§5 / §12）、14（Day 28）、
+CHANGELOG（本条）
+
+---
+
 ## v0.32 · 2026-11-11
 
 ### 统一调度接入退避重试驱动（已验证）

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
@@ -296,6 +297,13 @@ SyncRunResult _result({
     reason: outcomeReason,
     diff: SyncDiff.empty,
   );
+}
+
+Future<int> _count(VaultDatabase db, String table) async {
+  final row = await db
+      .customSelect('SELECT count(*) AS c FROM $table;')
+      .getSingle();
+  return row.read<int>('c');
 }
 
 void main() {
@@ -829,6 +837,89 @@ void main() {
       expect(quarantined.single.path, badPath);
       expect(quarantined.single.bytes.toList(), bytes);
       expect(quarantined.single.reason, contains('不覆盖本地'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('T15：强杀重启后状态一致', () {
+    test('落盘库中途失败无半写，重开后 applied=0 的仍是待推',
+        () async {
+      final dir = await Directory.systemTemp.createTemp('vault_t15_');
+      addTearDown(() async {
+        if (await dir.exists()) await dir.delete(recursive: true);
+      });
+      final originalKey = DatabaseKey.random(Random(77));
+      // close() 会 destroy 密钥；生产重启会重新派生，测试里先留一份副本。
+      final reopenKeyBytes = Uint8List.fromList(originalKey.bytes);
+      final dbKey = originalKey;
+      // 测试用 DELETE 日志模式：WAL 下同一文件在后台 isolate 重开会与
+      // 残留的 -wal 文件冲突，那是测试环境限制，不是事务语义问题。
+      final pragmas = const SqlitePragmas(journalMode: 'DELETE');
+      final first = VaultDatabaseOpener(
+        key: dbKey,
+        pragmas: pragmas,
+        storageDir: dir,
+        fileName: 'vault.db',
+      );
+      final db = await first.open();
+      final keys = VaultKeys.generate();
+      final clock = HlcClock(node: 'devA', now: () => 1731052800000);
+      final uuid = UuidV7(random: Random(78), now: () => 1731052800000);
+      final gateway = WriteGateway(
+        db: db,
+        keys: keys,
+        clock: clock,
+        deviceId: 'devA',
+        now: () => 1731052800000,
+        uuid: uuid,
+      );
+
+      // 一次正常写入（待推）+ 一次事务中途失败（模拟被强杀）。
+      final created = await gateway.writeEntry(
+        EntryWrite.create(id: 'entry-survive', title: '崩溃前'),
+      );
+      final broken = WriteGateway(
+        db: db,
+        keys: keys,
+        clock: clock,
+        deviceId: 'devA',
+        now: () => 1731052800000,
+        uuid: uuid,
+        segmenter: (String _) => throw StateError('模拟强杀时索引写入失败'),
+      );
+      await expectLater(
+        broken.writeEntry(EntryWrite.create(id: 'entry-lost', title: '不该留下')),
+        throwsA(isA<StateError>()),
+      );
+      expect(await _count(db, 'entry'), 1, reason: '失败事务必须整次回滚');
+
+      // 模拟进程被杀：关闭句柄，再用同一把 key / 同一个文件重开。
+      await first.close();
+      final reopenedOpener = VaultDatabaseOpener(
+        key: DatabaseKey(Uint8List.fromList(reopenKeyBytes)),
+        pragmas: pragmas,
+        storageDir: dir,
+        fileName: 'vault.db',
+      );
+      final reopened = await reopenedOpener.open();
+      try {
+        final rows = await (reopened.select(reopened.entries)
+              ..where((t) => t.id.equals('entry-survive')))
+            .get();
+        expect(rows, hasLength(1), reason: '崩溃前已提交的数据必须还在');
+        final pending = await (reopened.select(reopened.oplogs)
+              ..where((t) => t.applied.equals(0)))
+            .get();
+        expect(pending, hasLength(1));
+        expect(pending.single.seq, created.oplogSeq);
+        expect(pending.single.entityId, 'entry-survive',
+            reason: 'applied=0 的就是待推送，重启后无需额外恢复逻辑');
+        expect(await _count(reopened, 'entry'), 1,
+            reason: '被强杀的那次写入不能留下幽灵行');
+      } finally {
+        await reopenedOpener.close();
+        keys.destroy();
+      }
     });
   });
 
