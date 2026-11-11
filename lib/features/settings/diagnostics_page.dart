@@ -11,6 +11,7 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/activity/activity_logger.dart';
+import '../../data/agent/agent_policy.dart' show AgentLoopLimits;
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
@@ -173,7 +174,10 @@ class DiagnosticsPage extends ConsumerWidget {
                     windowsOutsideOneDrive: true,
                   ).allConfigured ? '已配置' : '未配置'} · '
                   '切换模型全量重建每批 20 条、cursor 可续\n'
-                  '下载中/校验中检索降级纯 FTS',
+                  '下载中/校验中检索降级纯 FTS\n'
+                  'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮、'
+                  '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
+                  'MCP 适配器骨架已就位（transport 未连接）',
                   style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
                 ),
               ],

@@ -4,6 +4,28 @@
 
 ---
 
+## v0.65 · 2026-11-11
+
+### M7：Agent 主循环与 MCP 适配器骨架（已验证）
+
+- 新增 `agent_loop.dart`：`runAgentLoop` 按上层计划逐轮调用工具，
+  强制 6 轮上限、结果截断 2000 字、统一过闸门；
+  deny / requireConfirm / 未注册工具立即停轮
+- `McpToolAdapter` 只映射远程 tool 描述为本地 [AgentTool]，
+  固定 dangerous/L2，**不发网络请求**；密码条目走第三方 MCP 被闸门直接拒绝
+- `DiagnosticsPage` 展示主循环上限与 MCP 骨架状态
+- 测试：`agent_loop_test.dart` 4 条 → 全量 **646 → 650**
+
+**边界**：无真实模型 / MCP transport；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**650/650 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 60）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.64 · 2026-11-11
 
 ### M6：字段模板与自定义字段增删排序（已验证）
