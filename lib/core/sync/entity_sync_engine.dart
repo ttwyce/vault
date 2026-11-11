@@ -46,6 +46,7 @@ class EntitySyncRunResult {
     required this.errorCode,
     required this.reason,
     required this.syncState,
+    required this.budgetExceeded,
   });
 
   factory EntitySyncRunResult.skipped() => const EntitySyncRunResult(
@@ -59,6 +60,7 @@ class EntitySyncRunResult {
         errorCode: null,
         reason: '单飞锁被占用：本次跳过，不排队',
         syncState: <String, String?>{},
+        budgetExceeded: false,
       );
 
   final bool skipped;
@@ -72,7 +74,12 @@ class EntitySyncRunResult {
   final String reason;
   final Map<String, String?> syncState;
 
+  /// 本轮有请求因预算不足没发出去。调度器据此保守跳过清理阶段。
+  final bool budgetExceeded;
+
   bool get isFailed => errorCode != null;
+  bool get isComplete =>
+      !skipped && !isFailed && !budgetExceeded;
 }
 
 /// 本地 outbox 里的一条 taxonomy 操作：oplog 信封字节原样 PUT。
@@ -144,9 +151,13 @@ class EntitySyncEngine {
     final requestLog = <String>[];
     final state = <String, String?>{};
     var reason = 'taxonomy 同步完成';
+    var budgetExceeded = false;
 
     Future<T?> request<T>(String label, Future<T> Function() call) async {
-      if (!budget.tryConsume()) return null;
+      if (!budget.tryConsume()) {
+        budgetExceeded = true;
+        return null;
+      }
       requestLog.add(label);
       return await call();
     }
@@ -171,6 +182,7 @@ class EntitySyncEngine {
           errorCode: errorCode,
           reason: failureReason ?? reason,
           syncState: Map<String, String?>.unmodifiable(state),
+          budgetExceeded: budgetExceeded,
         );
 
     // -----------------------------------------------------------------------

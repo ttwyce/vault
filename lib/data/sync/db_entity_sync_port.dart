@@ -10,12 +10,14 @@ import 'package:drift/drift.dart';
 import '../../core/sync/cloud_layout.dart';
 import '../../core/sync/entity_sync_engine.dart';
 import '../../core/sync/retention_policy.dart';
+import '../../core/sync/sync_coordinator.dart';
 import '../../core/sync/sync_payloads.dart';
 import '../db/tables/log_tables.dart';
 import '../db/vault_database.dart';
 import '../write/write_gateway.dart';
 
-class DbEntitySyncPort implements EntitySyncPort {
+class DbEntitySyncPort
+    implements EntitySyncPort, TrashPurgeRunner, TombstoneLister {
   DbEntitySyncPort({
     required this.db,
     required this.gateway,
@@ -138,6 +140,27 @@ class DbEntitySyncPort implements EntitySyncPort {
       purged: List<String>.unmodifiable(purged),
       skipped: Map<String, String>.unmodifiable(skipped),
     );
+  }
+
+  /// 顶层调度器的本地清理边界：只返回真正被清空的 id。
+  @override
+  Future<List<String>> purgedEntryIds({required int nowMs}) async =>
+      (await purgeExpiredTrash(nowMs: nowMs)).purged;
+
+  /// 从已确认的 `sync_state` 里列出云端墓碑。
+  ///
+  /// `deleted_at` 用 `sync_state.updatedAt`（确认写墓碑的时间）兜底；
+  /// 没有时间信息的记录一律返回 0（视为未过期），绝不自作主张按「看不见
+  /// 就算老」来删。真实接入层可以换成 GET 墓碑信封读 `deleted_at`。
+  @override
+  Future<List<TombstoneRecord>> tombstones() async {
+    final rows = await (db.select(db.syncStates)
+          ..where((t) => t.path.like('${CloudLayout.root}/tombstones/%')))
+        .get();
+    return <TombstoneRecord>[
+      for (final row in rows)
+        TombstoneRecord(path: row.path, deletedAt: row.updatedAt ?? 0),
+    ];
   }
 
   /// 只有「这一条 entry 对应的墓碑路径」拿到服务端 ETag 才算确认。

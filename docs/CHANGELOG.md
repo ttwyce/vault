@@ -4,6 +4,60 @@
 
 ---
 
+## v0.20 · 2026-11-11
+
+### M3 统一调度：正文 → taxonomy → 本地清理 → 云端墓碑 TTL（已验证）
+
+远端仓库由 `ttwyce/bbbjjj` 改名为 `ttwyce/vault`（私有），本地目录、
+package 名、远端名三者一致；`75b6c8b` 已推送。本轮把前一批三个互不感知的
+入口串成一次顶层同步，并补齐 90 天墓碑文件的云端 DELETE 编排。
+仍不新增依赖、不改 `pubspec.yaml`、不接真实 HTTP、不执行构建。
+
+**改了什么**
+- 新增 `lib/core/sync/sync_coordinator.dart`：
+  - `SyncCoordinator` 按「正文 `SyncEngine` → taxonomy `EntitySyncEngine`
+    → 本地 30 天清理 → 云端 90 天墓碑 DELETE」串行执行，一把总单飞锁
+    保证同一时刻只有一轮顶层同步，锁忙直接跳过
+  - **保守闸门**：正文失败 / 退避 / 预算不足 / 水位未发布，或 taxonomy
+    通道失败 / 跳过 / 预算不足时，一律跳过清理阶段 —— 清理不可逆
+  - 云端 DELETE 只针对 `planTombstoneRetention()` 判定的 90 天过期墓碑，
+    且必须用 `sync_state` 里已确认的 ETag 做 `If-Match`；无 ETag、
+    412、503、预算不足都留到下一轮，不做无条件删除
+  - `SyncRunReport` 汇总三条链路结果，`completed` 只表示同步链路完整；
+    清理阶段「部分完成」不推翻已成功的同步
+- 修改 `lib/core/sync/entity_sync_engine.dart`：
+  `EntitySyncRunResult` 新增 `budgetExceeded` / `isComplete`，
+  让调度器能区分「完整跑完」与「预算不足的半轮」
+- 修改 `lib/data/sync/db_entity_sync_port.dart`：实现
+  `TrashPurgeRunner` / `TombstoneLister`，从 `sync_state` 列出云端墓碑；
+  时间信息缺失的记录 `deletedAt=0`（视为未过期），绝不按「看不见就算老」
+- 新增 `test/sync_coordinator_test.dart`（7 条）：顺序、五类正文不完整、
+  三类 taxonomy 不完整、缺 ETag、DELETE 失败、总单飞锁、清理预算不足
+
+**关键决策**
+- **清理不可逆，所以前置链路不完整就不清理**：本地物理删除与云端墓碑
+  DELETE 都不能在「可能还有未同步状态」时执行
+- **90 天 TTL 只删云端墓碑文件**：本地 `sync_state` 里已确认的墓碑记录
+  仍保留，供 30 天清理闸门继续使用，两套依据互不删除
+- **每个 DELETE 都带 `If-Match`**：接口层不存在无条件删除的调用形态
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | **408/408 passed**（401 + 新增 7） |
+| `flutter build` / 打包 / 编译 | **未执行** |
+
+**工作方式**：全程主控串行，未开并行子代理；验证命令带
+`NO_PROXY=127.0.0.1,localhost,::1`；`pubspec.yaml` / `pubspec.lock`
+未改动、未新增依赖。**M3 硬门槛不变**：26 个真实集成用例仍未通过，不进 M4；
+本轮新增的仍是确定性单测与内存 fake。
+
+**影响文档**：09（§5）、README（进度 / 数字 / 目录 / 决策表）、
+14（Day 15）、20（下一步）、CHANGELOG（本条）
+
+---
+
 ## v0.19 · 2026-11-11
 
 ### M3 第三批收尾：#14 数据库集成测试 + #15 taxonomy 通道 / 保留策略（已验证）

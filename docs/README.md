@@ -106,6 +106,8 @@
 | D29 | **taxonomy 独立通道** | **category / tag / `entry_taxonomy` 只走 `/vault/entities/`，不跑 `merge3`** | 避免正文同步器把 taxonomy 信封当成 `EntrySnapshot`；同 rev 或更旧直接跳过 |
 | D30 | **刚 PUT 的文件合入本轮 remote** | **PROPFIND 与 PUT 之间没有原子性** | 服务器尚未列出新文件时，diff 不能把它误判为远端删除 |
 | D31 | **30 天清理闸门** | **本条墓碑 ETag 已确认 + 条目仍删除 + 无未推 oplog 才允许物理清空** | 只按到期时间删本地，另一台设备会把内容重新推回来；90 天墓碑 TTL 独立判定 |
+| D32 | **统一调度保守闸门** | **正文 / taxonomy 任一链路不完整就跳过清理** | 本地物理删除与云端墓碑 DELETE 不可逆，不能在半轮同步状态下执行 |
+| D33 | **90 天 TTL 只删云端墓碑** | **DELETE 必须带 `sync_state` 已确认 ETag 做 `If-Match`** | 本地已确认记录仍供 30 天清理闸门使用，两套依据互不删除 |
 
 ---
 
@@ -141,7 +143,7 @@
 ## 目录结构
 
 ```
-C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
+vault/                            Flutter 工程根（package: vault）
 ├── docs/                     # 文档（01~20 + README + CHANGELOG）
 ├── assets/
 │   ├── fonts/                # 内置 3 套 OFL 字体（13.9 MB）
@@ -175,7 +177,7 @@ C:\Android\projects\bbbjjj\        Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 第一 / 二 / 三批已完成（401/401 已验证）；M3 硬门槛未过**。
+**当前进度**：**M2 已完成；M3 第一 / 二 / 三批 + 统一调度已完成（408/408 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -218,17 +220,21 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **401 条全绿**
-（376 + #14 12 + #15 13）。慢机器上建议继续用 `--concurrency=1`：
+`flutter analyze` 无告警，`flutter test --concurrency=1` **408 条全绿**
+（401 + 统一调度 7）。慢机器上建议继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑
 analyze + test，**未执行任何构建**。
 **M2 未做**（见 [09 §4](09-里程碑、验收与风险.md)）：分类拖拽排序、
 1000 条 60fps / 中文搜索 P95 性能基线（需真机，未构建）。
+统一调度（CHANGELOG v0.20）：`SyncCoordinator` 把「正文同步 → taxonomy
+独立通道 → 30 天本地清理 → 90 天云端墓碑 DELETE」串成一次顶层同步；
+任一前置链路失败 / 退避 / 预算不足时**一律跳过清理**，云端 DELETE 必须带
+已确认 ETag 做 `If-Match`。远端仓库已改名为 `ttwyce/vault`。
+
 **M3 未做**：真实 WebDAV 客户端与 M0 A5 结论、26 个真实集成用例、
-Nextcloud + mod_dav Docker、真机计时 / 强杀重启 / 大 blob / 5000 条验收；
-30 天清理的云端墓碑 DELETE 编排与 90 天墓碑文件物理删除仍待真实接入层。
+Nextcloud + mod_dav Docker、真机计时 / 强杀重启 / 大 blob / 5000 条验收。
 内存后端 + 内存加密库只证明编排顺序与零丢失规则，不等于真实服务器验收；
 09 §5 的硬门槛尚未通过，不进 M4。
 **下一步**：向用户确认 M0 A5（客户端对坚果云 / Nextcloud）结论，再决定
