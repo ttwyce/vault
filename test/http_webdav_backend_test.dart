@@ -176,6 +176,36 @@ class _DavServer {
   }
 }
 
+/// 统计同时在途请求数的延迟服务器。
+class _ConcurrencyServer {
+  _ConcurrencyServer(this.server);
+
+  final HttpServer server;
+  int inFlight = 0;
+  int peak = 0;
+  int total = 0;
+
+  static Future<_ConcurrencyServer> start() async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final self = _ConcurrencyServer(server);
+    server.listen((HttpRequest request) async {
+      self.inFlight++;
+      self.total++;
+      if (self.inFlight > self.peak) self.peak = self.inFlight;
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      request.response.headers.set('ETag', '"x"');
+      request.response.add(<int>[1]);
+      await request.response.close();
+      self.inFlight--;
+    });
+    return self;
+  }
+
+  String get rootUrl => 'http://127.0.0.1:${server.port}';
+
+  Future<void> close() async => server.close(force: true);
+}
+
 /// 最小 JSON codec：本用例只走 L1 静默，不需要真实加密字节。
 class _JsonCodec implements SyncPayloadCodec {
   @override
@@ -483,6 +513,29 @@ void main() {
     } finally {
       b.close();
       await bare.close(force: true);
+    }
+  });
+
+  test('docs/04 §10：并发 HTTP 请求不超过 maxConcurrentRequests', () async {
+    final concurrent = _ConcurrencyServer.start();
+    final serverHttp = await concurrent;
+    final limited = HttpClientWebDavBackend(
+      HttpWebDavConfig(
+        rootUrl: serverHttp.rootUrl,
+        maxConcurrentRequests: 2,
+      ),
+    );
+    try {
+      await Future.wait<void>(<Future<void>>[
+        for (var i = 0; i < 8; i++)
+          limited.get('/vault/items/0/file-$i.enc').then((_) {}),
+      ]);
+      expect(serverHttp.peak, lessThanOrEqualTo(2),
+          reason: '连接池上限必须覆盖同时在途请求');
+      expect(serverHttp.total, 8);
+    } finally {
+      limited.close();
+      await serverHttp.close();
     }
   });
 

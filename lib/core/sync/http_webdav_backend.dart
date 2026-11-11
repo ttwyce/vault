@@ -27,18 +27,27 @@ class HttpWebDavConfig {
     this.password,
     this.connectTimeout = const Duration(seconds: 15),
     this.userAgent = 'vault/0.1',
-  });
+    this.maxConcurrentRequests = 3,
+  }) : assert(maxConcurrentRequests > 0);
 
   final String rootUrl;
   final String? username;
   final String? password;
   final Duration connectTimeout;
   final String userAgent;
+
+  /// docs/04 §10：全局最多 3 个在途 HTTP 请求。
+  final int maxConcurrentRequests;
 }
 
 class HttpClientWebDavBackend implements WebDavBackend {
   HttpClientWebDavBackend(this.config, {HttpClient? client})
-      : _client = client ?? HttpClient();
+      : _client = client ?? HttpClient() {
+    // docs/04 §10：全局最多 3 个在途 HTTP 请求。HttpClient 的连接池上限
+    // 覆盖「发请求 + 读响应体」整个生命周期，比只包住 _send 的手写信号量
+    // 更可靠；超出的请求在 SDK 层排队，不会瞬时打满服务商限流。
+    _client.maxConnectionsPerHost = config.maxConcurrentRequests;
+  }
 
   final HttpWebDavConfig config;
   final HttpClient _client;

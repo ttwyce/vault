@@ -4,6 +4,43 @@
 
 ---
 
+## v0.30 · 2026-11-11
+
+### 并发限流与真实运行时装配门面（已验证）
+
+**改了什么**
+- `HttpWebDavConfig.maxConcurrentRequests`（默认 3）落到
+  `HttpClient.maxConnectionsPerHost`：docs/04 §10「全局最多 3 个在途 HTTP
+  请求」不再只是文档承诺。用 SDK 连接池上限比手写信号量更可靠，
+  因为它覆盖「发请求 + 读响应体」整个生命周期
+- `test/http_webdav_backend_test.dart` +1 条：8 个并发 GET、服务器统计
+  同时在途数，断言峰值 ≤ 配置值
+- 新增 `lib/app/session/vault_sync_runtime.dart`：`VaultSyncRuntime.create()`
+  把真实 `VaultDatabase` + `WriteGateway` + `DbSyncWorkspaceStore` +
+  `DbEntitySyncPort` + `SyncEngine` + `EntitySyncEngine` +
+  `SyncCoordinator` + `HttpClientWebDavBackend` 接成一条完整链路，
+  `sync()` 一行跑完「正文 → taxonomy → 本地清理 → 云端墓碑 TTL」
+- `test/vault_sync_runtime_test.dart` 2 条：真实内存加密库 + 本地
+  HttpServer，断言设备水位真实 PUT、sync_log 落库、清理阶段执行；
+  `dispose()` 关闭 HTTP 客户端
+  → 全量 **449 → 452**
+
+**关键边界**
+- `VaultSyncRuntime` **刻意不接 App 启动装配**：构造它需要 WebDAV 地址
+  与凭据，而 M0 A5（坚果云 / Nextcloud 真实行为）尚未确认。
+  这里只提供「配置就绪后一行调用」的落点
+- 仍是本地最小 WebDAV 服务验证，**A5 未过、26 个真实集成用例未通过、
+  M3 硬门槛不变、不进 M4**
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**452/452 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 25）、
+20（真实接入边界）、CHANGELOG（本条）
+
+---
+
 ## v0.29 · 2026-11-11
 
 ### PUT 成功但服务器不给 ETag 时的兜底（已验证）
