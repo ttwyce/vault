@@ -15,6 +15,7 @@ import '../db/tables/entry_tables.dart';
 import '../db/tables/log_tables.dart';
 import '../db/vault_database.dart';
 import '../search/cjk_segmenter.dart';
+import '../taxonomy/taxonomy_lww.dart';
 import '../taxonomy/taxonomy_models.dart';
 import 'entry_snapshot.dart';
 import 'item_envelope.dart';
@@ -1705,7 +1706,13 @@ class WriteGateway {
         }
         _observeSnapshotHlc(snapshot.hlc);
         final latest = await _latestTaxonomy(snapshot.entity, snapshot.id);
-        if (latest != null && latest.rev >= snapshot.rev) {
+        final lww = resolveTaxonomyLww(
+          localRev: latest?.rev,
+          localHlc: latest?.hlc,
+          remoteRev: snapshot.rev,
+          remoteHlc: snapshot.hlc,
+        );
+        if (lww == TaxonomyLwwAction.keepLocal) {
           await _upsertSyncState(file.path, file.etag);
           continue;
         }
@@ -1754,7 +1761,13 @@ class WriteGateway {
         }
         _observeSnapshotHlc(snapshot.hlc);
         final latest = await _latestTaxonomy(snapshot.entity, snapshot.id);
-        if (latest != null && latest.rev >= snapshot.rev) {
+        final lww = resolveTaxonomyLww(
+          localRev: latest?.rev,
+          localHlc: latest?.hlc,
+          remoteRev: snapshot.rev,
+          remoteHlc: snapshot.hlc,
+        );
+        if (lww == TaxonomyLwwAction.keepLocal) {
           await _upsertSyncState(file.path, file.etag);
           continue;
         }

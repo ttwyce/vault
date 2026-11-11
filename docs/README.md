@@ -114,6 +114,7 @@
 | D37 | **MKCOL 只救目录** | **集合请求 / PUT 的 404/409 重建目录再重试，GET 文件 404 不建目录** | GET 404 是正常 diff 结果，盲目建目录会掩盖真实删除 |
 | D38 | **退避错误码显式化** | **`SyncRunResult.retryCode` + `RetryScheduler` 可注入时钟** | 状态机只在 FAILED 保留 error；靠解析文案猜 E_NET/E_RATE 太脆 |
 | D39 | **拖拽不改归属** | **分类只在同 parentId 内排序，跨级落点忽略** | 改层级是独立操作，不能靠一次拖拽悄悄完成 |
+| D40 | **taxonomy 同 rev 用 HLC 判定** | **`resolveTaxonomyLww` 在 rev 并列时比较 HLC，无法判定则保留本地** | 只比 rev 会静默丢掉另一台设备同 rev 的更新（T22） |
 
 ---
 
@@ -183,7 +184,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（431/431 已验证）；M3 硬门槛未过**。
+**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（436/436 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -226,8 +227,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **431 条全绿**
-（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18）。慢机器上建议继续用 `--concurrency=1`：
+`flutter analyze` 无告警，`flutter test --concurrency=1` **436 条全绿**
+（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5）。慢机器上建议继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑

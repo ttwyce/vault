@@ -420,6 +420,50 @@ void main() {
       expect(category.name, '远端分类', reason: '更旧的 rev 不能覆盖本地');
     });
 
+    test('T22：同 rev 但远端 HLC 更大时应用远端，不再静默丢更新', () async {
+      final newer = _category(name: '远端新名字');
+      // _category 的 HLC 固定 devB@_now；本地先灌一条同 rev、HLC 更小的。
+      final local = _category(name: '本地旧名字');
+      final localWithOlderHlc = TaxonomySnapshot(
+        entity: local.entity,
+        id: local.id,
+        rev: local.rev,
+        hlc: Hlc(millis: _now - 1000, counter: 0, node: 'devA').encode(),
+        updatedAt: local.updatedAt,
+        deleted: false,
+        fields: local.fields,
+      );
+      final localPath = await _path(env.codec, localWithOlderHlc);
+      final first = _FakeBackend()
+        ..add(localPath, await env.codec.encodeTaxonomy(localWithOlderHlc));
+      await EntitySyncEngine(
+        backend: first,
+        codec: env.codec,
+        port: env.port,
+      ).run();
+
+      // 同一路径换成同 rev 但 HLC 更大的远端版本，ETag 也变。
+      final second = _FakeBackend()
+        ..add(localPath, await env.codec.encodeTaxonomy(newer), etag: 'e2');
+      // 清掉本地 sync_state 让 diff 判定为 added（否则 ETag 相同会跳过）。
+      await env.port.commitPulls(
+        const <RemoteTaxonomyFile>[],
+        <String, String?>{},
+        const <String, List<int>>{},
+      );
+      await EntitySyncEngine(
+        backend: second,
+        codec: env.codec,
+        port: env.port,
+      ).run();
+
+      final row = await (env.db.select(env.db.categories)
+            ..where((t) => t.id.equals(local.id)))
+          .getSingle();
+      expect(row.name, '远端新名字');
+      expect(await env.count('oplog'), 2);
+    });
+
     test('部分分片扫描不推断删除，其它通道的 sync_state 不被清掉', () async {
       await env.db.into(env.db.syncStates).insert(
             SyncStatesCompanion.insert(

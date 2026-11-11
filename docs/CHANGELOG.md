@@ -4,6 +4,44 @@
 
 ---
 
+## v0.23 · 2026-11-11
+
+### 修复 taxonomy 同 rev 并发更新被静默丢弃（T22，已验证）
+
+在 v0.22 之后再做一轮代码审查，发现 `WriteGateway.applyRemoteTaxonomySnapshots()`
+与 `applyEntityPull()` 判定远端 taxonomy 快照时只比较 `rev`：
+`latest.rev >= snapshot.rev` 就直接 `continue`。两台设备从同一 base
+各自改一次分类 / 标签都会得到 `rev = base + 1`，此时**后到的那一方会被
+静默丢掉**，既不写 oplog 也不报错 —— 正是 docs/09 T22 要求避免的情况。
+
+**改了什么**
+- 新增 `lib/data/taxonomy/taxonomy_lww.dart`：`resolveTaxonomyLww()` 纯函数
+  - 本地无版本 → 应用远端；`rev` 不同 → 大者胜
+  - `rev` 相同 → 用 HLC 做因果序 tie-break，HLC 更大者胜
+  - HLC 解析失败 / 完全相等 → 保守保留本地，绝不覆盖
+- `applyRemoteTaxonomySnapshots()` / `applyEntityPull()` 两处判定统一换成
+  该函数，不再各自写 `latest.rev >= snapshot.rev`
+- `test/taxonomy_lww_test.dart` 4 条 + `test/entity_sync_engine_test.dart`
+  1 条落库层 T22 场景 → 全量 **431 → 436**
+
+**关键决策**：taxonomy 的 `rev` 是**本地单调递增**，不是跨设备全局版本；
+跨设备并发必须靠 HLC 判定（docs/03 §5）。同 rev 且无法建立因果序时
+保留本地比覆盖更安全。
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | **436/436 passed** |
+| `flutter build` | 未执行 |
+
+`pubspec.yaml` / `pubspec.lock` 未改动、未新增依赖、未执行构建。
+**M3 硬门槛不变**：26 个真实集成用例未通过，不进 M4。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 18）、CHANGELOG（本条）
+
+---
+
 ## v0.22 · 2026-11-11
 
 ### 自主代码审查：P0 数据一致性 + 6 项编排缺口 + M2 遗留 UI（已验证）
