@@ -28,6 +28,7 @@ import '../../data/archive/archive_maintenance.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/entry/entry_repository.dart';
 import '../../data/platform/platform_capabilities.dart';
+import '../../data/vault/attachment_validator.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/model_downloader.dart';
@@ -311,6 +312,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   '同步回归 ${auditSyncRegression().total} 用例：'
                   '本地 ${auditSyncRegression().localVerified} 条 · '
                   '需真实服务器 ${auditSyncRegression().pendingRealServer} 条\n'
+                  '图片附件按文件头识别 PNG/JPEG/WebP/GIF，'
+                  '上限 ${kMaxAttachmentBytes ~/ (1024 * 1024)}MB、路径与扩展名规范化\n'
                   '冷启动 < 1.2s、中文搜索 P95 < 150ms、混合检索 P95 < 300ms、'
                   '1000 条 60fps、5000 条重建 < 8min。未测 ≠ 达标。',
                   style: TextStyle(fontSize: 10.5, color: p.muted),

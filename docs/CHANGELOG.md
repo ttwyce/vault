@@ -4,6 +4,29 @@
 
 ---
 
+## v0.93 · 2026-11-11
+
+### M6：图片附件判定层（已验证）
+
+- 新增 `attachment_validator.dart`（docs/09 §8）：按文件头识别
+  PNG / JPEG / WebP / GIF（不信任扩展名）、≤5MB 上限守卫、空文件与
+  非法格式拒绝并给可执行原因、文件名去路径/可疑字符并按真实格式换扩展名
+- `planAttachment` 输出 blob_ref 写入计划（明文结构），真实加密入 blobs
+  与附件 UI 仍属平台层
+- `DiagnosticsPage` 展示附件规则；测试 `attachment_validator_test.dart`
+  4 条 → 全量 **713 → 717**
+
+**边界**：无真实文件选择 / 加密写入 / 附件展示；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**717/717 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 88）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.92 · 2026-11-11
 
 ### M6：备注字段加密与 L0 端侧边界（已验证）
