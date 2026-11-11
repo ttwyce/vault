@@ -9,11 +9,13 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
-import '../../data/agent/agent_policy.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/activity/activity_logger.dart';
+import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/backup/backup_models.dart';
+import '../../data/entry/entry_repository.dart';
+import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/model_downloader.dart';
 
@@ -33,12 +35,19 @@ class DiagnosticsPage extends ConsumerWidget {
       for (final spec in kDefaultModelSpecs)
         EmbeddingModelSpec.fromJson(spec),
     ];
+    final db = ref.watch(vaultDatabaseProvider);
+    final gateway = ref.watch(writeGatewayProvider);
+    final toolRegistry = buildDefaultToolRegistry(AgentToolDeps(
+      entries: EntryRepository(db),
+      credentials: CredentialRepository(db, gateway),
+      gateway: gateway,
+    ));
     final report = runReleaseAudit(ReleaseAuditInput(
       logSamples: const <Map<String, Object?>>[
         <String, Object?>{'event': 'diagnostics_opened', 'count': 1},
       ],
       modelSpecs: specs,
-      toolRegistry: AgentToolRegistry(),
+      toolRegistry: toolRegistry,
       knownSecrets: const <String>[],
       nowMs: nowMs,
     ));
@@ -53,7 +62,9 @@ class DiagnosticsPage extends ConsumerWidget {
 
     return PageScaffold(
       title: '诊断与备份',
-      subtitle: report.passed ? '自检通过' : '自检有未通过项',
+      subtitle:
+          '${report.passed ? '自检通过' : '自检有未通过项'} · '
+          '${toolRegistry.length} 个 Agent 工具',
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           SketchSpace.lg,

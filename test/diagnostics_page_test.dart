@@ -37,6 +37,7 @@ void main() {
     expect(find.textContaining('vault-local'), findsWidgets);
     expect(find.textContaining('不替代真实服务器集成用例'), findsWidgets);
     expect(find.text('向量模型下载与索引重建'), findsOneWidget);
+    expect(find.textContaining('4 个 Agent 工具'), findsWidgets);
     expect(find.textContaining('源优先级'), findsOneWidget);
   });
 

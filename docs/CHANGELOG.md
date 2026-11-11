@@ -4,6 +4,31 @@
 
 ---
 
+## v0.62 · 2026-11-11
+
+### M7：具体工具集接真实仓库（已验证）
+
+- 新增 `lib/data/agent/agent_tools.dart`：4 个工具
+  `credential_health` / `search_entries` / `get_entry` / `create_note`
+  接真实 `EntryRepository` / `CredentialRepository` / `WriteGateway`
+- `invokeTool()` **统一过 `checkToolCall` 闸门**：deny 返回结果文本、
+  requireConfirm 返回人话预览、allow 才执行；密码条目 `get_entry`
+  只给脱敏描述，`credential_health` 只给聚合统计
+- `DiagnosticsPage` 展示真实注册表与工具数
+- 测试：`agent_tools_test.dart` 5 条（注册表 / 统计 / FTS 排除 AI 日记 /
+  密码脱敏 / 确认写库 + 密码边界拒绝）→ 全量 **632 → 637**
+
+**边界**：不调模型、不联网、不接 MCP；写类工具只有确认预览。
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**637/637 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 57）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.61 · 2026-11-11
 
 ### M7：日总结流水线接真实活动埋点（已验证）
