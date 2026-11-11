@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/session/vault_session.dart';
+
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../core/identity/uuid_v7.dart';
+import '../../core/sync/hlc.dart';
 import '../../data/chat/conversation_models.dart';
+import '../../data/chat/conversation_repository.dart';
+import '../../data/chat/conversation_repository_provider.dart';
+import '../../data/chat/conversation_writer.dart';
 import 'widgets/conversation_drawer.dart';
 
 /// 聊天首页。
@@ -79,6 +86,28 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _closeDrawer();
   }
 
+  /// 首条用户消息才真正创建会话（T26），消息 append-only 写入。
+  Future<void> _send(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final writer = ConversationWriter(
+      db: ref.read(vaultDatabaseProvider),
+      clock: HlcClock(node: 'devA', now: () => DateTime.now().millisecondsSinceEpoch),
+      uuid: UuidV7(),
+      deviceId: 'devA',
+    );
+    final next = await writer.append(
+      draft: _draft,
+      role: 1,
+      content: trimmed,
+    );
+    if (!mounted) return;
+    setState(() {
+      _draft = next;
+      _input.clear();
+    });
+  }
+
   @override
   void dispose() {
     _input.dispose();
@@ -109,7 +138,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const _CurrentConversationBar(),
+          _CurrentConversationBar(
+            label: _draft.hasDraft
+                ? '新草稿会话'
+                : (_draft.currentId ?? '未选择会话'),
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
@@ -119,72 +152,58 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 SketchSpace.lg,
               ),
               children: <Widget>[
-                _AiMessage(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        '早上好。昨天你存了 3 条跟 WebDAV 限流有关的东西，'
-                        '其中一条还只是半句话 —— 要我合成一篇吗？',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          height: 1.7,
-                          color: palette.ink,
+                FutureBuilder<List<ConversationMessageView>>(
+                  future: _draft.currentId == null
+                      ? Future<List<ConversationMessageView>>.value(
+                          const <ConversationMessageView>[])
+                      : ref
+                          .read(conversationRepositoryProvider)
+                          .messages(_draft.currentId!),
+                  builder: (
+                    BuildContext context,
+                    AsyncSnapshot<List<ConversationMessageView>> snap,
+                  ) {
+                    final messages = snap.data ??
+                        const <ConversationMessageView>[];
+                    if (messages.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: SketchSpace.xl,
                         ),
-                      ),
-                      const SizedBox(height: SketchSpace.md),
-                      Wrap(
-                        spacing: SketchSpace.sm,
-                        runSpacing: SketchSpace.sm,
-                        children: const <Widget>[
-                          SketchTag('合成一篇', tone: SketchTone.primary),
-                          SketchTag('先看原文'),
-                          SketchTag('不用'),
+                        child: Text(
+                          _draft.hasDraft
+                              ? '新的草稿会话，发出第一条消息后才会保存。'
+                              : '还没有消息，说点什么吧。',
+                          style: TextStyle(fontSize: 12, color: palette.muted),
+                        ),
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        for (final message in messages) ...<Widget>[
+                          message.isUser
+                              ? _UserMessage(text: message.content)
+                              : _AiMessage(
+                                  child: Text(
+                                    message.content,
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      color: palette.ink,
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(height: SketchSpace.lg),
                         ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: SketchSpace.lg),
-                _UserMessage(
-                  text: '把 example.com/rfc-6578 收进来，跟之前那条合并',
-                ),
-                const SizedBox(height: SketchSpace.lg),
-                _ToolCard(),
-                const SizedBox(height: SketchSpace.lg),
-                _AiMessage(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        '收进来了。它跟你 8 月 11 日那条讲的是同一件事，'
-                        '我把两边的要点并到了一起：',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          height: 1.7,
-                          color: palette.ink,
-                        ),
-                      ),
-                      const SizedBox(height: SketchSpace.md),
-                      _CitationCard(
-                        title: 'RFC 6578 增量同步',
-                        meta: '08-11 · 归档 · 有快照',
-                        variant: 2,
-                      ),
-                      const SizedBox(height: SketchSpace.sm),
-                      _CitationCard(
-                        title: '增量同步的请求预算',
-                        meta: '08-10 · 笔记',
-                        variant: 3,
-                      ),
-                    ],
-                  ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: SketchSpace.xxl),
               ],
             ),
           ),
-          _InputBar(controller: _input),
+          _InputBar(controller: _input, onSend: _send),
         ],
       ),
     );
@@ -192,7 +211,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 }
 
 class _CurrentConversationBar extends StatelessWidget {
-  const _CurrentConversationBar();
+  const _CurrentConversationBar({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +232,7 @@ class _CurrentConversationBar extends StatelessWidget {
           const SizedBox(width: SketchSpace.sm),
           Expanded(
             child: Text(
-              '把 RFC 6578 收进来',
+              label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -221,7 +242,7 @@ class _CurrentConversationBar extends StatelessWidget {
               ),
             ),
           ),
-          Text('14:02 · 引用 3 条',
+          Text('端侧模型',
               style: TextStyle(fontSize: 10.5, color: p.muted)),
         ],
       ),
@@ -295,131 +316,11 @@ class _UserMessage extends StatelessWidget {
   }
 }
 
-class _ToolCard extends StatelessWidget {
-  const _ToolCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.sketch;
-    const steps = <(String, String, bool)>[
-      ('抓取正文', '4,182 字', true),
-      ('判定类型', '网页归档', true),
-      ('找到 2 条相关旧记录', '', true),
-      ('归档快照', '生成 PDF…', false),
-    ];
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        const SizedBox(width: 34),
-        Flexible(
-          child: SketchCard(
-            variant: 0,
-            tilt: SketchTilt.none,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        '正在处理这个链接',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: p.ink,
-                        ),
-                      ),
-                    ),
-                    Text('2.1s',
-                        style: TextStyle(fontSize: 10.5, color: p.muted)),
-                  ],
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                for (final (label, value, done) in steps)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: <Widget>[
-                        Text(
-                          done ? '✓' : '◐',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: done ? p.green : p.red,
-                          ),
-                        ),
-                        const SizedBox(width: SketchSpace.sm),
-                        Text(label,
-                            style: TextStyle(fontSize: 12, color: p.ink)),
-                        const Spacer(),
-                        Text(value,
-                            style: TextStyle(fontSize: 10.5, color: p.muted)),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CitationCard extends StatelessWidget {
-  const _CitationCard({
-    required this.title,
-    required this.meta,
-    required this.variant,
-  });
-
-  final String title;
-  final String meta;
-  final int variant;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.sketch;
-    return SketchCard(
-      variant: variant,
-      tilt: variant.isEven ? SketchTilt.left : SketchTilt.right,
-      padding: const EdgeInsets.symmetric(
-        horizontal: SketchSpace.md,
-        vertical: SketchSpace.sm,
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(meta,
-                    style: TextStyle(fontSize: 10.5, color: p.muted)),
-              ],
-            ),
-          ),
-          Text('点开 →',
-              style: TextStyle(fontSize: 10.5, color: p.blue)),
-        ],
-      ),
-    );
-  }
-}
-
 class _InputBar extends StatelessWidget {
-  const _InputBar({required this.controller});
+  const _InputBar({required this.controller, required this.onSend});
 
   final TextEditingController controller;
+  final void Function(String text) onSend;
 
   @override
   Widget build(BuildContext context) {
@@ -445,6 +346,7 @@ class _InputBar extends StatelessWidget {
                 controller: controller,
                 style: TextStyle(fontSize: 13, color: p.ink),
                 cursorColor: p.red,
+                onSubmitted: onSend,
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
@@ -458,7 +360,7 @@ class _InputBar extends StatelessWidget {
               label: '发送',
               tone: SketchTone.primary,
               dense: true,
-              onPressed: () {},
+              onPressed: () => onSend(controller.text),
             ),
           ],
         ),

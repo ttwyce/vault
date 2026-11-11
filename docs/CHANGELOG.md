@@ -4,6 +4,32 @@
 
 ---
 
+## v0.44 · 2026-11-11
+
+### 聊天页消息流真实落库（T25 / T26，已验证）
+
+- 新增 `ConversationWriter`：消息 append-only（只 INSERT 不改写），
+  草稿态会话在**第一条用户消息到达时**才与消息在同一事务里创建
+  conversation（T26 不产生空记录）；重复追加只递增 messageCount
+- `ConversationRepository.messages()` 按 (createdAt, hlc) 读取并解析 citations
+- `ChatPage` 写死的假消息流（早上好 / 工具卡 / 引用卡）替换为真实消息
+  FutureBuilder；当前对话条显示草稿 / 会话 id；发送按钮与回车都走
+  `ConversationWriter.append`
+- 测试：`conversation_writer_test.dart` 4 条（草稿落库、append-only 顺序、
+  丢弃不落库、发送按钮真实写表） → 全量 **578 → 582**
+
+**边界**：会话 / 消息目前不参与同步，写入口注释明确将来必须扩展
+`WriteGateway` 会话分支而不是绕过它；无真实 AI 模型回复，消息只有用户侧。
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**582/582 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字）、14（Day 39）、20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.43 · 2026-11-11
 
 ### 密码列表与归档搜索真实接线（已验证）
