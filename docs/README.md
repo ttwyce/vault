@@ -129,6 +129,8 @@
 | D52 | **归档 L1 正文永不省** | **`decideArchivePolicy` 超配额只降快照层，不降正文层** | L1 是检索与 AI 的唯一输入源，省掉它「找回」功能直接废掉 |
 | D53 | **403/451 不算死链** | **restricted 与 dead 分开判定，超时重试 2 次才 unreachable** | 把反爬误标成原站关停会误导用户删掉仍可访问的归档 |
 | D54 | **归档写入口也走 WriteGateway** | **blob_ref / link_check / job_queue 的写入统一在事务内，重复检查只补非空字段** | 绕过唯一写入口或让重放抹掉 simhash 证据都会造成静默数据损坏 |
+| D55 | **密码永不向量化** | **`planChunks(kind=6)` 直接返回空计划** | 密码进任何模型上下文都是不可接受的泄露面 |
+| D56 | **向量模型配置写进 manifest** | **Gemma query/doc 前缀分离、Qwen3 last pooling 由 audit 校验** | 两个坑都不报错但召回率静默崩掉 |
 
 ---
 
@@ -199,7 +201,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 三批 + 统一调度 + 编排完整性已补齐；M4 归档预备层已落地（498/498 已验证）；M3 硬门槛未过，M4 未完成**。
+**当前进度**：**M2 已完成；M3 编排已补齐；M4 归档 / M5 检索预备层已落地（516/516 已验证）；M3 硬门槛未过，M4/M5 未完成**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -242,8 +244,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **498 条全绿**
-（交接基线 376 + 后续各批次 122，逐批明细见 CHANGELOG）。慢机器上建议
+`flutter analyze` 无告警，`flutter test --concurrency=1` **516 条全绿**
+（交接基线 376 + 后续各批次 140，逐批明细见 CHANGELOG）。慢机器上建议
 继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
@@ -266,7 +268,7 @@ analyze + test，**未执行任何构建**。
 - **M2 遗留**：分类同级拖拽排序已补完；仅剩需真机的
   1000 条 60fps / 中文搜索 P95 性能基线
 
-**M4 预备层已落地**（v0.35）：归档 meta 模型、策略引擎 / 配额守卫、死链与 simhash 变更判定、LRU 缓存、总览页真实数据接线（27 条测试）。真实抓取 / WebView / PDF / 分享入口仍需平台层，M4 未完成。
+**M4 预备层已落地**（v0.35~v0.36）：归档 meta 模型、策略引擎 / 配额守卫、死链与 simhash 变更判定、LRU 缓存、总览页真实数据接线（27 条测试）。真实抓取 / WebView / PDF / 分享入口仍需平台层，M4 未完成。
 
 **M3 未做**：`HttpClientWebDavBackend` 与 `VaultSyncRuntime` **只对本地
 最小 WebDAV 服务验证，未接 App 启动装配**；M0 A5（坚果云 / Nextcloud

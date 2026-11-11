@@ -4,6 +4,44 @@
 
 ---
 
+## v0.37 · 2026-11-11
+
+### M5 预备层：混合检索判定与向量模型 manifest（已验证）
+
+M4 归档预备层两批完成后，按 docs/06 继续落地 M5 中不需要真实推理运行时 /
+模型文件 / 新依赖的部分。
+
+**改了什么**
+- 新增 `lib/data/search/hybrid_search.dart` 纯判定层
+  - `preprocessSearchQuery()`：引号精确短语、时间意图（今天/最近/上个月/去年）、
+    类型限定（日记/想法/笔记/归档）、中文停用词只在 FTS 侧去掉、
+    短查询降权向量并提升 FTS
+  - `reciprocalRankFusion()`：RRF k=60，两路召回按名次融合；结构化过滤在
+    融合前剔除、非法 rank 跳过、只返回 top N
+  - `rerankScore()`：时间衰减 `1+0.3·exp(-days/180)` + 置顶加权
+  - `planChunks()`：note/diary 512 token、bookmark 400 token / 20 块封顶 /
+    overlap；**credential 永不向量化**（代码级硬约束）
+- 新增 `lib/data/search/embedding_manifest.dart`
+  - 四套默认模型 spec（BGE Small / E5 / EmbeddingGemma / Qwen3），解析即校验
+    id 唯一、内置恰好一个、sha256、pooling、prompt 占位符、MRL 维度
+  - `auditModelConfig()` 钉死 docs/06 §3.2 两个坑：Gemma query/doc 前缀必须
+    不同；Qwen3 必须 last-token pooling
+  - `isCompatibleWith()` 落实红线 3：不同模型 / 不同维度的向量绝不混用
+- 测试：`hybrid_search_test.dart` 11 条、`embedding_manifest_test.dart` 7 条
+  → 全量 **498 → 516**
+
+**边界**：纯判定层，不加载 ONNX/GGUF、不做真实 KNN、不下载模型、
+不建 FTS 索引；这些仍需 M5 接入层与真机。M3 硬门槛未过，M4 / M5 均未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**516/516 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动、
+未新增依赖。
+
+**影响文档**：README（数字 / 决策表）、09（§7）、14（Day 32）、
+20（当前状态）、CHANGELOG（本条）
+
+---
+
 ## v0.36 · 2026-11-11
 
 ### M4 预备层第二批：阅读器判定与归档派生表写入口（已验证）
