@@ -4,6 +4,28 @@
 
 ---
 
+## v0.66 · 2026-11-11
+
+### M8：三端能力矩阵纯校验（已验证）
+
+- 新增 `platform_capabilities.dart`：docs/08 §1 的 11 项能力按三端标注
+  `dartReady / nativeRequired / unavailable`，`auditPlatformGaps()` 列出
+  每个平台仍需原生的能力，`unavailableFor()` 单列系统不支持项
+- 明确「纯逻辑已落地 ≠ 三端可用」；Windows 无系统填充、iOS 无托盘
+- `DiagnosticsPage` 展示三端缺口计数
+- 测试：`platform_capabilities_test.dart` 4 条 → 全量 **650 → 654**
+
+**边界**：真实原生模块、上架审核、三端联调仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**654/654 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 61）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.65 · 2026-11-11
 
 ### M7：Agent 主循环与 MCP 适配器骨架（已验证）

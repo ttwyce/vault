@@ -18,6 +18,7 @@ import '../../data/agent/daily_summary.dart' show SummaryGranularity;
 import '../../data/agent/rollup_service.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/entry/entry_repository.dart';
+import '../../data/platform/platform_capabilities.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/model_downloader.dart';
@@ -179,6 +180,37 @@ class DiagnosticsPage extends ConsumerWidget {
                   '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
                   'MCP 适配器骨架已就位（transport 未连接）',
                   style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: SketchSpace.xl),
+          SketchCard(
+            variant: 0,
+            fill: p.surface,
+            tilt: SketchTilt.right,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '三端能力缺口（docs/08）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                for (final platform in PlatformKind.values)
+                  Text(
+                    '${platform.name}：仍需原生 '
+                    '${auditPlatformGaps().gapsFor(platform).length} 项 · '
+                    '不可用 ${unavailableFor(platform).length} 项',
+                    style: TextStyle(fontSize: 11, color: p.muted),
+                  ),
+                Text(
+                  '纯逻辑已落地 ≠ 三端可用；原生模块与上架审核仍缺。',
+                  style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),
               ],
             ),
