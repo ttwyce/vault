@@ -4,6 +4,29 @@
 
 ---
 
+## v0.87 · 2026-11-11
+
+### M7：日记页「现在生成 AI 日记」（已验证）
+
+- `DiaryPage` 加「生成 AI 日记」按钮（docs/11 §3.2）：用选中日期
+  （未选则当月今天 / 否则 1 号）的真实活动埋点走
+  `DailySummaryService.buildAndStore`，生成 kind=4 日总结并刷新月历
+- 无活动时不写空条目，SnackBar 明确提示；端侧模型反思文本仍缺，不编造
+- 用已装配的 `vaultDatabaseProvider` / `writeGatewayProvider` /
+  `activityLoggerProvider`，避免测试夹具与会话状态耦合
+- 测试：`diary_page_test.dart` +1 条 → 全量 **705 → 706**
+
+**边界**：23:50 定时触发、模型反思文本、AI 日记独立配色仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**706/706 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 82）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.86 · 2026-11-11
 
 ### 诊断页收口：最后两个判定层接生产入口

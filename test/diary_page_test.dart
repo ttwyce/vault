@@ -78,4 +78,21 @@ void main() {
 
     expect(find.text('这个月还没有日记，点右上角补写'), findsOneWidget);
   });
+
+  testWidgets('生成 AI 日记按钮在无活动时不写空条目',
+      (WidgetTester tester) async {
+    await pumpDiary(tester);
+    expect(find.text('生成 AI 日记'), findsOneWidget);
+    await tester.tap(find.text('生成 AI 日记'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(
+      await (app.db.select(app.db.entries)
+            ..where((t) => t.kind.equals(EntryKind.aiDiary.code)))
+          .get(),
+      isEmpty,
+    );
+  });
 }

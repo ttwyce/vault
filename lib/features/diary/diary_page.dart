@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/agent/daily_summary_service.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
@@ -74,6 +76,36 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     });
   }
 
+  /// docs/11 §3.2「现在生成」：用选中日期（未选则今天）的真实活动埋点
+  /// 生成一条 kind=4 日总结；端侧模型反思文本仍缺，不编造。
+  Future<void> _generateAiDiary() async {
+    final db = ref.read(vaultDatabaseProvider);
+    final gateway = ref.read(writeGatewayProvider);
+    final activity = ref.read(activityLoggerProvider);
+    final now = DateTime.now();
+    final target = DateTime(
+      _month.year,
+      _month.month,
+      _selectedDay ?? (now.year == _month.year && now.month == _month.month
+          ? now.day
+          : 1),
+    );
+    final summary = await DailySummaryService(
+      logger: activity,
+      gateway: gateway,
+      db: db,
+    ).buildAndStore(target);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(summary == null
+            ? '这一天没有活动记录，未生成'
+            : '已生成 ${target.year}-${target.month}-${target.day} 日总结'),
+      ),
+    );
+    await _load();
+  }
+
   void _openEditor({String? entryId}) {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => entryId == null
@@ -87,6 +119,11 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     return PageScaffold(
       title: '日记',
       actions: <Widget>[
+        SketchButton(
+          label: '生成 AI 日记',
+          dense: true,
+          onPressed: _generateAiDiary,
+        ),
         SketchButton(
           label: '补写',
           tone: SketchTone.primary,
