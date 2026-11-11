@@ -4,6 +4,26 @@
 
 ---
 
+## v0.70 · 2026-11-11
+
+### M5：阅读器高亮与选区判定接线（已验证）
+
+- `ArchiveReaderPage` 增加「粘贴一段正文，问 AI」输入框与判定按钮，
+  用 `canAskAiAboutSelection` 拦截太短/太长选区、提示进入 L1 逐次授权；
+  底部显示 `mergeHighlights` 合并后的高亮段数
+- 测试：`archive_reader_page_test.dart` +1 条 → 全量 **662 → 663**
+
+**边界**：真实划词手势、AI 问答请求、L1 授权弹窗仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**663/663 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§5）、14（Day 65）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.69 · 2026-11-11
 
 ### M4：归档维护计划器（已验证）

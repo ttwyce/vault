@@ -82,4 +82,22 @@ void main() {
     expect(find.textContaining('原站已失效'), findsWidgets);
     expect(find.textContaining('Wayback'), findsWidgets);
   });
+
+  testWidgets('问 AI 选区判定与高亮合并计数接线', (WidgetTester tester) async {
+    await pumpReader(tester, archiveMeta: meta(changed: true));
+    expect(find.textContaining('高亮合并'), findsOneWidget);
+    expect(find.text('问 AI'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'x');
+    await tester.tap(find.text('问 AI'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('选区太短'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, '这段正文足够长');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('问 AI'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('选区长度合规'), findsOneWidget);
+  });
 }

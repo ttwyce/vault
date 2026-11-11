@@ -38,6 +38,14 @@ class ArchiveReaderPage extends StatefulWidget {
 
 class _ArchiveReaderPageState extends State<ArchiveReaderPage> {
   ReaderMode _mode = ReaderMode.clean;
+  final TextEditingController _selection = TextEditingController();
+  String? _askHint;
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
+  }
 
   static String _formatDate(int millis) {
     final date = DateTime.fromMillisecondsSinceEpoch(millis);
@@ -93,6 +101,38 @@ class _ArchiveReaderPageState extends State<ArchiveReaderPage> {
                 child: _bodyFor(p, availability),
               ),
             ),
+          ),
+          const SizedBox(height: SketchSpace.sm),
+          TextField(
+            controller: _selection,
+            decoration: const InputDecoration(
+              hintText: '粘贴一段正文，问 AI…',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: SketchSpace.xs),
+          Row(
+            children: <Widget>[
+              SketchButton(
+                label: '问 AI',
+                dense: true,
+                onPressed: () {
+                  final ok = canAskAiAboutSelection(_selection.text);
+                  setState(() => _askHint = ok
+                      ? '选区长度合规，可进入 L1 逐次授权流程'
+                      : '选区太短/太长，不能问 AI');
+                },
+              ),
+              const SizedBox(width: SketchSpace.sm),
+              Expanded(
+                child: Text(
+                  _askHint ??
+                      '高亮合并 ${mergeHighlights(widget.meta.highlights).length} 段',
+                  style: TextStyle(fontSize: 10.5, color: p.muted),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: SketchSpace.sm),
           Text(status, style: TextStyle(fontSize: 10.5, color: p.muted)),
