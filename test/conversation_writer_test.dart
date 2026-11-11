@@ -9,7 +9,9 @@ import 'package:vault/core/sync/hlc.dart';
 import 'package:vault/data/chat/conversation_models.dart';
 import 'package:vault/data/chat/conversation_repository.dart';
 import 'package:vault/data/chat/conversation_writer.dart';
+import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/features/chat/chat_page.dart';
+import 'package:vault/data/vault/credential_repository.dart';
 
 import 'support/test_harness.dart';
 
@@ -106,5 +108,46 @@ void main() {
     expect(messages, hasLength(1));
     expect(messages.single.content, '测试第一条消息');
     expect(find.text('测试第一条消息'), findsOneWidget);
+  });
+
+  testWidgets('聊天框夹带已存密码明文时拒绝发送，正常消息仍可发',
+      (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-guard'),
+        );
+    await repo.setPassword('cred-guard', 'UniquePass!2026');
+
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: const MaterialApp(home: Scaffold(body: ChatPage())),
+    ));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      '我的密码是 UniquePass!2026 请记住',
+    );
+    await tester.tap(find.text('发送'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('已阻止发送'), findsOneWidget);
+    expect(await app.db.select(app.db.messages).get(), isEmpty);
+
+    // 等 SnackBar 退场，避免它改变 widget 树导致 tap 落到别处。
+    await tester.pump(const Duration(seconds: 2));
+    await tester.enterText(
+      find.byType(TextField).last,
+      '今天整理同步笔记',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await app.db.select(app.db.messages).get(), hasLength(1));
   });
 }

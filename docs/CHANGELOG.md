@@ -4,6 +4,30 @@
 
 ---
 
+## v0.58 · 2026-11-11
+
+### M7：聊天输入框接密码绝对边界（已验证）
+
+- `CredentialRepository.knownSecretValues()`：在内存里解密已存的密码 /
+  TOTP 密钥 / `secret:true` 自定义字段值，只交给 Guard 做「是否夹带」判定，
+  绝不写日志、报告或工具返回值
+- `ChatPage._send()` 在**写库之前**用 `CredentialGuard.containsSecret`
+  拦截：用户把已存密码明文贴进聊天框时 SnackBar 明确拒绝，
+  绝不让它进任何模型上下文；正常消息照常落库
+- 测试：`conversation_writer_test.dart` +1 条（拦截 + 正常消息可发）
+  → 全量 **625 → 626**
+
+**边界**：只拦「本机已存的敏感值」，不拦用户新输入的任意密码；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**626/626 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 53）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.57 · 2026-11-11
 
 ### M5：模型下载器与索引重建判定层（已验证）

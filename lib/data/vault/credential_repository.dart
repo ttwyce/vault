@@ -47,6 +47,39 @@ class CredentialRepository {
   final VaultDatabase db;
   final WriteGateway gateway;
 
+  /// 本机已知的敏感值（密码 / TOTP 密钥 / secret 自定义字段的值）。
+  ///
+  /// 解密只在内存里发生；返回值只给 [CredentialGuard.containsSecret] 做
+  /// 「是否夹带」判定，绝不写日志、报告或工具返回值。
+  Future<Set<String>> knownSecretValues() async {
+    final rows = await db.select(db.credentials).get();
+    final out = <String>{};
+    for (final row in rows) {
+      for (final field in const <String>[
+        'password',
+        'totp_secret',
+      ]) {
+        final value = await _openField(
+          row,
+          field,
+          field == 'password' ? row.password : row.totpSecret,
+        );
+        if (value.length >= 4) out.add(value);
+      }
+      try {
+        final custom = CustomFields.fromJsonString(
+          await _openField(row, 'custom_fields', row.customFields),
+        );
+        for (final item in custom.fields) {
+          if (item.secret && item.value.length >= 4) out.add(item.value);
+        }
+      } on Object {
+        // 坏字段不影响其它值的 Guard 判定。
+      }
+    }
+    return Set<String>.unmodifiable(out);
+  }
+
   /// 解出密码明文（只在内存里用于强度估算，绝不写日志 / 报告）。
   Future<String> _passwordOf(CredentialRow row) async {
     final raw = row.password;

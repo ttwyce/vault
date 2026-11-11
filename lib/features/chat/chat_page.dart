@@ -13,6 +13,8 @@ import '../../core/identity/uuid_v7.dart';
 import '../../core/sync/hlc.dart';
 import '../../data/chat/conversation_models.dart';
 import '../../data/chat/conversation_repository.dart';
+import '../../data/vault/credential_models.dart';
+import '../../data/vault/credential_repository_provider.dart';
 import '../../data/chat/conversation_repository_provider.dart';
 import '../../data/chat/conversation_writer.dart';
 import 'widgets/conversation_drawer.dart';
@@ -90,6 +92,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Future<void> _send(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    // docs/07 §4.3 密码绝对边界：用户把已存密码 / TOTP / secret 字段的
+    // 明文贴进聊天框时，在写库之前就拒绝，绝不让它进任何模型上下文。
+    final secrets = await ref
+        .read(credentialRepositoryProvider)
+        .knownSecretValues();
+    if (CredentialGuard.containsSecret(trimmed, secrets)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('消息里含有本机已存的密码或密钥，已阻止发送'),
+          ),
+        );
+      }
+      return;
+    }
     final writer = ConversationWriter(
       db: ref.read(vaultDatabaseProvider),
       clock: HlcClock(node: 'devA', now: () => DateTime.now().millisecondsSinceEpoch),
