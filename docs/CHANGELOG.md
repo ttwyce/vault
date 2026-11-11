@@ -4,6 +4,29 @@
 
 ---
 
+## v0.77 · 2026-11-11
+
+### M7：双模型路由四分支（已验证）
+
+- `decideModelRoute`（docs/07 §2.2）把占位的「永远 onDevice」改成
+  可验证决策：L0 任务强制端侧且授权不能改；检索/笔记摘要用户可选但
+  未逐次授权仍端侧；长文/复杂推理云端需 L2 授权，未授权降级端侧；
+  端侧模型未就绪时明确降级纯 FTS 不出设备
+- `routeModelForTask` 保留为兼容入口；新增 `ModelRouteDecision`
+  带 reason / needsAuthorization
+- `DiagnosticsPage` 展示路由策略
+- 测试：`agent_policy_test.dart` +1 条 → 全量 **678 → 679**
+
+**边界**：真实模型调用与云端 adapter 仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**679/679 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 72）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.76 · 2026-11-11
 
 ### M7：L2/L1 逐次授权弹窗（已验证）

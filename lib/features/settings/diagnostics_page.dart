@@ -234,6 +234,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   ).allConfigured ? '已配置' : '未配置'} · '
                   '切换模型全量重建每批 20 条、cursor 可续\n'
                   '下载中/校验中检索降级纯 FTS\n'
+                  '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
+                  '云端任务未授权降级端侧\n'
                   'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮、'
                   '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
                   'MCP 适配器骨架已就位（transport 未连接）',

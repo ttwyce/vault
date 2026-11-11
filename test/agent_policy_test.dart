@@ -198,4 +198,49 @@ void main() {
       expect(truncated, contains('已截断'));
     });
   });
+
+  test('双模型路由四分支：强制端侧 / 可选 / L2 授权 / 未就绪降级', () {
+    const forced = <String>[
+      'credential', 'diary', 'daily_summary', 'totp', 'ai_diary', 'chat',
+    ];
+    for (final task in forced) {
+      final decision = decideModelRoute(
+        task,
+        userChoseCloud: true,
+        privacyAuthorized: true,
+      );
+      expect(decision.route, ModelRoute.onDevice,
+          reason: '$task 不能因授权改走云端');
+      expect(decision.needsAuthorization, isFalse);
+    }
+
+    expect(
+      decideModelRoute('long_doc_analysis').route,
+      ModelRoute.onDevice,
+      reason: '未授权降级端侧',
+    );
+    expect(decideModelRoute('long_doc_analysis').needsAuthorization, isTrue);
+    expect(
+      decideModelRoute('long_doc_analysis', privacyAuthorized: true).route,
+      ModelRoute.cloud,
+    );
+
+    expect(
+      decideModelRoute('search', userChoseCloud: true).route,
+      ModelRoute.onDevice,
+      reason: '用户选云端但未授权，仍端侧',
+    );
+    expect(
+      decideModelRoute(
+        'search',
+        userChoseCloud: true,
+        privacyAuthorized: true,
+      ).route,
+      ModelRoute.cloud,
+    );
+    expect(
+      decideModelRoute('search', onDeviceModelReady: false).reason,
+      contains('纯 FTS'),
+    );
+  });
 }

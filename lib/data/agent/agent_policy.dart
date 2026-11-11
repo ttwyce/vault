@@ -225,14 +225,94 @@ class AgentToolRegistry {
 /// 双模型路由（docs/07 §2.2）：密码 / 日记 / 日总结 / TOTP 强制端侧。
 enum ModelRoute { onDevice, cloud }
 
-ModelRoute routeModelForTask(String task) {
-  const forcedOnDevice = <String>{
-    'credential',
-    'diary',
-    'daily_summary',
-    'totp',
-    'ai_diary',
-  };
-  if (forcedOnDevice.contains(task)) return ModelRoute.onDevice;
-  return ModelRoute.onDevice; // 默认端侧；云端仅在用户授权后由上层覆盖
+/// docs/07 §2.2 的三类任务。
+const Set<String> kForcedOnDeviceTasks = <String>{
+  'credential',
+  'diary',
+  'daily_summary',
+  'totp',
+  'ai_diary',
+  'chat',
+};
+
+const Set<String> kUserChoiceTasks = <String>{
+  'search',
+  'summarize_note',
+};
+
+const Set<String> kCloudOnlyTasks = <String>{
+  'long_doc_analysis',
+  'complex_reasoning',
+};
+
+/// 路由决策附加信息：为什么走这条路、需要什么授权。
+class ModelRouteDecision {
+  const ModelRouteDecision({
+    required this.route,
+    required this.reason,
+    required this.needsAuthorization,
+  });
+
+  final ModelRoute route;
+  final String reason;
+  final bool needsAuthorization;
+}
+
+ModelRoute routeModelForTask(String task) =>
+    decideModelRoute(task).route;
+
+/// 双模型路由完整判定（docs/07 §2.2）。
+///
+/// - 密码/日记/日总结/TOTP/AI 日记/chat：**强制端侧 L0**，任何授权都不能改
+/// - 检索/笔记摘要：用户可选；未选择或端侧模型未就绪 → 端侧
+/// - 长文分析/复杂推理：云端需 L2 逐次授权；未授权一律降级端侧，
+///   绝不因为「任务想要云端」就偷偷发数据
+ModelRouteDecision decideModelRoute(
+  String task, {
+  bool userChoseCloud = false,
+  bool onDeviceModelReady = true,
+  bool privacyAuthorized = false,
+}) {
+  if (kForcedOnDeviceTasks.contains(task)) {
+    return const ModelRouteDecision(
+      route: ModelRoute.onDevice,
+      reason: 'L0 数据强制端侧，不随配置改变',
+      needsAuthorization: false,
+    );
+  }
+  if (kCloudOnlyTasks.contains(task)) {
+    if (!privacyAuthorized) {
+      return const ModelRouteDecision(
+        route: ModelRoute.onDevice,
+        reason: '云端任务未获 L2 逐次授权，降级端侧',
+        needsAuthorization: true,
+      );
+    }
+    return const ModelRouteDecision(
+      route: ModelRoute.cloud,
+      reason: '已获 L2 逐次授权，允许本次云端调用',
+      needsAuthorization: true,
+    );
+  }
+  if (kUserChoiceTasks.contains(task) &&
+      userChoseCloud &&
+      privacyAuthorized) {
+    return const ModelRouteDecision(
+      route: ModelRoute.cloud,
+      reason: '用户选择云端且已逐次授权',
+      needsAuthorization: true,
+    );
+  }
+  if (!onDeviceModelReady) {
+    return const ModelRouteDecision(
+      route: ModelRoute.onDevice,
+      reason: '端侧模型未就绪，检索降级为纯 FTS（不出设备）',
+      needsAuthorization: false,
+    );
+  }
+  return const ModelRouteDecision(
+    route: ModelRoute.onDevice,
+    reason: '默认端侧；未选择云端或未授权',
+    needsAuthorization: false,
+  );
 }
