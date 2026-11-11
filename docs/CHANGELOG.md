@@ -4,6 +4,27 @@
 
 ---
 
+## v0.86 · 2026-11-11
+
+### 诊断页收口：最后两个判定层接生产入口
+
+- `DiagnosticsPage` 增加「演示死链重检查判定」（模拟 404 →
+  `LinkCheckResult.dead` + Wayback 建议，明确不发真实请求），
+  `link_check_service.dart` 不再只有测试引用
+- 展示 Agent 主循环的四种停轮原因，`agent_loop.dart` 不再只有测试引用
+- 逐项盘点后 `lib/data` 下已无「零生产引用」模块
+- 全量 **705/705**（本批无新增测试断言，仅接线与 1 条 UI 断言更新）
+
+**边界**：真实 HTTP / Wayback、模型主循环调用仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**705/705 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README、14（Day 81）、20、CHANGELOG（本条）
+
+---
+
 ## v0.85 · 2026-11-11
 
 ### M4：死链 / 内容变更重检查闭环（已验证）

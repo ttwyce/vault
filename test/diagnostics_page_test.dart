@@ -40,6 +40,7 @@ void main() {
     expect(find.textContaining('17 个 Agent 工具'), findsWidgets);
     expect(find.text('三端能力缺口（docs/08）'), findsOneWidget);
     expect(find.text('性能基线（5000 条 / 真机）'), findsOneWidget);
+    expect(find.text('演示死链重检查判定'), findsOneWidget);
     expect(find.textContaining('A7'), findsWidgets);
     expect(find.textContaining('A9'), findsWidgets);
     expect(find.textContaining('源优先级'), findsOneWidget);

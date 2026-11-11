@@ -17,11 +17,13 @@ import '../../data/audit/sync_regression_matrix.dart';
 import '../../data/activity/activity_logger.dart';
 import '../../data/agent/agent_policy.dart'
     show AgentLoopLimits, PolicyAction, PolicyDecision;
+import '../../data/agent/agent_loop.dart' show LoopStop;
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
 import '../../data/agent/rollup_service.dart';
 import '../../data/archive/archive_job_queue.dart';
+import '../../data/archive/link_check_service.dart';
 import '../../data/archive/archive_maintenance.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/entry/entry_repository.dart';
@@ -86,6 +88,26 @@ class DiagnosticsPage extends ConsumerWidget {
           SketchSpace.xxl,
         ),
         children: <Widget>[
+          SketchButton(
+            label: '演示死链重检查判定',
+            dense: true,
+            onPressed: () {
+              final outcome = decideLinkCheck(
+                httpStatus: 404,
+                retries: 0,
+                previousSimhash: null,
+                currentSimhash: null,
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('模拟 404 → ${outcome.result.name} · '
+                      'Wayback ${outcome.tryWayback ? '建议' : '不需要'}'
+                      '（不发真实请求）'),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: SketchSpace.sm),
           SketchButton(
             label: '预览 L1 逐次授权',
             dense: true,
@@ -240,7 +262,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   '（${VectorDecision.discard.name}）\n'
                   '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
                   '云端任务未授权降级端侧\n'
-                  'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮、'
+                  'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮 / '
+                  '${LoopStop.values.length} 种停轮原因、'
                   '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
                   'MCP 适配器骨架已就位（transport 未连接）',
                   style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
