@@ -4,6 +4,30 @@
 
 ---
 
+## v0.91 · 2026-11-11
+
+### M8：导出与备份页（已验证）
+
+- 新增 `ExportBackupPage`（docs/03 §10）：明文导出二次确认状态机
+  idle→warned→confirmed→done、导入无冲突合并判定
+  insert/skip/conflictCopy、`/backup/` 隔离与 7 天排期展示
+- 设置中心加「导出与备份」入口；`advancePlaintextExport` /
+  `decideImport` / `isBackupPath` 不再只有测试引用
+- 页面**不打包、不写文件、不联网**，明确真实加密 zip 与 WebDAV
+  上传仍属平台层
+- 测试：`export_backup_page_test.dart` 2 条 → 全量 **709 → 711**
+
+**边界**：真实 zip / 密码保护 / Markdown 文件夹输出 / 自动备份上传仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**711/711 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 86）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.90 · 2026-11-11
 
 ### M6：智能分组 chips 接列表筛选（已验证）

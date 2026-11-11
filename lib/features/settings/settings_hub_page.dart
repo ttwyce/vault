@@ -13,6 +13,7 @@ import '../quick/quick_capture_page.dart';
 import '../search/search_page.dart';
 import '../settings/about_page.dart';
 import '../settings/diagnostics_page.dart';
+import '../settings/export_backup_page.dart';
 import '../settings/fonts_page.dart';
 import '../trash/trash_page.dart';
 
@@ -81,6 +82,12 @@ class SettingsHubPage extends ConsumerWidget {
               title: '关于与隐私',
               subtitle: '端侧加密、零遥测、开源许可与恢复码说明',
               onTap: () => _push(context, const AboutPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.archive,
+              title: '导出与备份',
+              subtitle: '明文导出二次确认、导入合并判定、/backup/ 隔离与排期',
+              onTap: () => _push(context, const ExportBackupPage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,
