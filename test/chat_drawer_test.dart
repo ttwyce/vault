@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/vault_database.dart';
+import 'package:vault/data/search/cjk_segmenter.dart';
 import 'package:vault/features/chat/chat_page.dart';
 import 'package:vault/features/chat/widgets/conversation_drawer.dart';
 
@@ -86,5 +87,48 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(ConversationDrawer), findsNothing);
+  });
+
+  testWidgets('抽屉搜索显示消息分区并可点开会话',
+      (WidgetTester tester) async {
+    await app.db.into(app.db.conversations).insert(
+          ConversationsCompanion.insert(
+            id: 'conv-search',
+            hlc: '0000000000000001:0000:devA',
+            title: const Value<String?>('WebDAV 项目'),
+            createdAt: const Value<int?>(1731052800000),
+            updatedAt: const Value<int?>(1731052800000),
+          ),
+        );
+    await app.db.into(app.db.messages).insert(
+          MessagesCompanion.insert(
+            id: 'msg-1',
+            conversationId: 'conv-search',
+            role: 1,
+            content: const Value<String?>('整理增量同步的限流策略'),
+            createdAt: const Value<int?>(1731052800000),
+            hlc: '0000000000000001:0000:devA',
+          ),
+        );
+    await app.db.indexConversation(
+      conversationId: 'conv-search',
+      title: 'WebDAV 项目',
+      body: CjkSegmenter.indexText('整理增量同步的限流策略'),
+    );
+
+    await pumpChat(tester);
+    await tester.tap(find.byTooltip('对话列表'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.enterText(find.byType(TextField).last, '限流');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    final direct = await app.db.searchConversationIds(
+      CjkSegmenter.matchQuery('限流'),
+    );
+    expect(direct, isNotEmpty, reason: 'FTS 应命中');
+    expect(find.text('消息'), findsOneWidget);
+    expect(find.textContaining('限流策略'), findsOneWidget);
   });
 }

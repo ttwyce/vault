@@ -196,6 +196,44 @@ class VaultDatabase extends _$VaultDatabase {
   ///
   /// 返回按相关度排序的 entry id。`readsFrom: {entries}` 让 drift 在
   /// entry 表变化时自动失效缓存（FTS 是虚拟表，无法参与 readsFrom）。
+  /// 会话 FTS：写入 / 重建单条会话的标题与消息正文。
+  Future<void> indexConversation({
+    required String conversationId,
+    required String title,
+    required String body,
+  }) async {
+    await customStatement(
+      'DELETE FROM $conversationFtsTable WHERE conversation_id = ?;',
+      <Object?>[conversationId],
+    );
+    await customStatement(
+      'INSERT INTO $conversationFtsTable(conversation_id, title, body) '
+      'VALUES (?, ?, ?);',
+      <Object?>[conversationId, title, body],
+    );
+  }
+
+  /// 会话 FTS 检索（保持相关度顺序）。
+  Future<List<String>> searchConversationIds(
+    String matchQuery, {
+    int limit = 50,
+  }) async {
+    final query = matchQuery.trim();
+    if (query.isEmpty) return const <String>[];
+    final rows = await customSelect(
+      'SELECT conversation_id FROM $conversationFtsTable '
+      'WHERE $conversationFtsTable MATCH ? ORDER BY rank LIMIT ?;',
+      variables: <Variable<Object>>[
+        Variable<String>(query),
+        Variable<int>(limit),
+      ],
+      readsFrom: <ResultSetImplementation<dynamic, dynamic>>{conversations},
+    ).get();
+    return rows
+        .map((QueryRow row) => row.read<String>('conversation_id'))
+        .toList(growable: false);
+  }
+
   Future<List<String>> searchEntryIds(
     String matchQuery, {
     int limit = 50,

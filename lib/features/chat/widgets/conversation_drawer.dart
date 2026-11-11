@@ -6,6 +6,7 @@ import '../../../app/theme/sketch_theme.dart';
 import '../../../core/widgets/sketch_controls.dart';
 import '../../../core/widgets/sketch_frame.dart';
 import '../../../data/chat/conversation_models.dart';
+import '../../../data/chat/conversation_repository.dart';
 import '../../../data/chat/conversation_repository_provider.dart';
 
 /// 对话抽屉（docs/12 §3 / §5）。
@@ -35,6 +36,7 @@ class _ConversationDrawerState
     extends ConsumerState<ConversationDrawer> {
   String _query = '';
   late Future<List<ConversationGroup>> _groups;
+  Future<ConversationSearchResult>? _search;
 
   @override
   void didChangeDependencies() {
@@ -84,8 +86,14 @@ class _ConversationDrawerState
                 isDense: true,
                 border: OutlineInputBorder(),
               ),
-              onChanged: (String value) =>
-                  setState(() => _query = value.trim()),
+              onChanged: (String value) => setState(() {
+                    _query = value.trim();
+                    _search = _query.isEmpty
+                        ? null
+                        : ref
+                            .read(conversationRepositoryProvider)
+                            .search(_query);
+                  }),
             ),
             const SizedBox(height: SketchSpace.md),
             Expanded(
@@ -110,7 +118,7 @@ class _ConversationDrawerState
                       ),
                   ].where((ConversationGroup g) =>
                       g.conversations.isNotEmpty).toList();
-                  if (visible.isEmpty) {
+                  if (visible.isEmpty && _search == null) {
                     return Text(
                       snapshot.connectionState == ConnectionState.waiting
                           ? '加载中…'
@@ -120,6 +128,55 @@ class _ConversationDrawerState
                   }
                   return ListView(
                     children: <Widget>[
+                      if (_search != null)
+                        FutureBuilder<ConversationSearchResult>(
+                          future: _search,
+                          builder: (
+                            BuildContext context,
+                            AsyncSnapshot<ConversationSearchResult> searchSnap,
+                          ) {
+                            final hits = searchSnap.data?.messages ??
+                                const <ConversationMessageHit>[];
+                            if (hits.isEmpty) return const SizedBox.shrink();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: SketchSpace.sm,
+                                    bottom: SketchSpace.xs,
+                                  ),
+                                  child: Text(
+                                    '消息',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      color: p.muted,
+                                    ),
+                                  ),
+                                ),
+                                for (final hit in hits)
+                                  GestureDetector(
+                                    onTap: () =>
+                                        widget.onSelect(hit.conversationId),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: SketchSpace.xs,
+                                      ),
+                                      child: Text(
+                                        hit.excerpt,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: p.ink,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
                       for (final group in visible) ...<Widget>[
                         Padding(
                           padding: const EdgeInsets.only(

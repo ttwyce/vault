@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import '../../core/identity/uuid_v7.dart';
 import '../../core/sync/hlc.dart';
 import '../db/vault_database.dart';
+import '../search/cjk_segmenter.dart';
 import 'conversation_models.dart';
 
 /// 会话消息的写入口（docs/12 §6 / T25 / T26）。
@@ -83,6 +84,22 @@ class ConversationWriter {
               hlc: hlc,
             ),
           );
+      // 会话 FTS 与消息 append-only 在同事务里重建：要么一起成功，
+      // 要么都不落，避免出现「消息有了但搜不到」的中间态。
+      final all = await (db.select(db.messages)
+            ..where((t) => t.conversationId.equals(targetId)))
+          .get();
+      final conversationRow = await (db.select(db.conversations)
+            ..where((t) => t.id.equals(targetId)))
+          .getSingleOrNull();
+      final title = conversationRow?.title ?? content;
+      await db.indexConversation(
+        conversationId: targetId,
+        title: CjkSegmenter.indexText(title),
+        body: CjkSegmenter.indexText(
+          all.map((row) => row.content ?? '').join(' '),
+        ),
+      );
     });
 
     return ConversationDraftState(

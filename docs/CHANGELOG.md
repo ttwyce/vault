@@ -4,6 +4,30 @@
 
 ---
 
+## v0.59 · 2026-11-11
+
+### M7：会话 FTS 索引与结果分区展示（已验证）
+
+- `VaultDatabase.indexConversation/searchConversationIds`：读写已有
+  `conversation_fts` 表（此前只有建表语句）
+- `ConversationWriter.append` 在**同一事务**里把该会话全部消息重新分词
+  写进 FTS，避免「消息有了但搜不到」的中间态
+- `ConversationRepository.search()` 返回「会话 / 消息」两个分区；
+  `ConversationDrawer` 搜索时显示消息命中分区，可点开原会话
+  （标题不含关键词也能看到消息分区）
+- 测试：`conversation_writer_test.dart` +1 条（中文 FTS + 分区）、
+  `chat_drawer_test.dart` +1 条（抽屉分区 UI）→ 全量 **626 → 628**
+
+**边界**：会话/消息仍不参与同步；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**628/628 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 54）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.58 · 2026-11-11
 
 ### M7：聊天输入框接密码绝对边界（已验证）

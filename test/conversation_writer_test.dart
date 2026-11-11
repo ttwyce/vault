@@ -150,4 +150,39 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(await app.db.select(app.db.messages).get(), hasLength(1));
   });
+
+  test('会话 FTS：中文消息可搜到，且分会话/消息两区', () async {
+    var state = await writer.append(
+      draft: ConversationDraftState.initial.startDraft(),
+      role: 1,
+      content: '把增量同步的限流策略整理一下',
+    );
+    state = await writer.append(
+      draft: state,
+      role: 2,
+      content: '已经记录了退避的三档策略',
+    );
+    await writer.append(
+      draft: ConversationDraftState.initial.startDraft(),
+      role: 1,
+      content: '今天天气不错',
+    );
+
+    final result = await ConversationRepository(app.db).search('限流');
+    expect(result.conversations, hasLength(1));
+    expect(result.conversations.single.id, state.currentId);
+    expect(result.messages, hasLength(1));
+    expect(result.messages.single.excerpt, contains('限流'));
+
+    expect(
+      (await ConversationRepository(app.db).search('天气'))
+          .conversations,
+      hasLength(1),
+    );
+    expect(
+      (await ConversationRepository(app.db).search('不存在的词'))
+          .conversations,
+      isEmpty,
+    );
+  });
 }
