@@ -4,6 +4,30 @@
 
 ---
 
+## v0.74 · 2026-11-11
+
+### M7：工具集补齐到 17 个（已验证）
+
+- `buildDefaultToolRegistry` 从 12 扩到 17：新增 `list_activity` /
+  `get_stats` / `open_entry` / `update_entry` / `archive_url`，
+  覆盖 docs/07 §3.1 中所有可纯本地实现的能力
+- `AgentToolDeps.activity` 可选注入活动仓库；`update_entry`、
+  `archive_url` 为 confirm 级，先出内容预览再写库；非法 URL 明确拒绝
+- `DiagnosticsPage` 工具数改为 17
+- 测试：`agent_tools_test.dart` +1 条（活动/统计/深链/更新/归档）
+  → 全量 **671 → 672**
+
+**边界**：`web_search` / `fetch_page` 需要 BYOK 搜索 API 与域名白名单，
+不做；`add_tags` 与云端模型仍缺。M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**672/672 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 69）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.73 · 2026-11-11
 
 ### M7：工具集补齐到 12 个（已验证）

@@ -5,6 +5,8 @@
 /// 不联网、不调模型、不接 MCP；写类工具只提供确认预览，不擅自执行。
 library;
 
+import '../activity/activity_logger.dart';
+import '../archive/archive_meta.dart';
 import '../db/tables/entry_tables.dart';
 import '../entry/entry_repository.dart';
 import '../taxonomy/taxonomy_repository.dart';
@@ -20,6 +22,7 @@ class AgentToolDeps {
     required this.credentials,
     required this.gateway,
     this.taxonomy,
+    this.activity,
   });
 
   final EntryRepository entries;
@@ -28,6 +31,9 @@ class AgentToolDeps {
 
   /// 分类 / 标签 / 回收站只读仓库（可选，缺省时相关工具返回不可用）。
   final TaxonomyRepository? taxonomy;
+
+  /// 活动埋点（可选，供 list_activity / get_stats 使用）。
+  final ActivityLogger? activity;
 }
 
 /// 统一调用：先过闸门，再执行。返回可直接给模型的结果文本。
@@ -63,7 +69,12 @@ AgentToolRegistry buildDefaultToolRegistry(AgentToolDeps deps) =>
       ..register(_UncategorizedTool(deps))
       ..register(_DiaryForMonthTool(deps))
       ..register(_EntryHistoryTool(deps))
-      ..register(_CredentialGroupsTool(deps));
+      ..register(_CredentialGroupsTool(deps))
+      ..register(_ListActivityTool(deps))
+      ..register(_GetStatsTool(deps))
+      ..register(_OpenEntryTool(deps))
+      ..register(_UpdateEntryTool(deps))
+      ..register(_ArchiveUrlTool(deps));
 
 /// credential_health：只返回聚合统计（docs/07 §4.3）。
 class _CredentialHealthTool extends _BaseTool {
@@ -381,5 +392,150 @@ class _CredentialGroupsTool extends _ReadOnlyTool {
       for (final bucket in buckets)
         '${bucket.label} ${bucket.ids.length}',
     ].join(' · '));
+  }
+}
+
+
+class _ListActivityTool extends _ReadOnlyTool {
+  const _ListActivityTool(super.deps);
+
+  @override
+  String get name => 'list_activity';
+
+  @override
+  String get description => '列出某天的本地活动时间线（不参与同步）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final activity = deps.activity;
+    if (activity == null) {
+      return const ToolResult('活动仓库未装配', isError: true);
+    }
+    final dateStr = (args['date'] as String?) ?? '';
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return const ToolResult('缺少合法 date', isError: true);
+    final rows = await activity.timelineForDay(date);
+    return ToolResult(<String>[
+      '$dateStr 共 ${rows.length} 条活动：',
+      for (final row in rows.take(10)) '- ${row.kind} @ ${row.ts}',
+    ].join('\n'));
+  }
+}
+
+class _GetStatsTool extends _ReadOnlyTool {
+  const _GetStatsTool(super.deps);
+
+  @override
+  String get name => 'get_stats';
+
+  @override
+  String get description => '统计某天的活动事件数（事实，不含洞察）';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final activity = deps.activity;
+    if (activity == null) {
+      return const ToolResult('活动仓库未装配', isError: true);
+    }
+    final dateStr = (args['date'] as String?) ?? '';
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return const ToolResult('缺少合法 date', isError: true);
+    final summary = await activity.summarizeDay(date);
+    return ToolResult('${summary.headline} · 共 ${summary.totalEvents} 次活动');
+  }
+}
+
+class _OpenEntryTool extends _ReadOnlyTool {
+  const _OpenEntryTool(super.deps);
+
+  @override
+  String get name => 'open_entry';
+
+  @override
+  String get description => '返回条目深链，UI 可渲染成卡片';
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final id = (args['id'] as String?) ?? '';
+    final row = id.isEmpty ? null : await deps.entries.getRow(id);
+    if (row == null || row.deleted != 0) {
+      return const ToolResult('条目不存在', isError: true);
+    }
+    return ToolResult('vault://entry/$id · ${row.title}');
+  }
+}
+
+/// confirm：更新条目（保留 meta，rev 递增）。
+class _UpdateEntryTool extends _BaseTool {
+  const _UpdateEntryTool(this.deps);
+
+  final AgentToolDeps deps;
+
+  @override
+  String get name => 'update_entry';
+
+  @override
+  String get description => '修改已有条目的标题 / 正文';
+
+  @override
+  RiskLevel get risk => RiskLevel.confirm;
+
+  @override
+  PrivacyLevel get maxPrivacy => PrivacyLevel.l1;
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final id = (args['id'] as String?) ?? '';
+    final row = id.isEmpty ? null : await deps.entries.getRow(id);
+    if (row == null) return const ToolResult('条目不存在', isError: true);
+    final result = await deps.gateway.writeEntry(EntryWrite.update(
+      id: id,
+      title: (args['title'] as String?) ?? row.title,
+      body: (args['body'] as String?) ?? row.body,
+      meta: row.meta,
+    ));
+    return ToolResult('已更新 $id 到 rev ${result.snapshot.rev}');
+  }
+}
+
+/// confirm：归档网址（只建 L1 元数据层，真实抓取排任务）。
+class _ArchiveUrlTool extends _BaseTool {
+  const _ArchiveUrlTool(this.deps);
+
+  final AgentToolDeps deps;
+
+  @override
+  String get name => 'archive_url';
+
+  @override
+  String get description => '归档一个 URL（默认仅元数据层）';
+
+  @override
+  RiskLevel get risk => RiskLevel.confirm;
+
+  @override
+  PrivacyLevel get maxPrivacy => PrivacyLevel.l1;
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final url = (args['url'] as String?)?.trim() ?? '';
+    if (url.isEmpty) return const ToolResult('缺少 url', isError: true);
+    final ArchiveMeta meta;
+    try {
+      meta = ArchiveMeta(
+        url: url,
+        site: ArchiveMeta.siteOf(url),
+        status: ArchiveStatus.metadata,
+        policy: RecheckPolicy.monthly,
+      );
+    } on FormatException catch (e) {
+      return ToolResult(e.message, isError: true);
+    }
+    final result = await deps.gateway.writeEntry(EntryWrite.create(
+      kind: EntryKind.bookmark,
+      title: url,
+      meta: meta.toJsonString(),
+    ));
+    return ToolResult('已排归档任务 ${result.snapshot.id}：$url');
   }
 }

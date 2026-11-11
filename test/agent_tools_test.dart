@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vault/data/activity/activity_logger.dart';
 import 'package:vault/data/agent/agent_policy.dart';
 import 'package:vault/data/agent/agent_tools.dart';
 import 'package:vault/data/db/tables/entry_tables.dart';
@@ -21,6 +22,7 @@ void main() {
       entries: EntryRepository(app.db),
       credentials: CredentialRepository(app.db, app.gateway),
       gateway: app.gateway,
+      activity: ActivityLogger(db: app.db, deviceId: 'devA'),
     ));
   });
   tearDown(() async => app.dispose());
@@ -44,8 +46,8 @@ void main() {
         entryKind: entryKind,
       );
 
-  test('注册表导出 12 个工具的 schema', () {
-    expect(registry.length, 12);
+  test('注册表导出 17 个工具的 schema', () {
+    expect(registry.length, 17);
     final names = registry.schemas()
         .map((Map<String, Object?> s) => s['name'] as String)
         .toSet();
@@ -62,6 +64,11 @@ void main() {
       'diary_for_month',
       'entry_history',
       'credential_smart_groups',
+      'list_activity',
+      'get_stats',
+      'open_entry',
+      'update_entry',
+      'archive_url',
     });
   });
 
@@ -199,5 +206,57 @@ void main() {
       ctx(args: const <String, Object?>{'now_ms': 1731052800000}),
     );
     expect(groups.content, contains('已泄露'));
+  });
+
+  test('活动统计、深链、更新条目与归档 URL 工具', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'e1',
+      kind: EntryKind.note,
+      title: '原文',
+      body: '正文',
+    ));
+    final activity = await invokeTool(registry, 'list_activity',
+        ctx(args: const <String, Object?>{'date': '2026-11-08'}));
+    expect(activity.content, contains('共 0 条活动'));
+
+    final stats = await invokeTool(registry, 'get_stats',
+        ctx(args: const <String, Object?>{'date': '2026-11-08'}));
+    expect(stats.content, contains('这一天没有记录'));
+
+    final deep = await invokeTool(registry, 'open_entry',
+        ctx(args: const <String, Object?>{'id': 'e1'}));
+    expect(deep.content, contains('vault://entry/e1'));
+
+    final pending = await invokeTool(registry, 'update_entry',
+        ctx(args: const <String, Object?>{'id': 'e1', 'title': '新标题'}));
+    expect(pending.content, contains('内容预览'));
+    final updated = await invokeTool(
+      registry,
+      'update_entry',
+      ctx(args: const <String, Object?>{'id': 'e1', 'title': '新标题'},
+          confirmed: true),
+    );
+    expect(updated.content, contains('已更新'));
+
+    final archive = await invokeTool(
+      registry,
+      'archive_url',
+      ctx(
+        args: const <String, Object?>{
+          'url': 'https://example.com/post',
+        },
+        confirmed: true,
+      ),
+    );
+    expect(archive.content, contains('已排归档任务'));
+    final badUrl = await invokeTool(
+      registry,
+      'archive_url',
+      ctx(
+        args: const <String, Object?>{'url': 'ftp://x/y'},
+        confirmed: true,
+      ),
+    );
+    expect(badUrl.isError, isTrue);
   });
 }
