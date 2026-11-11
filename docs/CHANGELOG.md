@@ -4,6 +4,29 @@
 
 ---
 
+## v1.05 · 2026-11-12
+
+### M8 预备：剪藏分享意图判定层（已验证）
+
+- 新增 `share_intent_parser.dart`（docs/08 §4 / docs/05 §3）：
+  text/plain 分享里的多 URL 提取、去重、坏 scheme 拒绝、
+  纯文本无 URL 降级为想法、空白忽略
+- `shareQueueItems` 生成待处理队列项（Extension 只接收不抓取，
+  明确 30s 限制），站点键复用 `ArchiveMeta.siteOf` 口径
+- `DiagnosticsPage` 展示规则
+- 测试：`share_intent_parser_test.dart` 3 条 → 全量 **751 → 754**
+
+**边界**：真实 Intent / Share Extension / 全局热键 / 队列落库与消费
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**754/754 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 100）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.04 · 2026-11-12
 
 ### M4：归档交互动作判定层（已验证）
