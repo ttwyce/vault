@@ -30,6 +30,23 @@ class CredentialField {
   final bool secret;
   final int sort;
 
+  CredentialField copyWith({
+    String? id,
+    String? label,
+    String? value,
+    CustomFieldType? type,
+    bool? secret,
+    int? sort,
+  }) =>
+      CredentialField(
+        id: id ?? this.id,
+        label: label ?? this.label,
+        value: value ?? this.value,
+        type: type ?? this.type,
+        secret: secret ?? this.secret,
+        sort: sort ?? this.sort,
+      );
+
   Map<String, Object?> toJson() => <String, Object?>{
         'id': id,
         'label': label,

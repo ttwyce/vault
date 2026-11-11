@@ -13,6 +13,7 @@ import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
 import '../../data/vault/credential_groups.dart';
 import '../../data/vault/credential_repository_provider.dart';
+import '../../data/vault/credential_template.dart';
 import '../../data/vault/password_generator.dart';
 import '../../data/write/write_gateway.dart';
 
@@ -43,6 +44,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
 
   Future<void> _addCredential() async {
     String? generated;
+    String? templateId;
     final title = await showDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
@@ -59,6 +61,21 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                   decoration: const InputDecoration(hintText: '账号名称'),
                   onSubmitted: (String value) =>
                       Navigator.of(dialogContext).pop(value),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  hint: const Text('字段模板（可选）'),
+                  value: templateId,
+                  items: <DropdownMenuItem<String>>[
+                    for (final template in kDefaultFieldTemplates)
+                      DropdownMenuItem<String>(
+                        value: template.id,
+                        child: Text(template.label),
+                      ),
+                  ],
+                  onChanged: (String? value) =>
+                      setDialogState(() => templateId = value),
                 ),
                 const SizedBox(height: SketchSpace.sm),
                 TextButton(
@@ -113,11 +130,18 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     await db.into(db.credentials).insert(
           CredentialsCompanion.insert(id: created.snapshot.id),
         );
+    final repo = ref.read(credentialRepositoryProvider);
     if (generated != null) {
-      await ref.read(credentialRepositoryProvider).setPassword(
-            created.snapshot.id,
-            generated!,
-          );
+      await repo.setPassword(created.snapshot.id, generated!);
+    }
+    if (templateId != null) {
+      final template = templateById(templateId!);
+      if (template != null) {
+        await repo.setCustomFields(
+          created.snapshot.id,
+          template.instantiate(),
+        );
+      }
     }
     _name.clear();
     setState(() {});

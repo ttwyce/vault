@@ -4,6 +4,28 @@
 
 ---
 
+## v0.64 · 2026-11-11
+
+### M6：字段模板与自定义字段增删排序（已验证）
+
+- 新增 `credential_template.dart`：社交/开发/金融三套预置模板，
+  `instantiate()` 生成空字段；`CustomFieldsEdit` 不可变 add/remove/reorder，
+  自动续 sort、拒绝重复 id 与超过 20 个、越界 clamp；secret 掩码只给标签
+- `CredentialField.copyWith` 支持不可变编辑
+- `VaultPage` 新增弹窗可选模板 → 模板字段整体加密落库（连标签都不明文）
+- 测试：`credential_template_test.dart` 4 条、`vault_page_test.dart` +1 条
+  → 全量 **641 → 646**
+
+**边界**：无字段编辑 UI / 拖拽排序 / 图片附件；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**646/646 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 59）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.63 · 2026-11-11
 
 ### M7：滚动摘要日→周→月→年（已验证）

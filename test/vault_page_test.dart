@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
+import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/features/vault/vault_page.dart';
 
@@ -100,5 +101,34 @@ void main() {
     );
     final health = await repo.health(nowMs: 1731052800000);
     expect(health.toJson().toString(), isNot(contains(generated)));
+  });
+
+  testWidgets('新增时选字段模板，secret 字段以密文落库',
+      (WidgetTester tester) async {
+    await pumpVault(tester);
+    await tester.tap(find.text('新增'));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('开发平台').last, warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.enterText(find.byType(TextField).last, '模板账号');
+    await tester.tap(find.text('确定'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final repo = CredentialRepository(app.db, app.gateway);
+    final rows = await app.db.select(app.db.credentials).get();
+    expect(rows, hasLength(1));
+    final fields = await repo.customFields(rows.single.id);
+    expect(fields.fields, hasLength(3));
+    expect(fields.fields.map((CredentialField f) => f.id).toList(),
+        <String>['username', 'url', 'token']);
+    expect(fields.fields.last.secret, isTrue);
+    expect(rows.single.customFields, isNotNull);
+    expect(rows.single.customFields, isNot(contains('API Token')),
+        reason: '模板标签也不能以明文落库');
   });
 }
