@@ -239,33 +239,40 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
 `flutter analyze` 无告警，`flutter test --concurrency=1` **458 条全绿**
-（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7 + 超时 1 + ETag 2 + 限流/装配 3 + HTTP 兼容 2 + 重试贯通 1 + 认证/T15 2 + 响应体上限 1）。慢机器上建议继续用 `--concurrency=1`：
+（交接基线 376 + 后续各批次 82，逐批明细见 CHANGELOG）。慢机器上建议
+继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
-**构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑
+**构建约定**：只在明确要求「打包」时才执行 `flutter build`；本轮只跑
 analyze + test，**未执行任何构建**。
-编排完整性（CHANGELOG v0.22）：`sync/token` 落库、水位 schema 闸门、
-E_PATH MKCOL 重建、24h 能力缓存、`RetryScheduler` 退避驱动、
-`purgeTrashEntry` 全关联表清理、**M2 遗留的分类拖拽排序**已补完。
 
-**M2 未做**（见 [09 §4](09-里程碑、验收与风险.md)）：
-1000 条 60fps / 中文搜索 P95 性能基线（需真机，未构建）。
-L2 删除列表修复（CHANGELOG v0.21）：`SyncEngine` 此前只拉 `added + modified`，
-`diff.deleted` 从未被消费；现在按规则 7 软删进回收站，本地有未推编辑则
-编辑胜复活并推回云端，同时清掉陈旧 `sync_state`。统一调度（v0.20）：`SyncCoordinator` 把「正文同步 → taxonomy
-独立通道 → 30 天本地清理 → 90 天云端墓碑 DELETE」串成一次顶层同步；
-任一前置链路失败 / 退避 / 预算不足时**一律跳过清理**，云端 DELETE 必须带
-已确认 ETag 做 `If-Match`。远端仓库已改名为 `ttwyce/vault`。
+### 收尾后的代码状态（v0.19~v0.34）
 
-**M3 未做**：真实 WebDAV 客户端与 M0 A5 结论、26 个真实集成用例、
-Nextcloud + mod_dav Docker、真机计时 / 强杀重启 / 大 blob / 5000 条验收。
-内存后端 + 内存加密库只证明编排顺序与零丢失规则，不等于真实服务器验收；
-09 §5 的硬门槛尚未通过，不进 M4。
-真实 HTTP 后端（`HttpClientWebDavBackend`）已用本地 `HttpServer` 验证，
-但**未接生产路径、不等于 M0 A5 通过**。**下一步**：向用户确认 A5 结论与
-WebDAV 账号配置，再接线并跑 26 个真实集成用例。
-仍只跑 `flutter analyze` + `flutter test`，不构建、不开并行子代理；涉及
-改 `pubspec.yaml` 时先向用户确认。环境说明见 `C:\Android\AGENTS.md`。
+- **同步编排**：`SyncCoordinator` 把「正文 `SyncEngine` → taxonomy
+  `EntitySyncEngine` → 30 天本地清理 → 90 天云端墓碑 DELETE」串成一次
+  顶层同步；任一前置链路失败 / 退避 / 预算不足时一律跳过清理；
+  `RetryScheduler` 只对 BACKOFF 重试且每轮重新装配 workspace
+- **零丢失规则**：L2 删除列表按规则 7 软删 / 编辑胜复活；12 条冲突矩阵、
+  `merge3`、密码永不字段合并、墓碑「编辑胜」、冲突副本均有断言
+- **taxonomy**：`/vault/entities/` 独立通道、同 rev 用 HLC 判定（T22）、
+  远端同名标签自动合并（T21）、删除分类与本地路径对称（T23）
+- **真实 HTTP**：`HttpClientWebDavBackend`（`dart:io`，无新依赖）覆盖
+  条件写 / ETag 兜底 / 3xx 防护 / 超时 / 3 并发 / 1MB 响应上限；
+  `VaultSyncRuntime.create()` 把真实 DB、HTTP 与统一调度一次接好
+- **M2 遗留**：分类同级拖拽排序已补完；仅剩需真机的
+  1000 条 60fps / 中文搜索 P95 性能基线
+
+**M3 未做**：`HttpClientWebDavBackend` 与 `VaultSyncRuntime` **只对本地
+最小 WebDAV 服务验证，未接 App 启动装配**；M0 A5（坚果云 / Nextcloud
+真实行为）未过，26 个真实集成用例、Nextcloud + mod_dav Docker、真机计时 /
+强杀重启 / 大 blob / 5000 条验收仍缺。本地 fake 与内存加密库只证明编排顺序
+与零丢失规则，不等于真实服务商验收；09 §5 的硬门槛尚未通过，不进 M4。
+
+**下一步（外部条件就绪后）**：确认 M0 A5 结论与 WebDAV 账号配置，
+把 `VaultSyncRuntime` 接进 App 启动装配，跑 26 个真实集成用例。
+当前硬规则：只跑 `flutter analyze` + `flutter test`、不执行构建、
+改 `pubspec.yaml` 前先确认；用户已授权并行，但只读审查并行、
+写文件仍串行（见 [20 交接文档](20-交接文档.md) §1）。
 
 ---
 
