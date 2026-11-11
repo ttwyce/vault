@@ -8,6 +8,8 @@ import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/data/vault/credential_models.dart';
+import 'package:vault/data/taxonomy/taxonomy_models.dart';
+import 'package:vault/data/vault/credential_group_repository.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/core/widgets/secure_card.dart';
 import 'package:vault/features/vault/vault_page.dart';
@@ -231,5 +233,45 @@ void main() {
           ..where((t) => t.id.equals('cred-notes-ui')))
         .getSingle();
     expect(row.notes, isNot(contains('公司 VPN')));
+  });
+
+  testWidgets('新增时选账号分组会自动套用该组字段模板',
+      (WidgetTester tester) async {
+    final parent = await app.gateway.writeCategory(CategoryWrite.create(
+      id: 'g-work',
+      name: '工作开发',
+      kind: EntryKind.credential,
+    ));
+    final groupRepo = CredentialGroupRepository(db: app.db, uuid: app.uuid);
+    await groupRepo.addTemplateField(
+      categoryId: parent.snapshot.id,
+      label: '恢复码',
+      type: 'secret',
+      secret: true,
+    );
+    await pumpVault(tester);
+
+    await tester.tap(find.text('新增'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    // 分组下拉（两个 DropdownButton：模板、分组；等 FutureBuilder 完成）
+    expect(find.byType(DropdownButton<String>), findsNWidgets(2));
+    await tester.tap(find.byType(DropdownButton<String>).last);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('工作开发').last, warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(find.byType(TextField).last, '分组账号');
+    await tester.tap(find.text('确定'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await app.db.select(app.db.credentials).get();
+    expect(rows, hasLength(1));
+    final repo = CredentialRepository(app.db, app.gateway);
+    final fields = await repo.customFields(rows.single.id);
+    expect(fields.fields, hasLength(1));
+    expect(fields.fields.single.label, '恢复码');
+    expect(fields.fields.single.secret, isTrue);
+    expect(fields.fields.single.value, isEmpty);
   });
 }

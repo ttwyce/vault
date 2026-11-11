@@ -12,6 +12,7 @@ import '../../data/vault/credential_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
+import '../../data/vault/credential_group_repository.dart';
 import '../../data/vault/credential_groups.dart';
 
 import '../../data/vault/credential_repository_provider.dart';
@@ -50,6 +51,10 @@ class _VaultPageState extends ConsumerState<VaultPage> {
   Future<void> _addCredential() async {
     String? generated;
     String? templateId;
+    String? groupId;
+    final groupRepo =
+        CredentialGroupRepository(db: ref.read(vaultDatabaseProvider));
+    final groupsFuture = groupRepo.groups();
     final title = await showDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
@@ -81,6 +86,42 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                   ],
                   onChanged: (String? value) =>
                       setDialogState(() => templateId = value),
+                ),
+                const SizedBox(height: SketchSpace.sm),
+                FutureBuilder<List<CategoryRow>>(
+                  future: groupsFuture,
+                  builder: (
+                    BuildContext context,
+                    AsyncSnapshot<List<CategoryRow>> groupSnap,
+                  ) {
+                    final groups = groupSnap.data ?? const <CategoryRow>[];
+                    if (groups.isEmpty) {
+                      return Text(
+                        '账号分组：暂无分组（可在设置里建）',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Theme.of(dialogContext)
+                              .textTheme
+                              .bodySmall
+                              ?.color,
+                        ),
+                      );
+                    }
+                    return DropdownButton<String>(
+                      isExpanded: true,
+                      hint: const Text('账号分组（自动套用字段模板）'),
+                      value: groupId,
+                      items: <DropdownMenuItem<String>>[
+                        for (final group in groups)
+                          DropdownMenuItem<String>(
+                            value: group.id,
+                            child: Text(group.name),
+                          ),
+                      ],
+                      onChanged: (String? value) =>
+                          setDialogState(() => groupId = value),
+                    );
+                  },
                 ),
                 const SizedBox(height: SketchSpace.sm),
                 TextButton(
@@ -139,7 +180,15 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     if (generated != null) {
       await repo.setPassword(created.snapshot.id, generated!);
     }
-    if (templateId != null) {
+    if (groupId != null) {
+      // 分组模板优先于固定模板：这正是 docs/11 §4.6 里分组的价值。
+      await repo.setCustomFields(
+        created.snapshot.id,
+        await CredentialGroupRepository(
+          db: ref.read(vaultDatabaseProvider),
+        ).instantiateForGroup(groupId!),
+      );
+    } else if (templateId != null) {
       final template = templateById(templateId!);
       if (template != null) {
         await repo.setCustomFields(

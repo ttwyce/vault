@@ -4,6 +4,29 @@
 
 ---
 
+## v0.94 · 2026-11-11
+
+### M6：账号分组与组内字段模板（已验证）
+
+- 新增 `CredentialGroupRepository`（docs/11 §4.6）：复用
+  `category.kind=6` 只读分组树、`category_field_template` 模板字段
+  写入/去重/按 sortOrder 读取、`instantiateForGroup` 生成空 secret 字段
+- `VaultPage` 新增弹窗加「账号分组」下拉，选组后自动套用该组模板
+  （优先于固定模板）——即文档里「分组真正的价值」
+- 测试：`credential_group_repository_test.dart` 3 条、
+  `vault_page_test.dart` +1 条 → 全量 **717 → 721**
+
+**边界**：分组树 UI / 拖拽换组 / 模板随 taxonomy 通道加密同步仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**721/721 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 89）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.93 · 2026-11-11
 
 ### M6：图片附件判定层（已验证）
