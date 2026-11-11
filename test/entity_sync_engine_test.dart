@@ -464,6 +464,66 @@ void main() {
       expect(await env.count('oplog'), 2);
     });
 
+    test('T21：两设备各建同名标签，拉取后自动合并且条目关联不丢', () async {
+      // 本地标签挂了两条笔记。
+      final localTag = await env.gateway.writeTag(
+        TagWrite.create(id: 'tag-local', name: 'WebDAV'),
+      );
+      final e1 = await env.gateway.writeEntry(
+        EntryWrite.create(id: 'note-1', title: '一'),
+      );
+      final e2 = await env.gateway.writeEntry(
+        EntryWrite.create(id: 'note-2', title: '二'),
+      );
+      await env.gateway.setEntryTaxonomy(
+        entryId: e1.snapshot.id,
+        tagIds: <String>['tag-local'],
+      );
+      await env.gateway.setEntryTaxonomy(
+        entryId: e2.snapshot.id,
+        tagIds: <String>['tag-local'],
+      );
+      expect(localTag.changed, isTrue);
+
+      // 远端同名标签 id 不同、usage_count=0（本地 usage=2 更大 → 保留本地）。
+      final remoteTag = TaxonomySnapshot(
+        entity: SyncEntity.tag,
+        id: 'tag-remote',
+        rev: 1,
+        hlc: Hlc(millis: _now, counter: 0, node: 'devB').encode(),
+        updatedAt: _now,
+        deleted: false,
+        fields: <String, Object?>{
+          'name': 'webdav', // 大小写不同，taxonomyNameKey 仍视为同名
+          'usage_count': 0,
+        },
+      );
+      final path = await _path(env.codec, remoteTag);
+      final backend = _FakeBackend()
+        ..add(path, await env.codec.encodeTaxonomy(remoteTag));
+
+      await EntitySyncEngine(
+        backend: backend,
+        codec: env.codec,
+        port: env.port,
+      ).run();
+
+      final tags = await (env.db.select(env.db.tags)
+            ..where((t) => t.deleted.equals(0)))
+          .get();
+      expect(tags, hasLength(1), reason: '同名活标签必须只剩一个');
+      expect(tags.single.id, 'tag-local', reason: 'usage 大的一方保留');
+      final kept = await (env.db.select(env.db.entryTags)
+            ..where((t) => t.tagId.equals('tag-local')))
+          .get();
+      expect(kept.map((row) => row.entryId).toSet(),
+          <String>{'note-1', 'note-2'}, reason: '关联不丢');
+      final remoteRow = await (env.db.select(env.db.tags)
+            ..where((t) => t.id.equals('tag-remote')))
+          .getSingleOrNull();
+      expect(remoteRow, isNull, reason: '保留本地时远端 id 不能复活成活标签');
+    });
+
     test('部分分片扫描不推断删除，其它通道的 sync_state 不被清掉', () async {
       await env.db.into(env.db.syncStates).insert(
             SyncStatesCompanion.insert(

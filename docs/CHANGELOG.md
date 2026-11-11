@@ -4,6 +4,36 @@
 
 ---
 
+## v0.25 · 2026-11-11
+
+### T21：两设备同名标签在独立通道自动合并（已验证）
+
+docs/09 T21 要求「两设备各建同名标签 → 自动合并为一个，关联不丢」。
+M2 的组织页合并向导只覆盖**本地**同名标签；taxonomy 独立通道拉取远端
+标签时 `_applyTagSnapshot` 直接 `insertOnConflictUpdate`，会留下两个同名
+活标签、条目关联各挂一边。
+
+**改了什么**
+- `_applyTagSnapshot` 在远端 tag 非删除且本地存在「同名不同 id」的活标签时，
+  在同一事务内按 `usage_count` 大者保留（`taxonomyNameKey` 大小写不敏感），
+  用 `INSERT OR IGNORE` 把关联改指到保留方、软删另一方、重算计数、
+  重建受影响条目的 FTS
+- **保留本地 id 时跳过远端 id 的插入**，否则刚软删的远端标签会被
+  `insertOnConflictUpdate` 复活成活标签 —— 这是实现时最容易漏的一步
+- `test/entity_sync_engine_test.dart` +1 条 T21 场景 → 全量 **437 → 438**
+
+**关键决策**：合并判定复用本地 `_mergeTags` 的「usage 大者」规则，
+不新增另一套；并列时按 id 字典序做确定性 tie-break。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**438/438 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+**M3 硬门槛不变**：26 个真实集成用例未通过，不进 M4。
+
+**影响文档**：README（数字 / 决策表）、09（§5 / §12 T21）、14（Day 20）、
+CHANGELOG（本条）
+
+---
+
 ## v0.24 · 2026-11-11
 
 ### 首批同步 50 条分批与分片游标边界（已验证）

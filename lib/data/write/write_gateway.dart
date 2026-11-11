@@ -2113,18 +2113,56 @@ class WriteGateway {
 
   Future<void> _applyTagSnapshot(TaxonomySnapshot snapshot) async {
     final name = _stringField(snapshot.fields, 'name') ?? '';
-    await _db.into(_db.tags).insertOnConflictUpdate(
-          TagsCompanion(
-            id: Value<String>(snapshot.id),
-            name: Value<String>(name),
-            createdAt: Value<int?>(snapshot.updatedAt),
-            updatedAt: Value<int?>(snapshot.updatedAt),
-            hlc: Value<String>(snapshot.hlc),
-            deleted: Value<int>(snapshot.deleted ? 1 : 0),
-          ),
+    var mergedIntoLocal = false;
+    if (!snapshot.deleted && name.isNotEmpty) {
+      // T21：两设备各自建了同名标签。远端信封带的是另一个 id，
+      // 直接 insertOnConflictUpdate 会留下两个同名活标签、关联各挂一边。
+      // 在同一事务里按「usage 大者保留」自动合并，关联不丢。
+      final duplicates = await (_db.select(_db.tags)
+            ..where((t) =>
+                t.deleted.equals(0) & t.id.isNotIn(<String>[snapshot.id])))
+          .get();
+      for (final local in duplicates) {
+        if (taxonomyNameKey(local.name) != taxonomyNameKey(name)) continue;
+        final remoteUsage = _intField(snapshot.fields, 'usage_count', 0);
+        final keepRemote = remoteUsage > local.usageCount ||
+            (remoteUsage == local.usageCount &&
+                snapshot.id.compareTo(local.id) > 0);
+        final keepId = keepRemote ? snapshot.id : local.id;
+        final dropId = keepRemote ? local.id : snapshot.id;
+        await _db.customStatement(
+          'INSERT OR IGNORE INTO entry_tag(entry_id, tag_id) '
+          'SELECT entry_id, ? FROM entry_tag WHERE tag_id = ?;',
+          <Object?>[keepId, dropId],
         );
+        final affected = await _entriesForTag(dropId);
+        await (_db.delete(_db.entryTags)..where((t) => t.tagId.equals(dropId)))
+            .go();
+        await _recountTags(<String>{keepId, dropId});
+        for (final entryId in affected) {
+          await _rebuildEntrySearch(entryId);
+        }
+        await (_db.update(_db.tags)..where((t) => t.id.equals(dropId)))
+            .write(const TagsCompanion(deleted: Value<int>(1)));
+        // 保留的是本地 id 时，不能再把远端 id 插回成活标签。
+        mergedIntoLocal = !keepRemote;
+        break;
+      }
+    }
+    if (!mergedIntoLocal) {
+      await _db.into(_db.tags).insertOnConflictUpdate(
+            TagsCompanion(
+              id: Value<String>(snapshot.id),
+              name: Value<String>(name),
+              createdAt: Value<int?>(snapshot.updatedAt),
+              updatedAt: Value<int?>(snapshot.updatedAt),
+              hlc: Value<String>(snapshot.hlc),
+              deleted: Value<int>(snapshot.deleted ? 1 : 0),
+            ),
+          );
+    }
     if (!snapshot.deleted) {
-      await _rebuildEntriesForTag(snapshot.id);
+      if (!mergedIntoLocal) await _rebuildEntriesForTag(snapshot.id);
       return;
     }
     final affected = await _entriesForTag(snapshot.id);
