@@ -18,6 +18,7 @@ import '../../data/vault/credential_repository_provider.dart';
 import '../../data/chat/conversation_repository_provider.dart';
 import '../../data/agent/model_availability_provider.dart';
 import '../../data/agent/model_status.dart';
+import '../../data/chat/conversation_retention.dart';
 import '../../data/chat/conversation_writer.dart';
 import '../editor/editor_page.dart';
 import 'widgets/conversation_drawer.dart';
@@ -90,7 +91,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       _messages = next.currentId == null
           ? Future<List<ConversationMessageView>>.value(
               const <ConversationMessageView>[])
-          : ref.read(conversationRepositoryProvider).messages(next.currentId!);
+          : ref
+              .read(conversationRepositoryProvider)
+              .messages(next.currentId!, plan: MessagePagePlan.latest());
       if (_scroll.hasClients) _scroll.jumpTo(0);
     });
   }

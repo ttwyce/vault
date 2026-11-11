@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../db/vault_database.dart';
+import 'conversation_retention.dart';
 import '../search/cjk_segmenter.dart';
 import 'conversation_models.dart';
 
@@ -118,16 +119,34 @@ class ConversationRepository {
   }
 
   /// 读取某会话的消息（append-only 顺序）。
-  Future<List<ConversationMessageView>> messages(String conversationId) async {
-    final rows = await (db.select(db.messages)
-          ..where((t) => t.conversationId.equals(conversationId))
-          ..orderBy(<OrderClauseGenerator<dynamic>>[
-            (t) => OrderingTerm.asc(t.createdAt),
-            (t) => OrderingTerm.asc(t.hlc),
-          ]))
-        .get();
+  /// [plan] 为空时读全部；R15 建议由 UI 传 [MessagePagePlan.latest] 分页加载。
+  Future<List<ConversationMessageView>> messages(
+    String conversationId, {
+    MessagePagePlan? plan,
+  }) async {
+    final query = db.select(db.messages)
+      ..where((t) => t.conversationId.equals(conversationId));
+    if (plan != null) {
+      final before = plan.beforeMs;
+      if (before != null) {
+        query.where((t) => t.createdAt.isSmallerThanValue(before));
+      }
+      query.orderBy(<OrderClauseGenerator<dynamic>>[
+        (t) => OrderingTerm.desc(t.createdAt),
+        (t) => OrderingTerm.desc(t.hlc),
+      ]);
+      query.limit(plan.limit);
+    } else {
+      query.orderBy(<OrderClauseGenerator<dynamic>>[
+        (t) => OrderingTerm.asc(t.createdAt),
+        (t) => OrderingTerm.asc(t.hlc),
+      ]);
+    }
+    final rows = await query.get();
+    // 分页查询按时间倒序取，返回前恢复为 append-only 的视觉顺序。
+    final ordered = plan == null ? rows : rows.reversed.toList();
     return <ConversationMessageView>[
-      for (final row in rows)
+      for (final row in ordered)
         ConversationMessageView(
           role: row.role,
           content: row.content ?? '',

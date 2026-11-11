@@ -4,6 +4,29 @@
 
 ---
 
+## v1.01 · 2026-11-12
+
+### M7：消息分页与 90 天会话归档判定（R15，已验证）
+
+- 新增 `conversation_retention.dart`（docs/09 R15）：50 条分页窗口
+  （上限 200）、更早页游标、90 天前会话归档为摘要且只保留最近 5 条原文、
+  批量归档按最老优先
+- `ConversationRepository.messages(plan:)` 真实分页：倒序取最新一页后
+  恢复 append-only 视觉顺序；`ChatPage._switchTo` 默认加载最新 50 条，
+  长会话不再一次读全表
+- 测试：`conversation_retention_test.dart` 4 条 → 全量 **734 → 738**
+
+**边界**：真实归档任务 / 摘要生成 / UI「加载更早」按钮仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**738/738 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（R15）、14（Day 96）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.00 · 2026-11-12
 
 ### M7：引用卡片与工具调用折叠卡（已验证）
