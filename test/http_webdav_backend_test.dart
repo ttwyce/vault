@@ -25,6 +25,9 @@ class _DavServer {
   final List<String> calls = <String>[];
   int _etag = 100;
 
+  /// 模拟「PUT 成功但不返回 ETag」的服务商行为。
+  bool noPutEtag = false;
+
   static Future<_DavServer> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final dav = _DavServer(server);
@@ -48,6 +51,16 @@ class _DavServer {
       case 'OPTIONS':
         response.headers.set('Allow', 'OPTIONS, PROPFIND, REPORT, GET, PUT, DELETE, MKCOL');
         response.headers.set('ETag', '"root"');
+        await response.close();
+        return;
+
+      case 'HEAD':
+        final entry = files[path];
+        if (entry == null) {
+          response.statusCode = HttpStatus.notFound;
+        } else {
+          response.headers.set('ETag', entry.etag);
+        }
         await response.close();
         return;
 
@@ -97,7 +110,7 @@ class _DavServer {
         files[path] = _Entry(bytes, etag);
         response.statusCode =
             current == null ? HttpStatus.created : HttpStatus.noContent;
-        response.headers.set('ETag', etag);
+        if (!noPutEtag) response.headers.set('ETag', etag);
         await response.close();
         return;
 
@@ -414,6 +427,62 @@ void main() {
     } finally {
       slow.close();
       await slowServer.close(force: true);
+    }
+  });
+
+  test('PUT 无响应 ETag 时用 HEAD 回读，不退化成空条件', () async {
+    server.noPutEtag = true;
+    const String path = '/vault/items/0/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.enc';
+    final put = await backend.put(
+      path,
+      utf8.encode('载荷'),
+      condition: const WebDavCondition.createOnly(),
+    );
+    expect(put.etag, isNotEmpty);
+    expect(server.calls, contains('HEAD $path'));
+    // 下一轮用它做 If-Match 必须成功。
+    final next = await backend.put(
+      path,
+      utf8.encode('第二版'),
+      condition: WebDavCondition.ifMatch(put.etag),
+    );
+    expect(next.statusCode, HttpStatus.noContent);
+  });
+
+  test('PUT 与 HEAD 都没有 ETag 时抛 E_PATH，不返回空条件', () async {
+    server.noPutEtag = true;
+    // 让 HEAD 也拿不到：直接清空该路径的 ETag 头通过覆写 response 较难，
+    // 这里用独立服务器验证「服务器完全不实现 HEAD」的退化路径。
+    final bare = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    bare.listen((HttpRequest request) async {
+      if (request.method == 'PUT') {
+        await request.drain<void>();
+        request.response.statusCode = HttpStatus.created;
+        await request.response.close();
+      } else {
+        request.response.statusCode = HttpStatus.methodNotAllowed;
+        await request.response.close();
+      }
+    });
+    final b = HttpClientWebDavBackend(
+      HttpWebDavConfig(rootUrl: 'http://127.0.0.1:${bare.port}'),
+    );
+    try {
+      await expectLater(
+        b.put(
+          '/vault/items/0/ffffffffffffffffffffffffffffffff.enc',
+          utf8.encode('x'),
+          condition: const WebDavCondition.createOnly(),
+        ),
+        throwsA(isA<WebDavException>().having(
+          (WebDavException e) => e.syncErrorCode,
+          'errorCode',
+          SyncErrorCode.path,
+        )),
+      );
+    } finally {
+      b.close();
+      await bare.close(force: true);
     }
   });
 

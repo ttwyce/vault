@@ -288,8 +288,30 @@ class HttpClientWebDavBackend implements WebDavBackend {
       body: bytes,
     );
     await response.drain<void>();
+    var etag = _header(response, 'etag') ?? '';
+    if (etag.isEmpty) {
+      // 部分 WebDAV 实现（尤其坚果云一类）成功 PUT 不在响应头给 ETag。
+      // 空 ETag 会被 SyncEngine 写进 syncState，下一轮退化成 createOnly
+      // 并陷入 412 死循环。这里用一次 HEAD 回读真实 ETag 兜底；
+      // 仍拿不到就抛 E_PATH，交由调用方下一轮重新发现，绝不静默返回空。
+      try {
+        final head = await _send('HEAD', path);
+        await head.drain<void>();
+        etag = _header(head, 'etag') ?? '';
+      } on WebDavException {
+        // HEAD 不被支持时也不伪造 ETag。
+      }
+    }
+    if (etag.isEmpty) {
+      throw WebDavException(
+        statusCode: 409,
+        method: 'PUT',
+        path: path,
+        message: 'PUT 成功但服务器未提供 ETag',
+      );
+    }
     return WebDavPutResult(
-      etag: _header(response, 'etag') ?? '',
+      etag: etag,
       statusCode: response.statusCode,
     );
   }

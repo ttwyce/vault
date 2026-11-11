@@ -4,6 +4,34 @@
 
 ---
 
+## v0.29 · 2026-11-11
+
+### PUT 成功但服务器不给 ETag 时的兜底（已验证）
+
+部分 WebDAV 实现成功 `PUT` 不在响应头返回 ETag。`HttpClientWebDavBackend.put()`
+此前直接返回空字符串，`SyncEngine` 把它写进 `syncState` 后下一轮会按
+`createOnly()` 重试已存在文件，陷入 412 死循环 —— 这是真实服务商上最容易
+遇到的兼容性坑之一。
+
+**改了什么**
+- `put()` 在响应 ETag 为空时用一次 `HEAD` 回读真实 ETag；HEAD 不支持或
+  仍拿不到 ETag 时抛 `WebDavException(409 → E_PATH)` 交下一轮重新发现，
+  **绝不静默返回空条件**
+- `test/http_webdav_backend_test.dart` +2 条真实 TCP 场景：无响应 ETag 时
+  HEAD 兜底且下一轮 `If-Match` 成功；服务器完全不实现 HEAD 时抛 E_PATH
+  → 全量 **447 → 449**
+
+**关键决策**：宁可多一次 HEAD 或让本轮重试，也不能把空 ETag 写进
+`syncState` —— 后者会把「条件写」悄悄降级成「无条件写」。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**449/449 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+真实 HTTP 后端**仍未接生产路径、M0 A5 未过**，M3 硬门槛不变。
+
+**影响文档**：README（数字 / 决策表）、09（§5）、14（Day 24）、CHANGELOG（本条）
+
+---
+
 ## v0.28 · 2026-11-11
 
 ### 真实 HTTP 后端超时错误码修正（已验证）

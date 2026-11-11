@@ -119,6 +119,7 @@
 | D42 | **远端同名标签自动合并** | **独立通道按 `usage_count` 大者保留，关联改指、另一方软删** | 直接插远端 id 会留下两个同名活标签，关联各挂一边（T21） |
 | D43 | **删除分类本地/远端对称** | **两边都清条目关联 + 子分类提升为一级** | 只做一边会留下 parent_id 指向已删分类的孤儿（T23） |
 | D44 | **真实 HTTP 后端只用 SDK** | **`dart:io HttpClient` 实现 WebDAV，无需新增依赖** | XML 按 response 块解析以兼容各家命名空间前缀；不接生产路径直到 M0 A5 确认 |
+| D45 | **绝不把空 ETag 写进 syncState** | **PUT 无 ETag 时 HEAD 回读，仍无则抛 E_PATH** | 空 ETag 会让条件写悄悄降级成 createOnly，下轮 412 死循环 |
 
 ---
 
@@ -188,7 +189,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（447/447 已验证）；M3 硬门槛未过**。
+**当前进度**：**M2（含分类拖拽排序）已完成；M3 三批 + 统一调度 + L2 删除修复 + 编排完整性补齐已完成（449/449 已验证）；M3 硬门槛未过**。
 
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
@@ -231,8 +232,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **447 条全绿**
-（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7 + 超时 1）。慢机器上建议继续用 `--concurrency=1`：
+`flutter analyze` 无告警，`flutter test --concurrency=1` **449 条全绿**
+（401 + 统一调度 7 + L2 删除列表 5 + 编排完整性 18 + T22 5 + 分批 1 + T21 1 + T23 1 + 真实 HTTP 7 + 超时 1 + ETag 2）。慢机器上建议继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
 **构建约定**：只在明确要求「打包」时才执行 `flutter build`；本阶段只跑
