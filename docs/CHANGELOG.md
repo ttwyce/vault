@@ -4,6 +4,54 @@
 
 ---
 
+## v0.27 · 2026-11-11
+
+### 真实 HTTP WebDAV 后端（dart:io，无新增依赖，本地集成验证）
+
+此前 `WebDavBackend` 只有内存 fake。本轮用 Dart SDK 自带的
+`dart:io HttpClient` 实现真实 HTTP 客户端，并用
+`HttpServer.bind(127.0.0.1, 0)` 起最小 WebDAV 服务做**真实 TCP 集成测试**，
+不需要外部服务器、不新增任何 Dart 依赖、不动 `pubspec.yaml`。
+
+**改了什么**
+- 新增 `lib/core/sync/http_webdav_backend.dart`：`HttpClientWebDavBackend`
+  - OPTIONS / PROPFIND / REPORT / GET / PUT / DELETE / MKCOL 全覆盖
+  - `WebDavCondition` 原样转成 `If-Match` / `If-None-Match: *`；
+    4xx/5xx 与 SocketException / HttpException 统一映射 `WebDavException`
+  - Basic 认证、可配连接超时、ETag 从响应头读
+  - 207 Multi-Status 用轻量正则按 `<response>` 块解析，兼容
+    `d:` / 无前缀 / 绝对 URL href；`status=404` 的块收敛成 `etag=null`
+  - `reportSyncCollection` 返回 changed / deleted / `sync-token`
+- 新增 `test/http_webdav_backend_test.dart` 7 条：OPTIONS 能力头、
+  条件 PUT/GET/DELETE + 412 + 404、PROPFIND 207 解析、REPORT 增量/删除/token、
+  MKCOL + 网络错误、XML 兼容性、以及
+  **`SyncEngine` 通过真实 HTTP 后端跑完一轮 L1 静默同步**（设备水位真实 PUT）
+  → 全量 **439 → 446**
+
+**关键边界（必须守住）**
+- 这是**抽象层的真实网络实现**，只针对本地最小 WebDAV 服务验证；
+  **不等于 M0 A5 通过** —— 坚果云 / Nextcloud 的 RFC 6578、ETag 引号、
+  Depth、URL 编码差异都还没实测
+- **未接入生产路径**：App 启动装配仍不构造 `HttpClientWebDavBackend`，
+  需要用户确认 M0 A5 结论与 WebDAV 账号配置后才接线
+- 26 个真实集成用例仍未通过，**M3 硬门槛不变，不进 M4**
+- XML 解析刻意不引第三方包：各家服务器命名空间前缀差异大，
+  按标签局部名匹配反而更 tolerant；若将来要解析复杂属性再评估
+
+**验证**
+| 项 | 结果 |
+|---|---|
+| `flutter analyze` | 通过：No issues found |
+| `flutter test --reporter compact --concurrency=1` | **446/446 passed** |
+| `flutter build` | 未执行 |
+
+`pubspec.yaml` / `pubspec.lock` 未改动、未新增依赖。
+
+**影响文档**：README（数字 / 决策表 / 下一步）、09（§2 A5 / §5）、
+14（Day 22）、20（真实接入边界）、CHANGELOG（本条）
+
+---
+
 ## v0.26 · 2026-11-11
 
 ### T23：远端删除分类与本地路径对称（已验证）
