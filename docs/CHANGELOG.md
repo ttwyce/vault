@@ -4,6 +4,26 @@
 
 ---
 
+## v1.07 · 2026-11-12
+
+### M6：密码详情 TOTP 复制清除（已验证）
+
+- `VaultPage` 详情弹窗为带 TOTP 的账号提供「复制当前 TOTP（30 秒后清除）」
+  按钮，走 `SensitiveClipboard` 自动清除通道；secret 字段始终只给掩码标签
+- 测试：`vault_page_test.dart` +1 条（按钮可见、点击不抛异常）
+  → 全量 **757 → 758**
+
+**边界**：密码主值复制 / 拖拽换组 / 分组关联表仍缺；真实剪贴板平台行为
+需真机验证。M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**758/758 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 102）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.06 · 2026-11-12
 
 ### M8 预备：解锁失败计数与锁定策略（已验证）

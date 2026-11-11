@@ -274,4 +274,32 @@ void main() {
     expect(fields.fields.single.secret, isTrue);
     expect(fields.fields.single.value, isEmpty);
   });
+
+  testWidgets('带 TOTP 的账号详情提供复制且注明 30 秒清除',
+      (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-totp-ui',
+      kind: EntryKind.credential,
+      title: 'TOTP 账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-totp-ui'),
+        );
+    await repo.setTotpSecret(
+      'cred-totp-ui',
+      'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+    );
+    await pumpVault(tester);
+    await tester.tap(find.text('TOTP 账号'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('当前 TOTP：'), findsOneWidget);
+    expect(find.text('复制当前 TOTP（30 秒后清除）'), findsOneWidget);
+    await tester.tap(find.text('复制当前 TOTP（30 秒后清除）'));
+    await tester.pump(const Duration(milliseconds: 300));
+    // SensitiveClipboard 的 30 秒定时器在测试环境不推进；这里只保证点击不抛异常。
+    expect(tester.takeException(), isNull);
+  });
 }

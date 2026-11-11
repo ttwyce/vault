@@ -9,6 +9,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../core/widgets/secure_card.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
+import '../../app/session/flutter_clipboard_port.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart';
@@ -18,6 +19,7 @@ import '../../data/vault/credential_groups.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/credential_template.dart';
 import '../../data/vault/password_generator.dart';
+import '../../data/vault/sensitive_clipboard.dart';
 import '../../data/write/write_gateway.dart';
 
 /// 密码库。
@@ -267,6 +269,24 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 style: TextStyle(fontSize: 10.5, color: sheetContext.sketch.blue),
               ),
               const SizedBox(height: SketchSpace.md),
+              if (detail.totpCode != null)
+                SketchButton(
+                  label: '复制当前 TOTP（30 秒后清除）',
+                  dense: true,
+                  onPressed: () async {
+                    await SensitiveClipboard(
+                      port: const FlutterClipboardPort(),
+                    ).copy(detail.totpCode!);
+                    if (sheetContext.mounted) {
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('已复制，30 秒后自动从剪贴板清除'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              const SizedBox(height: SketchSpace.sm),
               SketchButton(
                 label: '生成新密码并替换',
                 dense: true,
