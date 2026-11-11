@@ -53,6 +53,7 @@ class DailySummary {
     required this.openThreads,
     required this.citations,
     required this.date,
+    this.granularity = SummaryGranularity.day,
   });
 
   final String headline;
@@ -62,6 +63,7 @@ class DailySummary {
   /// 引用到的 entry id（UI 每条结论可点开原文）。
   final List<String> citations;
   final String date;
+  final SummaryGranularity granularity;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'headline': headline,
@@ -76,6 +78,7 @@ class DailySummary {
         'open_threads': openThreads,
         'citations': citations,
         'date': date,
+        'granularity': granularity.name,
       };
 }
 

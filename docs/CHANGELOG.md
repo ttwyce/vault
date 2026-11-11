@@ -4,6 +4,27 @@
 
 ---
 
+## v0.63 · 2026-11-11
+
+### M7：滚动摘要日→周→月→年（已验证）
+
+- `DailySummary` 增加 `granularity` 标记（day/week/month/year）
+- 新增 `RollupService`：只读指定层级与日期范围的 kind=4 摘要，
+  按 7/4/12 的层级预算聚合成上一层；引用逐层校验、坏 meta 跳过、
+  不足完整周期时明确写「仅 N 条」而不是假装完整；无下层不写空条目
+- `DiagnosticsPage` 加「生成上月摘要」按钮
+- 测试：`rollup_service_test.dart` 4 条 → 全量 **637 → 641**
+
+**边界**：不调模型生成反思文本；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**641/641 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 58）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.62 · 2026-11-11
 
 ### M7：具体工具集接真实仓库（已验证）

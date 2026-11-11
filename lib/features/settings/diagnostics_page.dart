@@ -13,6 +13,8 @@ import '../../data/audit/release_audit.dart';
 import '../../data/activity/activity_logger.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
+import '../../data/agent/daily_summary.dart' show SummaryGranularity;
+import '../../data/agent/rollup_service.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/entry/entry_repository.dart';
 import '../../data/vault/credential_repository.dart';
@@ -94,6 +96,37 @@ class DiagnosticsPage extends ConsumerWidget {
                   SnackBar(
                     content: Text(summary == null
                         ? '昨天没有活动记录'
+                        : '已生成：${summary.headline}'),
+                  ),
+                );
+              }
+            },
+          ),
+          SketchButton(
+            label: '生成上月摘要',
+            dense: true,
+            onPressed: () async {
+              final session = ref.read(vaultSessionProvider);
+              final db = session.database;
+              final gateway = session.gateway;
+              if (db == null || gateway == null) return;
+              final now = DateTime.now();
+              final monthKey =
+                  '${now.year}-${now.month.toString().padLeft(2, '0')}';
+              final summary = await RollupService(
+                db: db,
+                gateway: gateway,
+              ).rollup(
+                target: SummaryGranularity.month,
+                periodKey: monthKey,
+                from: '$monthKey-W1',
+                to: '$monthKey-W5',
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(summary == null
+                        ? '没有可汇总的周摘要'
                         : '已生成：${summary.headline}'),
                   ),
                 );
