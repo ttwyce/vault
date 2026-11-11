@@ -6,6 +6,7 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../core/widgets/secure_card.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../app/session/vault_session.dart';
@@ -361,16 +362,16 @@ class _VaultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.sketch;
 
-    return SketchCard(
-      variant: variant,
-      tilt: variant.isEven ? SketchTilt.left : SketchTilt.right,
+    final breached = badges.any(((String, SketchTone) b) => b.$1 == '已泄露');
+    return SecureCard(
+      accent: breached ? p.red : null,
       child: Row(
         children: <Widget>[
           SketchFrame(
-            radius: SketchRadii.d,
+            radius: const BorderRadius.all(Radius.circular(SecureCard.radius)),
             fill: p.note,
             padding: const EdgeInsets.all(6),
-            shadowOffset: SketchShadowOffset.card,
+            shadowOffset: SketchShadowOffset.none,
             child: Text(
               letter,
               style: TextStyle(

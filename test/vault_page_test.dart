@@ -7,6 +7,7 @@ import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/vault/credential_repository.dart';
+import 'package:vault/core/widgets/secure_card.dart';
 import 'package:vault/features/vault/vault_page.dart';
 
 import 'support/test_harness.dart';
@@ -37,6 +38,7 @@ void main() {
     expect(find.text('GitHub'), findsNothing);
     expect(find.text('Cloudflare'), findsNothing);
     expect(find.text('还没有账号'), findsOneWidget);
+    expect(find.byType(SecureCard), findsNothing);
     expect(find.text('已泄露 0'), findsOneWidget);
   });
 
