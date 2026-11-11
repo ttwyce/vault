@@ -4,6 +4,31 @@
 
 ---
 
+## v0.50 · 2026-11-11
+
+### M6：RFC 6238 TOTP 落地并接进密码列表（已验证）
+
+- 新增 `lib/data/vault/totp.dart`：Base32 解码自实现（容错小写/空格/填充）、
+  HMAC-SHA1 用项目已有 `crypto` 包、动态截断、6/8 位输出、窗口剩余时间。
+  **不新增依赖**，验证码只在内存生成，绝不写日志 / prompt
+- 用 RFC 6238 附录 B 的 5 个 SHA1 官方向量钉住实现正确性
+- `CredentialRepository.listSummaries()` 在仓库内部生成当前验证码，
+  对外只输出 `totpCode`，**Base32 密钥绝不出仓库**；`VaultPage` 列表显示
+  「TOTP 287082」徽章
+- 测试：`totp_test.dart` 5 条 + `credential_repository_test.dart` +1 条
+  → 全量 **593 → 599**
+
+**边界**：不做剪贴板 30 秒清除 / 自动填充 / HIBP 真实网络请求；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**599/599 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 45）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.49 · 2026-11-11
 
 ### 关于与隐私页（docs/09 §10 上架材料，已验证）

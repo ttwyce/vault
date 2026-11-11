@@ -165,7 +165,8 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                       name: items[i].title,
                       account: items[i].username ?? '未填写用户名',
                       badges: <(String, SketchTone)>[
-                        if (items[i].hasTotp) ('TOTP', SketchTone.plain),
+                        if (items[i].totpCode != null)
+                          ('TOTP ${items[i].totpCode}', SketchTone.blue),
                         if (items[i].breached) ('已泄露', SketchTone.primary),
                       ],
                     ),

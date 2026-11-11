@@ -89,4 +89,24 @@ void main() {
     expect(items.single.toString(), isNot(contains('hunter2')));
   });
 
+
+  test('listSummaries 生成 TOTP 验证码但绝不外泄密钥', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-totp',
+      kind: EntryKind.credential,
+      title: '带 2FA 的账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(
+            id: 'cred-totp',
+            totpSecret: const Value<String?>(
+                'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'),
+          ),
+        );
+    final items = await repo.listSummaries(nowMs: 59000);
+    expect(items.single.totpCode, '287082',
+        reason: 'RFC 6238 8 位 94287082 的 6 位后缀');
+    expect(items.single.toString(),
+        isNot(contains('GEZDGNBVGY3TQOJQ')));
+  });
 }
