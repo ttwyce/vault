@@ -29,6 +29,7 @@ import '../../data/platform/platform_capabilities.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/model_downloader.dart';
+import '../../data/search/vector_sync_policy.dart';
 
 /// 发布前自检 / 备份诊断页。
 ///
@@ -234,7 +235,9 @@ class DiagnosticsPage extends ConsumerWidget {
                     windowsOutsideOneDrive: true,
                   ).allConfigured ? '已配置' : '未配置'} · '
                   '切换模型全量重建每批 20 条、cursor 可续\n'
-                  '下载中/校验中检索降级纯 FTS\n'
+                  '下载中/校验中检索降级纯 FTS；向量同步 '
+                  'model_id/dim/dtype 不匹配直接丢弃并排重算'
+                  '（${VectorDecision.discard.name}）\n'
                   '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
                   '云端任务未授权降级端侧\n'
                   'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮、'

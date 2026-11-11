@@ -4,6 +4,29 @@
 
 ---
 
+## v0.80 · 2026-11-11
+
+### M5：向量同步判定层（已验证）
+
+- 新增 `vector_sync_policy.dart`（docs/06 §7）：封包结构解析、
+  `model_id / dim / dtype / 空 bytes` 任一不匹配即丢弃并标记需重算，
+  **绝不混用不同模型的向量**；坏结构逐条隔离不抛异常
+- `expectationFromSpec` 从 manifest 取 dim / quant，不硬编码；
+  `planVectorRecompute` 批量输出需重算的 entry id
+- `DiagnosticsPage` 展示向量同步红线
+- 测试：`vector_sync_policy_test.dart` 5 条 → 全量 **685 → 690**
+
+**边界**：真实 `/vault/vec/` 加解密上传下载、entry_vec 写入仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**690/690 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§5）、14（Day 75）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.79 · 2026-11-11
 
 ### P10：密码模块克制变体落地（已验证）
