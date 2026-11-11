@@ -4,6 +4,30 @@
 
 ---
 
+## v0.71 · 2026-11-11
+
+### M4：抓取任务队列状态机（已验证）
+
+- 新增 `archive_job_queue.dart`：docs/05 §4 九步流水线（去重→元数据→
+  加载→readability→Markdown→PDF→L3→blob→向量队列）的 `next/progress`
+- 同 URL 已存在且未确认更新直接失败，不覆盖快照；策略降级跳过 pdf/
+  rawHtml；PDF 失败只降级为 L1+L3 不整体失败；其它阶段失败重试 3 次
+- docs/05 §7 按需下载：L1 正文优先于 L2 PDF、并发上限 2、
+  进度只按已完成字节算、失败保持仅云端（不删云端 blob）
+- `DiagnosticsPage` 展示流水线步数与降级策略
+- 测试：`archive_job_queue_test.dart` 5 条 → 全量 **663 → 668**
+
+**边界**：真实 WebView / readability.js / PDF 生成 / blob 写入仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**668/668 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 66）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.70 · 2026-11-11
 
 ### M5：阅读器高亮与选区判定接线（已验证）
