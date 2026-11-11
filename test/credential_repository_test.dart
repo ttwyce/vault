@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/vault/credential_models.dart';
+import 'package:vault/data/vault/hibp_client.dart';
 import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/data/db/tables/entry_tables.dart';
@@ -197,5 +198,37 @@ void main() {
       () => repo.setTotpSecret('cred-fields', 'ABC1'),
       throwsA(isA<FormatException>()),
     );
+  });
+
+  test('HIBP 离线判定：只比对后缀，命中写 breached=2、未命中写 1', () async {
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-hibp'),
+        );
+    await repo.setPassword('cred-hibp', 'password');
+    final request = HibpChecker().requestFor('password');
+
+    final hit = await repo.applyHibpResponse(
+      'cred-hibp',
+      responseBody: '${request.suffix}:12345\n',
+      nowMs: 1731052800000,
+    );
+    expect(hit, isTrue);
+    var row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-hibp')))
+        .getSingle();
+    expect(row.breached, 2);
+    expect((await repo.health(nowMs: 1731052800000)).leaked, 1);
+
+    final miss = await repo.applyHibpResponse(
+      'cred-hibp',
+      responseBody: 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:1\n',
+      nowMs: 1731052800000,
+    );
+    expect(miss, isFalse);
+    row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-hibp')))
+        .getSingle();
+    expect(row.breached, 1);
+    expect((await repo.health(nowMs: 1731052800000)).leaked, 0);
   });
 }

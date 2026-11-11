@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../db/vault_database.dart';
 import '../entry/entry_models.dart';
 import 'credential_models.dart';
+import 'hibp_client.dart';
 import '../write/write_gateway.dart';
 import 'totp.dart';
 
@@ -112,6 +113,41 @@ class CredentialRepository {
   /// 写入自定义字段（含 secret:true 的项，整体加密）。
   Future<void> setCustomFields(String credentialId, CustomFields fields) =>
       _writeField(credentialId, 'custom_fields', fields.toJsonString());
+
+  /// HIBP k-anonymity **离线判定**：平台层把 `/range/<prefix>` 的响应体
+  /// 交给这里，完整哈希与密码明文都不出设备。返回是否泄露并更新缓存列。
+  ///
+  /// 不联网、不自动发请求；响应体缺失 / 过期 / 无法比对时返回 null，
+  /// 绝不把「未知」误标成「安全」。
+  Future<bool?> applyHibpResponse(
+    String credentialId, {
+    required String responseBody,
+    required int nowMs,
+    HibpChecker? checker,
+  }) async {
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    final password = await _openField(row, 'password', row.password);
+    if (password.isEmpty) return null;
+
+    final hibp = checker ?? HibpChecker();
+    final request = hibp.requestFor(password);
+    hibp.store(request.prefix, hibp.parseResponse(responseBody), nowMs);
+    bool breached;
+    try {
+      breached = hibp.isBreached(request, nowMs);
+    } on FormatException {
+      return null;
+    }
+    await (db.update(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .write(CredentialsCompanion(
+      breached: Value<int>(breached ? 2 : 1),
+    ));
+    return breached;
+  }
 
   /// 读回自定义字段（只在需要展示详情时调用）。
   Future<CustomFields> customFields(String credentialId) async {

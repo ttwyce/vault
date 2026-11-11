@@ -4,6 +4,31 @@
 
 ---
 
+## v0.54 · 2026-11-11
+
+### M6：HIBP k-anonymity 本地判定层（已验证）
+
+- 新增 `lib/data/vault/hibp_client.dart`：SHA1 → 前 5 位请求路径 +
+  35 位后缀、响应行容错解析、7 天缓存新鲜度、本地后缀比对。
+  **完整哈希与密码明文永远不出设备**，URL 只含前缀
+- `CredentialRepository.applyHibpResponse()`：平台层把响应体交给这里，
+  命中写 `breached=2`、未命中写 `1`；无法比对返回 null，
+  绝不把「未知」误标成「安全」；健康报告随即反映真实结果
+- 测试：`hibp_client_test.dart` 4 条（含 SHA1("password") 官方前缀
+  5BAA6 / 只带前缀 / 缓存过期拒绝判定）、
+  `credential_repository_test.dart` +1 条 → 全量 **606 → 611**
+
+**边界**：真实 HTTPS 请求由平台层执行，本层不联网；剪贴板清除与账号
+分组树仍缺。M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**611/611 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 49）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v0.53 · 2026-11-11
 
 ### M6：敏感字段加密通道统一（已验证）
