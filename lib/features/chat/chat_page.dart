@@ -186,6 +186,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 ? '新草稿会话'
                 : (_draft.currentId ?? '未选择会话'),
             modelLabel: status.subtitle,
+            currentId: _draft.currentId,
           ),
           Expanded(
             child: ListView(
@@ -312,10 +313,12 @@ class _CurrentConversationBar extends StatelessWidget {
   const _CurrentConversationBar({
     required this.label,
     required this.modelLabel,
+    this.currentId,
   });
 
   final String label;
   final String modelLabel;
+  final String? currentId;
 
   @override
   Widget build(BuildContext context) {
@@ -344,12 +347,55 @@ class _CurrentConversationBar extends StatelessWidget {
               ),
             ),
           ),
+          if (currentId != null)
+            Flexible(
+              child: Consumer(
+                builder: (BuildContext context, WidgetRef ref, Widget? _) =>
+                    FutureBuilder<String>(
+                  future: _conversationMeta(ref, currentId!),
+                  builder: (BuildContext context, AsyncSnapshot<String> snap) {
+                    final meta = snap.data ?? '';
+                    return Text(
+                      meta.isEmpty ? '' : '$meta · ',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10, color: p.muted),
+                    );
+                  },
+                ),
+              ),
+            ),
           Text(modelLabel,
               style: TextStyle(fontSize: 10.5, color: p.muted)),
         ],
       ),
     );
   }
+
+  /// 当前会话的时间 + 引用数（docs/12 §3.1），从真实库异步读。
+  static Future<String> _conversationMeta(
+      WidgetRef ref, String currentId) async {
+    final repo = ref.read(conversationRepositoryProvider);
+    final summaries = await repo.list();
+    final updatedAt = summaries
+        .where((ConversationSummary c) => c.id == currentId)
+        .firstOrNull
+        ?.updatedAt;
+    final messages = await repo.messages(currentId);
+    final citations = <String>{
+      for (final message in messages) ...message.citations,
+    }.length;
+    final time = updatedAt == null
+        ? ''
+        : _formatTime(DateTime.fromMillisecondsSinceEpoch(updatedAt));
+    return citations > 0 ? '$time · 引用 $citations 条' : time;
+  }
+
+  static String _formatTime(DateTime d) =>
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')} '
+      '${d.hour.toString().padLeft(2, '0')}:'
+      '${d.minute.toString().padLeft(2, '0')}';
 }
 
 class _AiMessage extends StatelessWidget {

@@ -4,6 +4,29 @@
 
 ---
 
+## v1.67 · 2026-11-12
+
+### M7：当前对话条时间 + 引用数（已验证）
+
+- `_CurrentConversationBar` 从真实 `ConversationRepository.list()` 与
+  `messages()` 异步汇总当前会话更新时间、去重的引用 id 数，
+  显示「MM-dd HH:mm · 引用 N 条」（docs/12 §3.1）；
+  草稿态 / 未选会话不显示元信息，空引用只显示时间
+- 时间用纯 Dart 格式化，不引入 `intl` 依赖；聊天相关 16 条回归全绿
+- 测试：`conversation_writer_test.dart` 现有引用用例补断言
+  → 全量维持 **928/928**
+
+**边界**：抽屉内单条会话的引用数 / `↑↓↵` 键盘导航仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**928/928 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 162）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.66 · 2026-11-12
 
 ### M7：AI 日记引用可溯源入口（已验证）

@@ -271,5 +271,7 @@ void main() {
     await tester.tap(find.textContaining('工具调用 · 点击展开'));
     await tester.pump();
     expect(find.textContaining('检索了 3 条笔记'), findsOneWidget);
+    // docs/12 §3.1：当前对话条同时显示时间与引用数。
+    expect(find.textContaining('引用 1 条'), findsOneWidget);
   });
 }
