@@ -4,6 +4,27 @@
 
 ---
 
+## v1.55 · 2026-11-12
+
+### M5：A2 退路之 Dart 内暴力余弦 KNN（已验证）
+
+- 新增 `vector_knn.dart`（docs/02 §8 A2）：sqlite_vector 不可用时的
+  int8 量化向量暴力余弦检索；维度不匹配 / 零向量跳过、topK 降序、
+  同分按 entryId 稳定、minScore 过滤，不引入任何新依赖
+- `DiagnosticsPage` 展示退路规则
+- 测试：`vector_knn_test.dart` 4 条 → 全量 **900 → 904**
+
+**边界**：真实 `entry_vec` 读取 / 量化推理 / 5 万条计时仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**904/904 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 150）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.54 · 2026-11-12
 
 ### UI：底部导航 375px 适配判定（U7，已验证）
