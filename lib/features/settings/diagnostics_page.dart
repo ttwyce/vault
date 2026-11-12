@@ -8,6 +8,7 @@ import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/contrast_audit.dart';
 import '../../app/theme/sketch_palette.dart';
+import '../../app/shell/global_hotkey_policy.dart';
 import '../../app/theme/desktop_layout_plan.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
@@ -254,6 +255,10 @@ class DiagnosticsPage extends ConsumerWidget {
           const SizedBox(height: SketchSpace.lg),
           const SizedBox(height: SketchSpace.sm),
           Text(
+            '全局热键：默认 $kDefaultGlobalHotkey / '
+            '${HotkeyCheck.values.length} 态判定（保留键 / 冲突 / 可注册）\n'
+            '全局热键：默认 $kDefaultGlobalHotkey / '
+            '${HotkeyCheck.values.length} 态判定（保留键 / 冲突 / 可注册）\n'
             '桌面布局：${DesktopLayout.values.length} 档（紧凑 / rail / '
             '≥${kThreeColumnMinWidth.toInt()} 三栏，窗口下限 '
             '${kWindowsMinWidth.toInt()}×${kWindowsMinHeight.toInt()}）',

@@ -4,6 +4,27 @@
 
 ---
 
+## v1.72 · 2026-11-12
+
+### M8：Windows 全局热键判定层（已验证）
+
+- 新增 `global_hotkey_policy.dart`（docs/08 §4.3）：默认
+  `Ctrl+Shift+V`、热键规范化（忽略大小写与修饰键顺序）、
+  系统保留键拒绝、与已注册组合冲突检测并给不冲突回退候选
+- `DiagnosticsPage` 展示规则
+- 测试：`global_hotkey_policy_test.dart` 3 条 → 全量 **941 → 944**
+
+**边界**：真实 `hotkey_manager` 注册 / 托盘气泡 / 系统级冲突
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**944/944 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 167）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.71 · 2026-11-12
 
 ### M8：Windows 三栏布局判定层（已验证）
