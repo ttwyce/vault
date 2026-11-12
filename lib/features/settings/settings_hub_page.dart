@@ -15,6 +15,7 @@ import '../settings/about_page.dart';
 import '../settings/diagnostics_page.dart';
 import '../settings/export_backup_page.dart';
 import '../settings/fonts_page.dart';
+import '../settings/models_page.dart';
 import '../trash/trash_page.dart';
 
 /// 设置中心。
@@ -88,6 +89,12 @@ class SettingsHubPage extends ConsumerWidget {
               title: '导出与备份',
               subtitle: '明文导出二次确认、导入合并判定、/backup/ 隔离与排期',
               onTap: () => _push(context, const ExportBackupPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.type,
+              title: '模型管理',
+              subtitle: '端侧模型清单、下载源优先级与检索降级四态',
+              onTap: () => _push(context, const ModelsPage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,
