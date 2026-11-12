@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vault/data/backup/backup_models.dart';
 import 'package:vault/data/backup/encrypted_backup_service.dart';
 import 'package:vault/data/backup/markdown_exporter.dart';
+import 'package:vault/data/backup/markdown_importer.dart';
 import 'package:vault/data/backup/security_audit.dart';
 import 'package:vault/features/settings/export_backup_page.dart';
 
@@ -118,6 +119,33 @@ void main() {
     await tester.tap(find.text('执行明文导出'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.textContaining('已导出 1 条'), findsOneWidget);
+  });
+
+
+
+  testWidgets('导入 Markdown 文件夹按钮展示无冲突合并汇总',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(900, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ExportBackupPage(
+          markdownImportRunner: () async => const MarkdownImportResult(
+            inserted: <String>['a'],
+            skipped: <String>['b'],
+            conflictCopies: <String>['c'],
+            failed: <String>[],
+            hints: <String>[],
+          ),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.text('导入 Markdown 文件夹'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('插入 1 · 跳过 1 · 冲突副本 1'),
+        findsOneWidget);
   });
 
 }

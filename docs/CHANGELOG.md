@@ -4,6 +4,33 @@
 
 ---
 
+## v2.3 · 2026-11-12
+
+### M9：Markdown 文件夹真实导入（无冲突合并，已验证）
+
+- 新增 `markdown_importer.dart`（docs/03 §10）：扫描
+  `<root>/<kind>/*.md`，解析 frontmatter + 正文 + meta 注释，
+  用 `decideImport(content_hash, localHash)` 判定
+  insert / skip / conflictCopy；同 id 不同内容生成新 id 冲突副本
+  并标注标题，**绝不覆盖本地**；密码占位与坏文件跳过；
+  全部写入经 `WriteGateway` 唯一入口
+- `ExportBackupPage` 新增「导入 Markdown 文件夹」按钮（装配层注入
+  runner），展示插入 / 跳过 / 冲突副本 / 失败汇总
+- 测试：`markdown_importer_test.dart` 4 条（导出→导入 round-trip /
+  二次 skip / 本地改写后 conflictCopy / 密码占位与坏文件 / 目录不存在）、
+  `export_backup_page_test.dart` +1 条 → 全量 **1050 → 1055**
+
+**边界**：标准 zip 加密包导入、装配层目录注入仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1055/1055 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 198）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v2.2 · 2026-11-12
 
 ### M9：明文 Markdown 导出真实写盘（已验证）

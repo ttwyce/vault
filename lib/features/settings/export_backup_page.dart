@@ -8,6 +8,7 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/backup/encrypted_backup_service.dart';
 import '../../data/backup/markdown_exporter.dart';
+import '../../data/backup/markdown_importer.dart';
 
 /// 导出与备份页（docs/03 §10）。
 ///
@@ -19,6 +20,7 @@ class ExportBackupPage extends StatefulWidget {
     super.key,
     this.backupServiceFactory,
     this.plaintextExportRunner,
+    this.markdownImportRunner,
   });
 
   /// 真实加密备份服务由启动装配层注入（需要 VaultKeys + WebDavBackend）。
@@ -26,6 +28,7 @@ class ExportBackupPage extends StatefulWidget {
   /// 装配层把 [MarkdownExporter] + 已知敏感值打包成这个函数；
   /// 页面只负责二次确认与展示，不直接碰文件系统 / Provider。
   final Future<MarkdownExportResult> Function()? plaintextExportRunner;
+  final Future<MarkdownImportResult> Function()? markdownImportRunner;
 
   @override
   State<ExportBackupPage> createState() => _ExportBackupPageState();
@@ -41,6 +44,7 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
   ImportAction? _importAction;
   String? _backupHint;
   String? _exportHint;
+  String? _importHint;
 
   Future<void> _runPlaintextExport() async {
     final runner = widget.plaintextExportRunner;
@@ -51,6 +55,16 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
     final result = await runner();
     if (!mounted) return;
     setState(() => _exportHint = result.hint);
+  }
+
+  Future<void> _runMarkdownImport() async {
+    final runner = widget.markdownImportRunner;
+    if (runner == null) return;
+    final result = await runner();
+    if (!mounted) return;
+    setState(() => _importHint =
+        '插入 ${result.inserted.length} · 跳过 ${result.skipped.length} · '
+        '冲突副本 ${result.conflictCopies.length} · 失败 ${result.failed.length}');
   }
 
   Future<void> _uploadBackup() async {
@@ -229,6 +243,20 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
                   'WebDAV /backup/ 条件 PUT 已接通。',
                   style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),
+                const SizedBox(height: SketchSpace.sm),
+                SketchButton(
+                  label: '导入 Markdown 文件夹',
+                  tone: SketchTone.ghost,
+                  dense: true,
+                  onPressed: widget.markdownImportRunner == null
+                      ? null
+                      : _runMarkdownImport,
+                ),
+                if (_importHint != null) ...<Widget>[
+                  const SizedBox(height: SketchSpace.xs),
+                  Text(_importHint!,
+                      style: TextStyle(fontSize: 10.5, color: p.muted)),
+                ],
                 const SizedBox(height: SketchSpace.sm),
                 SketchButton(
                   label: '上传加密备份',
