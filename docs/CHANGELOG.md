@@ -4,6 +4,31 @@
 
 ---
 
+## v1.19 · 2026-11-12
+
+### M3 预备：同步设置页（第 12 屏，已验证）
+
+- 新增 `sync_settings_plan.dart`：WebDAV URL 规整（强制 https、
+  本机 http 例外、拒绝内嵌凭据/查询串）、表单三道关卡
+  （非法 / A5 未确认 / 可探测）、能力探测文案按 DAV token 分支
+- 新增 `SyncSettingsPage`（docs/10 第 12 屏）：只做表单校验与状态说明，
+  **不持久化账号密码、不发起请求、不实例化 `VaultSyncRuntime`**；
+  A5 未确认时永远停在 `needsA5`
+- `SettingsHubPage` 新增「同步设置」入口
+- 测试：`sync_settings_plan_test.dart` 3 条、
+  `sync_settings_page_test.dart` 3 条 → 全量 **792 → 798**
+
+**边界**：真实 `flutter_secure_storage` / OPTIONS 能力探测 /
+启动同步仍缺，且必须等 M0 A5；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**798/798 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 114）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.18 · 2026-11-12
 
 ### M8 预备：待处理任务页（第 20 屏，已验证）

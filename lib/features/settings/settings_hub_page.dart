@@ -17,6 +17,7 @@ import '../settings/export_backup_page.dart';
 import '../settings/fonts_page.dart';
 import '../settings/models_page.dart';
 import '../settings/pending_jobs_page.dart';
+import '../settings/sync_settings_page.dart';
 import '../trash/trash_page.dart';
 
 /// 设置中心。
@@ -90,6 +91,12 @@ class SettingsHubPage extends ConsumerWidget {
               title: '导出与备份',
               subtitle: '明文导出二次确认、导入合并判定、/backup/ 隔离与排期',
               onTap: () => _push(context, const ExportBackupPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.settings,
+              title: '同步设置',
+              subtitle: 'WebDAV 配置校验，A5 未过不启动同步',
+              onTap: () => _push(context, const SyncSettingsPage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.archive,
