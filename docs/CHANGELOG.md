@@ -4,6 +4,31 @@
 
 ---
 
+## v1.85 · 2026-11-12
+
+### M6：密码库分类树过滤（已验证）
+
+- 新增 `credential_category_filter.dart`（docs/11 §4.2 A）：
+  两级分类树选父级含子分类、与智能分组 id 集合求交、
+  左栏只显示有账号的分类及其父级
+- `VaultPage` 从真实 `category` / `entry_category` 读分类与关联，
+  渲染分类芯片并过滤列表；未分类账号在无筛选时照常显示，
+  选智能分组时不绕过分组过滤
+- 测试：`credential_category_filter_test.dart` 3 条、
+  `vault_page_test.dart` +1 条（父级含子分类 / 未分类账号可见）
+  → 全量 **974 → 978**
+
+**边界**：分类增删改 / 拖拽排序仍走组织页，未在密码页内编辑；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**978/978 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 180）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.84 · 2026-11-12
 
 ### M4：归档 tile 显示下次检查日期（已验证）

@@ -402,4 +402,41 @@ void main() {
     expect(profile.username, 'alice@example.com');
     expect(profile.url, 'https://example.com');
   });
+
+  testWidgets('分类芯片按真实 entry_category 过滤账号（父级含子分类）',
+      (WidgetTester tester) async {
+    await app.gateway.writeCategory(CategoryWrite.create(
+      id: 'c-work',
+      name: '工作',
+      kind: EntryKind.credential,
+    ));
+    await app.gateway.writeCategory(CategoryWrite.create(
+      id: 'c-dev',
+      name: '开发',
+      parentId: 'c-work',
+      kind: EntryKind.credential,
+    ));
+    for (final id in <String>['cred-cat-a', 'cred-cat-b']) {
+      await app.gateway.writeEntry(EntryWrite.create(
+        id: id,
+        kind: EntryKind.credential,
+        title: id,
+      ));
+      await app.db.into(app.db.credentials).insert(
+            CredentialsCompanion.insert(id: id),
+          );
+    }
+    await app.gateway.setEntryTaxonomy(
+      entryId: 'cred-cat-a',
+      categoryId: 'c-dev',
+      tagIds: const <String>[],
+    );
+    await pumpVault(tester);
+    expect(find.text('cred-cat-a'), findsOneWidget);
+    expect(find.text('cred-cat-b'), findsOneWidget);
+    await tester.tap(find.text('工作'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('cred-cat-a'), findsOneWidget);
+    expect(find.text('cred-cat-b'), findsNothing);
+  });
 }

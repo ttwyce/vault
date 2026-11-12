@@ -7,6 +7,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../core/widgets/secure_card.dart';
+import '../../data/vault/credential_category_filter.dart';
 import '../../data/vault/credential_meta.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
@@ -43,8 +44,48 @@ class VaultPage extends ConsumerStatefulWidget {
 class _VaultPageState extends ConsumerState<VaultPage> {
   final TextEditingController _name = TextEditingController();
   CredentialSmartGroup? _activeGroup;
+  String? _activeCategoryId;
   List<CredentialGroupBucket> _buckets =
       const <CredentialGroupBucket>[];
+  List<CategoryNode> _categoryNodes = const <CategoryNode>[];
+  List<EntryCategoryLink> _categoryLinks = const <EntryCategoryLink>[];
+  Map<String, String> _categoryNames = const <String, String>{};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadCategoryData();
+  }
+
+  Future<void> _loadCategoryData() async {
+    final db = ref.read(vaultDatabaseProvider);
+    final rows = await (db.select(db.categories)
+          ..where((t) => t.deleted.equals(0)))
+        .get();
+    final links = await db.select(db.entryCategories).get();
+    if (!mounted) return;
+    setState(() {
+      _categoryNodes = <CategoryNode>[
+        for (final row in rows)
+          if (row.kind == EntryKind.credential.code)
+            CategoryNode(id: row.id, parentId: row.parentId),
+      ];
+      _categoryNames = <String, String>{
+        for (final row in rows)
+          if (row.kind == EntryKind.credential.code) row.id: row.name,
+      };
+      _categoryLinks = <EntryCategoryLink>[
+        for (final link in links)
+          EntryCategoryLink(
+            entryId: link.entryId,
+            categoryId: link.categoryId,
+          ),
+      ];
+    });
+  }
+
+  String _categoryName(CategoryNode node) =>
+      _categoryNames[node.id] ?? node.id;
 
   @override
   void dispose() {
@@ -526,6 +567,30 @@ class _VaultPageState extends ConsumerState<VaultPage> {
               );
             },
           ),
+          const SizedBox(height: SketchSpace.sm),
+          Wrap(
+            spacing: SketchSpace.sm,
+            runSpacing: SketchSpace.sm,
+            children: <Widget>[
+              for (final node in categoriesWithCredentials(
+                categories: _categoryNodes,
+                links: _categoryLinks,
+              ))
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _activeCategoryId =
+                        _activeCategoryId == node.id ? null : node.id;
+                  }),
+                  child: SketchTag(
+                    _categoryName(node),
+                    tone: _activeCategoryId == node.id
+                        ? SketchTone.primary
+                        : SketchTone.ghost,
+                    dense: true,
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: SketchSpace.lg),
           FutureBuilder<List<CredentialSummary>>(
             future: summaries,
@@ -540,12 +605,28 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                       b.group == _activeGroup)
                   .expand((CredentialGroupBucket b) => b.ids)
                   .toSet();
-              final items = _activeGroup == null
-                  ? all
-                  : all
-                      .where((CredentialSummary c) =>
-                          activeIds.contains(c.id))
-                      .toList();
+              // 没有任何分类关联时（老数据 / 未分类账号）不过滤，
+              // 只应用智能分组，避免把全部账号藏起来。
+              final allIds = all.map((CredentialSummary c) => c.id).toSet();
+              final linkedIds = _categoryLinks
+                  .map((EntryCategoryLink l) => l.entryId)
+                  .toSet();
+              final visibleIds = _categoryLinks.isEmpty
+                  ? (_activeGroup == null ? allIds : activeIds)
+                  : filterCredentialIdsByCategory(
+                      categories: _categoryNodes,
+                      links: _categoryLinks,
+                      selectedCategoryId: _activeCategoryId,
+                      smartGroupIds:
+                          _activeGroup == null ? null : activeIds,
+                    );
+              // 没选分类时，未分类账号也照常显示。
+              if (_activeCategoryId == null && _activeGroup == null) {
+                visibleIds.addAll(allIds.difference(linkedIds));
+              }
+              final items = all
+                  .where((CredentialSummary c) => visibleIds.contains(c.id))
+                  .toList();
               if (items.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: SketchSpace.xl),
