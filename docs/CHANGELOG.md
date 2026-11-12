@@ -4,6 +4,29 @@
 
 ---
 
+## v1.22 · 2026-11-12
+
+### M2：编辑器 `#` 行内标签触发（已验证）
+
+- 新增 `inline_tag_parser.dart`（docs/11 §2.5）：光标前 `#xxx` 触发器
+  （要求行首/空白后、≤20 字、遇空白失效）、正文标签抽取去重、
+  采纳计划去重且上限 8 并明确标记超出
+- `EditorPage` 正文 `onChanged` 显示行内标签提示（含上限文案），
+  输入普通正文后提示消失
+- 测试：`inline_tag_parser_test.dart` 3 条、`editor_page_test.dart` +1 条
+  → 全量 **808 → 812**
+
+**边界**：真实标签建议列表 / 回车自动采纳 / 新建标签仍走已有标签行 UI；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**812/812 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 117）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.21 · 2026-11-12
 
 ### M2：日记 meta 模型与编辑器接线（已验证）

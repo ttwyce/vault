@@ -17,6 +17,7 @@ import '../../data/db/vault_database.dart' show CategoryRow;
 import '../../data/entry/entry_models.dart';
 import '../../data/diary/diary_meta.dart';
 import '../../data/entry/entry_repository_provider.dart';
+import '../../data/taxonomy/inline_tag_parser.dart';
 import '../../data/taxonomy/taxonomy_models.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/write/write_gateway.dart';
@@ -54,6 +55,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   final TextEditingController _body = TextEditingController();
 
   late EntryKind _kind = widget.initialKind;
+  String? _inlineTagHint;
 
   /// 编辑态下从数据库读到的旧 `meta`。保存时要原样传回 ——
   /// 日记日期等扩展字段都住在 meta 里，不传回就等于把扩展字段清掉。
@@ -478,6 +480,14 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                   fontSize: 18, fontWeight: FontWeight.w700, color: p.muted),
             ),
           ),
+          if (_inlineTagHint != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: SketchSpace.xs),
+              child: Text(
+                _inlineTagHint!,
+                style: TextStyle(fontSize: 10.5, color: p.blue),
+              ),
+            ),
           _buildTaxonomyRow(),
           _buildMarkdownBar(),
           Expanded(
@@ -486,6 +496,19 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                 : TextField(
                     controller: _body,
                     enabled: !_saving,
+                    onChanged: (String value) {
+                      final trigger = detectInlineTag(
+                        value,
+                        _body.selection.baseOffset,
+                      );
+                      final hint = trigger.active
+                          ? '输入 #${trigger.query}：匹配已有标签，'
+                              '回车可采纳（上限 ${TaxonomyRules.maxTagsPerEntry}）'
+                          : null;
+                      if (hint != _inlineTagHint) {
+                        setState(() => _inlineTagHint = hint);
+                      }
+                    },
                     expands: true,
                     maxLines: null,
                     minLines: null,

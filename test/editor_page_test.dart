@@ -206,4 +206,16 @@ void main() {
     expect(meta.date, '2020-01-02');
     expect(meta.backfilled, isTrue);
   });
+
+  testWidgets('输入 # 触发行内标签提示', (WidgetTester tester) async {
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).last, '看看 #同步');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('输入 #同步'), findsOneWidget);
+    expect(find.textContaining('上限 8'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, '普通正文');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('输入 #'), findsNothing);
+  });
 }
