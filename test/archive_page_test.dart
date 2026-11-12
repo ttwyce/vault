@@ -305,4 +305,39 @@ void main() {
     // 原貌模式可点（pdfLocal=true），说明 blob_ref 已接线。
     expect(find.text('原貌'), findsOneWidget);
   });
+
+  testWidgets('点开归档时解密 entry_history 上一版并启用真实对比模式',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/history',
+      site: 'example.com',
+      status: ArchiveStatus.full,
+      title: '改过的归档',
+      changed: true,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-history',
+      kind: EntryKind.bookmark,
+      title: '改过的归档',
+      body: '新的正文内容\n保留行',
+      meta: meta.toJsonString(),
+    ));
+    // 一次 update 会把 rev=1 的旧快照写进 entry_history（加密信封）。
+    await app.gateway.writeEntry(EntryWrite.update(
+      id: 'arch-history',
+      title: '改过的归档',
+      body: '新新正文内容\n保留行',
+      meta: meta.toJsonString(),
+    ));
+    await pumpArchive(tester);
+    await tester.tap(find.text('改过的归档'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('对比'));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.textContaining('新旧正文差异'), findsOneWidget);
+    expect(find.textContaining('+'), findsWidgets);
+  });
 }

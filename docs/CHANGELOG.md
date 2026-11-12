@@ -4,6 +4,29 @@
 
 ---
 
+## v1.80 · 2026-11-12
+
+### M4：对比模式接入加密历史版本（已验证）
+
+- `ArchivePage._openReader` 从 `entry_history` 取早于当前 rev 的
+  最近 5 条加密信封，经 `WriteGateway.readEntryPayload` 解密出上一版
+  L1 正文；坏信封 / 密钥不匹配只跳过，不让一条历史把阅读器打挂
+- `hasPreviousTextVersion` 与 `previousBody` 由真实解密结果决定；
+  与 v1.79 的 `buildVersionDiff` 合流，对比模式现在能显示真实 +/- 行
+- 测试：`archive_page_test.dart` +1 条（update 造历史信封 → 点开 → 对比显示差异）
+  → 全量 **959 → 960**
+
+**边界**：历史信封最多回溯 5 版；L2 PDF 渲染与真实 WebView 抓取
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**960/960 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 175）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.79 · 2026-11-12
 
 ### M4：归档阅读器真实 diff 与数据接线（已验证）

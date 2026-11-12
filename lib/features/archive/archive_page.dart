@@ -17,7 +17,7 @@ import '../../data/archive/archive_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/archive/archive_repository_provider.dart';
 import '../../data/db/tables/entry_tables.dart';
-import '../../data/db/vault_database.dart' show BlobRefRow;
+import '../../data/db/vault_database.dart' show BlobRefRow, EntryHistoryRow;
 import '../../data/write/write_gateway.dart';
 
 /// 归档网站总览（docs/11 §3.2）。
@@ -345,8 +345,8 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
   }
 
   Future<void> _openReader(ArchiveEntry entry) async {
-    // 真实接线：L1 正文来自 entry.body；L2 PDF 是否本地可读来自 blob_ref。
-    // 旧版正文需解密 entry_history，当前仍由平台层后续提供（诚实占位）。
+    // 真实接线：L1 正文来自 entry.body；L2 PDF 是否本地可读来自 blob_ref；
+    // 上一版正文来自 entry_history 里最近的加密信封（解密失败只跳过，不崩页）。
     final db = ref.read(vaultDatabaseProvider);
     final row = await (db.select(db.entries)
           ..where((t) => t.id.equals(entry.id)))
@@ -356,6 +356,36 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
         .get();
     final pdfLocal = pdfRows.any((BlobRefRow r) => r.kind == 2 && r.local == 1);
     final body = row?.body;
+
+    String? previousBody;
+    final historyRows = await (db.select(db.entryHistory)
+          ..where((t) => t.entryId.equals(entry.id)))
+        .get();
+    // 只对早于当前 rev 的版本按 rev 倒序尝试，纯 Dart 过滤避开
+    // drift 组合表达式差异。
+    final candidates = historyRows
+        .where((EntryHistoryRow h) => h.rev < (row?.rev ?? 0))
+        .toList()
+      ..sort((EntryHistoryRow a, EntryHistoryRow b) =>
+          b.rev.compareTo(a.rev));
+    if (candidates.isNotEmpty) {
+      final gateway = ref.read(writeGatewayProvider);
+      for (final history in candidates.take(5)) {
+        try {
+          final snapshot = await gateway.readEntryPayload(
+            history.payload,
+            expectedId: entry.id,
+          );
+          if (snapshot.body != null && snapshot.body != body) {
+            previousBody = snapshot.body;
+            break;
+          }
+        } on Object {
+          // 坏信封 / 密钥不匹配：不让一条历史把阅读器打挂。
+        }
+      }
+    }
+    final hasPrevious = previousBody != null && body != null;
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -365,8 +395,9 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
           meta: entry.meta,
           archivedAtMs: entry.updatedAt,
           pdfLocal: pdfLocal,
-          hasPreviousTextVersion: false,
+          hasPreviousTextVersion: hasPrevious,
           body: body,
+          previousBody: previousBody,
         ),
       ),
     );

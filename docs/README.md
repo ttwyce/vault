@@ -255,7 +255,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 编排已补齐；M4~M9 预备层（含 M5 真实 FTS 接线）已落地（959/959 已验证）；M3 硬门槛未过，M4~M9 未完成**。
+**当前进度**：**M2 已完成；M3 编排已补齐；M4~M9 预备层（含 M5 真实 FTS 接线）已落地（960/960 已验证）；M3 硬门槛未过，M4~M9 未完成**。
 
 **仓库状态（2026-11-12）**：`ttwyce/vault` 已公开；`.github/workflows/android-apk.yml`
 自动构建 debug APK；172 个提交署名统一为 `ttwyce <323808844478@qq.com>`。
@@ -302,8 +302,8 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **959 条全绿**；决策表 D1~D110
-（交接基线 376 + 后续各批次 583，逐批明细见 CHANGELOG）。慢机器上建议
+`flutter analyze` 无告警，`flutter test --concurrency=1` **960 条全绿**；决策表 D1~D110
+（交接基线 376 + 后续各批次 584，逐批明细见 CHANGELOG）。慢机器上建议
 继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现
 5662 ms > 5000 ms 的性能抖动，单独复跑 2610 ms 通过。
