@@ -73,6 +73,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   String? _categoryId;
   List<String> _tagIds = const <String>[];
   TaxonomySuggestion? _suggestion;
+  bool _pinned = false;
 
   @override
   void initState() {
@@ -105,6 +106,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     String? notFound;
     String? categoryId;
     List<String> tagIds = const <String>[];
+    bool pinned = false;
 
     final id = widget.entryId;
     if (id != null) {
@@ -116,6 +118,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         body = row.body ?? '';
         existingMeta = row.meta;
         kind = EntryKind.fromCode(row.kind) ?? widget.initialKind;
+        if (kind == EntryKind.note || kind == EntryKind.thought) {
+          pinned = NoteMeta.fromJson(existingMeta).pinned;
+        }
         final taxonomyRepo = ref.read(taxonomyRepositoryProvider);
         categoryId = await taxonomyRepo.categoryForEntry(id);
         tagIds = await taxonomyRepo.tagIdsForEntry(id);
@@ -132,6 +137,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
       _tagIds = tagIds;
       _existingMeta = existingMeta;
       _kind = kind;
+      _pinned = pinned;
       _error = notFound;
       _loading = false;
     });
@@ -168,7 +174,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             _kind == EntryKind.thought) {
           // docs/13 §3：笔记/想法 meta 只放 pinned + word_count；
           // 标签一律走关联表，不双写。
-          meta = noteMetaForSave(null, body).toJsonString();
+          meta = noteMetaForSave(null, body)
+              .copyWith(pinned: _pinned)
+              .toJsonString();
         }
         final created = await gateway.writeEntry(
           EntryWrite.create(kind: _kind, title: title, body: body, meta: meta),
@@ -181,7 +189,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             id: widget.entryId!,
             title: title,
             body: body,
-            meta: _refreshedDiaryMeta(_existingMeta, body),
+            meta: _refreshedMeta(_existingMeta, body),
           ),
         );
         entryId = widget.entryId!;
@@ -409,6 +417,21 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     ).toJsonString();
   }
 
+  /// 编辑态整体刷新 meta：日记刷新日期类字段；笔记/想法保留 pinned
+  /// 并刷新 word_count；其它 kind 原样不动，避免覆盖各自扩展字段。
+  String? _refreshedMeta(String? raw, String body) {
+    if (_kind == EntryKind.diary) {
+      return _refreshedDiaryMeta(raw, body);
+    }
+    if (_kind != EntryKind.note && _kind != EntryKind.thought) {
+      return raw;
+    }
+    return NoteMeta.fromJson(raw).copyWith(
+      pinned: _pinned,
+      wordCount: countNoteWords(body),
+    ).toJsonString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
@@ -602,6 +625,17 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             onTap: _saving ? null : _pickTags,
             child: SketchTag('＋ 标签', tone: SketchTone.ghost, dense: true),
           ),
+          if (_kind == EntryKind.note || _kind == EntryKind.thought)
+            GestureDetector(
+              onTap: _saving
+                  ? null
+                  : () => setState(() => _pinned = !_pinned),
+              child: SketchTag(
+                _pinned ? '已置顶' : '置顶',
+                tone: _pinned ? SketchTone.primary : SketchTone.ghost,
+                dense: true,
+              ),
+            ),
         ],
       ),
     );

@@ -252,4 +252,40 @@ void main() {
     expect(meta.pinned, isFalse);
     expect(meta.wordCount, 6);
   });
+
+  testWidgets('新建笔记点置顶后保存 meta.pinned=true',
+      (WidgetTester tester) async {
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).first, '置顶笔记');
+    await tester.tap(find.text('置顶'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('已置顶'), findsOneWidget);
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await app.db.select(app.db.entries).get();
+    expect(NoteMeta.fromJson(jsonDecode(rows.single.meta!)).pinned, isTrue);
+  });
+
+  testWidgets('编辑已有置顶笔记时回显已置顶且保存不丢',
+      (WidgetTester tester) async {
+    final created = await app.gateway.writeEntry(EntryWrite.create(
+      id: 'pinned-edit',
+      title: '旧置顶',
+      body: '旧正文',
+      meta: const NoteMeta(pinned: true, wordCount: 3).toJsonString(),
+    ));
+    await pumpEditor(tester, entryId: created.snapshot.id);
+    expect(find.text('已置顶'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '新的正文内容');
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final row = await app.repo.getRow('pinned-edit');
+    final meta = NoteMeta.fromJson(jsonDecode(row!.meta!));
+    expect(meta.pinned, isTrue);
+    expect(meta.wordCount, 6);
+  });
 }

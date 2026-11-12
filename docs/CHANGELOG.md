@@ -4,6 +4,28 @@
 
 ---
 
+## v1.62 · 2026-11-12
+
+### M2：编辑器置顶开关（已验证）
+
+- `EditorPage` 分类行新增「置顶 / 已置顶」切换（仅 kind=1/2 显示）；
+  新建时写 `pinned:true` meta，编辑态从 `NoteMeta` 回显；
+  保存统一走 `_refreshedMeta`：日记刷新日期字段、笔记刷新字数、
+  其它 kind 原样不动不覆盖扩展字段
+- 与 v1.61 的 `rerankScore(pinned:)` 形成完整闭环；编辑器 12 条回归全绿
+- 测试：`editor_page_test.dart` +2 条（点置顶落库、编辑回显不丢）
+  → 全量 **915 → 917**
+
+**边界**：置顶列表单独视图仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**917/917 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 157）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.61 · 2026-11-12
 
 ### M5：置顶 meta 接入混合检索重排（已验证）
