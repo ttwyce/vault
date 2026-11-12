@@ -1683,6 +1683,19 @@ class WriteGateway {
     });
   }
 
+  /// LRU 缓存清理：只把 `local` 置 0，云端副本与条目都保留（docs/05 §7）。
+  Future<void> unmarkArchiveBlobLocal({
+    required String entryId,
+    required String blobHash,
+  }) {
+    return _db.transaction(() async {
+      await (_db.update(_db.blobRefs)
+            ..where((t) =>
+                t.entryId.equals(entryId) & t.blobHash.equals(blobHash)))
+          .write(const BlobRefsCompanion(local: Value<int>(0)));
+    });
+  }
+
   /// 记录一次死链 / 内容变更检查。同 entry 同时间戳只留一条。
   Future<void> recordLinkCheck({
     required String entryId,

@@ -52,4 +52,30 @@ void main() {
     expect(find.textContaining('local=1'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
+
+  testWidgets('有 onDownload 时显示按钮，下载中与完成态正确',
+      (WidgetTester tester) async {
+    var tapped = 0;
+    await pump(tester, ArchiveDownloadBanner(
+      request: _request(OnDemandLayer.pdf),
+      onDownload: () => tapped++,
+    ));
+    expect(find.text('下载到本地'), findsOneWidget);
+    await tester.tap(find.text('下载到本地'));
+    expect(tapped, 1);
+
+    await pump(tester, ArchiveDownloadBanner(
+      request: _request(OnDemandLayer.pdf),
+      onDownload: () {},
+      downloading: true,
+    ));
+    expect(find.text('下载中…'), findsOneWidget);
+
+    await pump(tester, ArchiveDownloadBanner(
+      request: _request(OnDemandLayer.text),
+      onDownload: () {},
+      completed: true,
+    ));
+    expect(find.text('下载到本地'), findsNothing);
+  });
 }

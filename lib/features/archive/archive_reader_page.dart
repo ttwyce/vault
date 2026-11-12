@@ -11,6 +11,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/archive/archive_highlight_writer.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_cache_policy.dart';
+import '../../data/archive/http_blob_downloader.dart';
 import '../../data/archive/archive_reader.dart';
 import '../../data/sync/version_diff.dart';
 import 'widgets/archive_download_banner.dart';
@@ -32,6 +33,7 @@ class ArchiveReaderPage extends ConsumerStatefulWidget {
     this.previousBody,
     this.textDownload,
     this.pdfDownload,
+    this.blobBaseUrl,
     this.entryId,
   });
 
@@ -48,6 +50,9 @@ class ArchiveReaderPage extends ConsumerStatefulWidget {
   final DownloadRequest? textDownload;
   final DownloadRequest? pdfDownload;
 
+  /// blob 云端根地址；为空时只展示计划、不提供下载按钮。
+  final String? blobBaseUrl;
+
   /// 有 entryId 才能把高亮写回 meta；旧调用不传时按钮禁用。
   final String? entryId;
 
@@ -59,6 +64,7 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
   ReaderMode _mode = ReaderMode.clean;
   final TextEditingController _selection = TextEditingController();
   String? _askHint;
+  final Map<String, _DownloadState> _downloads = <String, _DownloadState>{};
 
   @override
   void dispose() {
@@ -202,7 +208,7 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
         if (body == null || body.trim().isEmpty) {
           final request = widget.textDownload;
           if (request != null) {
-            return ArchiveDownloadBanner(request: request);
+            return _downloadBanner(request);
           }
           return Text(
             widget.meta.hasText
@@ -226,7 +232,7 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
             ),
             if (pdfRequest != null) ...<Widget>[
               const SizedBox(height: SketchSpace.sm),
-              ArchiveDownloadBanner(request: pdfRequest),
+              _downloadBanner(pdfRequest),
             ],
           ],
         );
@@ -302,9 +308,79 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
     );
   }
 
+  Widget _downloadBanner(DownloadRequest request) {
+    final state = _downloads[request.blobHash];
+    final base = widget.blobBaseUrl;
+    return ArchiveDownloadBanner(
+      request: request,
+      receivedBytes: state?.received ?? 0,
+      totalBytes: state?.total ?? 0,
+      completed: state?.done ?? false,
+      downloading: state?.running ?? false,
+      onDownload: base == null || base.isEmpty
+          ? null
+          : () => _startDownload(request, base),
+    );
+  }
+
+  Future<void> _startDownload(DownloadRequest request, String base) async {
+    if (_downloads[request.blobHash]?.running == true) return;
+    final normalized = base.endsWith('/')
+        ? base.substring(0, base.length - 1)
+        : base;
+    final url = Uri.parse('$normalized/blobs/${request.blobHash}');
+    setState(() {
+      _downloads[request.blobHash] = const _DownloadState(running: true);
+    });
+    final downloader = HttpBlobDownloader(
+      gateway: ref.read(writeGatewayProvider),
+    );
+    final result = await downloader.download(
+      entryId: request.entryId,
+      blobHash: request.blobHash,
+      url: url,
+      expectedBytes: 0,
+      onProgress: (double progress) {
+        if (!mounted) return;
+        setState(() {
+          _downloads[request.blobHash] = _DownloadState(
+            running: true,
+            done: false,
+            received: (progress * 1024).round(),
+            total: 1024,
+          );
+        });
+      },
+    );
+    downloader.close();
+    if (!mounted) return;
+    setState(() {
+      _downloads[request.blobHash] = _DownloadState(
+        running: false,
+        done: result.ok,
+        received: result.bytes,
+        total: result.bytes,
+      );
+    });
+  }
+
   String _label(ReaderMode mode) => switch (mode) {
         ReaderMode.clean => '纯净',
         ReaderMode.original => '原貌',
         ReaderMode.compare => '对比',
       };
+}
+
+class _DownloadState {
+  const _DownloadState({
+    this.running = false,
+    this.done = false,
+    this.received = 0,
+    this.total = 0,
+  });
+
+  final bool running;
+  final bool done;
+  final int received;
+  final int total;
 }

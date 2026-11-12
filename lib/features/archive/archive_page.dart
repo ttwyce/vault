@@ -36,12 +36,16 @@ class ArchivePage extends ConsumerStatefulWidget {
     super.key,
     this.checkerFactory,
     this.waybackClientFactory,
+    this.blobBaseUrl,
   });
 
   /// 真实执行批量检查时可注入（widget 测试里 HttpClient 被绑定拦截，
   /// 用假 checker 覆盖），生产环境为 null → 真实 dart:io HEAD。
   final HttpLinkChecker Function()? checkerFactory;
   final HttpWaybackClient Function()? waybackClientFactory;
+
+  /// blob 云端根地址（由装配层注入）；为空时阅读器只展示下载计划。
+  final String? blobBaseUrl;
 
   @override
   ConsumerState<ArchivePage> createState() => _ArchivePageState();
@@ -641,6 +645,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
           previousBody: previousBody,
           textDownload: textRequest,
           pdfDownload: pdfRequest,
+          blobBaseUrl: widget.blobBaseUrl,
         ),
       ),
     );

@@ -4,6 +4,35 @@
 
 ---
 
+## v1.95 · 2026-11-12
+
+### M4：真实 blob 按需下载与 LRU 清理执行（已验证）
+
+- 新增 `http_blob_downloader.dart`：`dart:io` 真实 GET blob，
+  流式计进度，完整读完后经 `WriteGateway.markArchiveBlobLocal`
+  只把 `local` 置 1；404 / 超时 / 断连 / 实际大小远超声明一律
+  不动数据库，绝不把半截数据当可用
+- `WriteGateway.unmarkArchiveBlobLocal` + `BlobCacheEvictor`：
+  读真实 `blob_ref` 按 `planBlobCacheCleanup` LRU 淘汰，只置
+  `local=0`，不删云端副本 / 不删条目
+- `ArchiveDownloadBanner` 新增「下载到本地」按钮（下载中 /
+  完成态）；`ArchiveReaderPage` 接 `HttpBlobDownloader` 真实执行，
+  `ArchivePage` 可注入 `blobBaseUrl`（装配层未提供时只显示计划）
+- 测试：`http_blob_downloader_test.dart` 3 条（本地 HttpServer：
+  成功写 local=1 / 404 不写 / LRU 清理）、
+  `archive_download_banner_test.dart` +1 条（按钮三态）→ 全量 **1013 → 1017**
+
+**边界**：真实 blob 云端 URL 装配 / 20MB 大文件真机计时 / 加密 blob
+上传下载仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1017/1017 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 190）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.94 · 2026-11-12
 
 ### M7：OpenAI-compatible 真实 SSE 流式链路（已验证）

@@ -20,16 +20,36 @@ class ArchiveDownloadBanner extends StatelessWidget {
     this.receivedBytes = 0,
     this.totalBytes = 0,
     this.completed = false,
+    this.onDownload,
+    this.downloading = false,
   });
 
   final DownloadRequest request;
   final int receivedBytes;
   final int totalBytes;
   final bool completed;
+  final VoidCallback? onDownload;
+  final bool downloading;
 
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
+    final body = _buildBody(p);
+    if (onDownload == null || completed) return body;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        body,
+        const SizedBox(height: SketchSpace.sm),
+        TextButton(
+          onPressed: downloading ? null : onDownload,
+          child: Text(downloading ? '下载中…' : '下载到本地'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBody(SketchPalette p) {
     if (completed) {
       return Text(
         '已下载到本地缓存（local=1），云端副本保留',
