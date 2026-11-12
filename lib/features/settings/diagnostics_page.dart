@@ -32,6 +32,7 @@ import '../../core/sync/sync_checkpoint.dart';
 import '../../core/sync/sync_state_machine.dart' show SyncPhase;
 import '../../core/sync/sync_status_ui.dart';
 import '../../data/agent/rollup_service.dart';
+import '../../data/archive/archive_cache_policy.dart';
 import '../../data/archive/archive_content_gate.dart';
 import '../../data/archive/content_change_policy.dart';
 import '../../data/archive/archive_image_filter.dart';
@@ -327,6 +328,8 @@ class DiagnosticsPage extends ConsumerWidget {
               '变更检测：只对手动标记或 '
               '${kRecentlyVisitedMs ~/ 86400000} 天内访问过的条目重抓，'
               'simhash 汉明距离 > 3 才提示并保留旧版\n'
+              '按需下载：L1 自动 + 骨架屏 / L2 点原貌才下 / '
+              '本地缓存 ${kDefaultBlobCacheMaxBytes ~/ 1024 ~/ 1024}MB 按 LRU 只置 local=0\n'
               'PDF 分页 A4 ${kA4WidthPt.toInt()}×${kA4HeightPt.toInt()}pt / '
               '${PdfFallbackStage.values.length} 级降级到只保留 L1+L3\n'
               'Wayback：availability 响应解析 / 时间戳兜底 / '

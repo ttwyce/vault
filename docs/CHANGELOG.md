@@ -4,6 +4,28 @@
 
 ---
 
+## v1.38 · 2026-11-12
+
+### M4：按需下载与本地 blob 缓存策略（已验证）
+
+- 新增 `archive_cache_policy.dart`（docs/05 §7）：默认 500MB 上限、
+  L1 正文自动下载带骨架屏 / L2 PDF 必须点「查看原貌」/ 已本地不请求；
+  超上限复用 `planBlobCacheEviction` 按 LRU 清理，动作明确
+  **只置 local=0，不删云端**
+- `DiagnosticsPage` 展示规则
+- 测试：`archive_cache_policy_test.dart` 3 条 → 全量 **853 → 856**
+
+**边界**：真实 blob 下载 / 进度条 / `local` 落库仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**856/856 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 133）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.37 · 2026-11-12
 
 ### M4：PDF 分页与三级降级（已验证）
