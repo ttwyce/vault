@@ -1,8 +1,10 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/archive/archive_meta.dart';
+import 'package:vault/data/db/vault_database.dart' show BlobRefsCompanion;
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/features/archive/archive_page.dart';
@@ -266,5 +268,41 @@ void main() {
           ..where((t) => t.kind.equals(EntryKind.bookmark.code)))
         .get();
     expect(rows, hasLength(1));
+  });
+
+  testWidgets('点开归档时把真实 L1 正文与 PDF 本地状态传给阅读器',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/full',
+      site: 'example.com',
+      status: ArchiveStatus.full,
+      title: '有正文的归档',
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-body',
+      kind: EntryKind.bookmark,
+      title: '有正文的归档',
+      body: '这是真实 L1 正文',
+      meta: meta.toJsonString(),
+    ));
+    await app.db.into(app.db.blobRefs).insert(
+          BlobRefsCompanion.insert(
+            entryId: 'arch-body',
+            blobHash: 'pdf-hash',
+            kind: 2,
+            bytes: 1024,
+            createdAt: 1731052800000,
+            local: const Value<int>(1),
+          ),
+        );
+    await pumpArchive(tester);
+    await tester.tap(find.text('有正文的归档'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('这是真实 L1 正文'), findsOneWidget);
+    // 原貌模式可点（pdfLocal=true），说明 blob_ref 已接线。
+    expect(find.text('原貌'), findsOneWidget);
   });
 }

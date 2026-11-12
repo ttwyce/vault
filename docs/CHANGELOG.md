@@ -4,6 +4,33 @@
 
 ---
 
+## v1.79 · 2026-11-12
+
+### M4：归档阅读器真实 diff 与数据接线（已验证）
+
+- `ArchivePage._openReader` 从真实 `entry.body` 传 L1 正文、
+  从 `blob_ref(kind=2, local=1)` 判断 L2 PDF 是否已本地缓存，
+  不再把 `body: null / pdfLocal: false` 写死
+- `ArchiveReaderPage` 新增 `previousBody` 参数，对比模式接
+  `buildVersionDiff` 渲染 +/- 行（新增绿 / 删除红 / 上下文灰），
+  超阈值降级为统计、最多展示 200 行并提示截断；
+  缺上一版时明确说明「旧版需历史版本解密」，不假装能 diff
+- 顺手修两个真实 UI 缺陷：独立路由缺 Material 祖先导致 TextField 崩、
+  无界 `SingleChildScrollView` 里用 `Expanded` 撑爆布局
+- 测试：`archive_reader_page_test.dart` +1 条（真实 diff / 缺版提示），
+  `archive_page_test.dart` +1 条（正文与 PDF 状态接线）→ 全量 **957 → 959**
+
+**边界**：旧版正文仍需 `entry_history` 加密信封解密后传入；
+L2 PDF 渲染属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**959/959 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 174）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.78 · 2026-11-12
 
 ### M4：死链重检查的平台默认排期（已验证）

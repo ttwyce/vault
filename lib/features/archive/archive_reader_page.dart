@@ -11,6 +11,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/archive/archive_highlight_writer.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_reader.dart';
+import '../../data/sync/version_diff.dart';
 
 /// 归档阅读器（docs/05 §9）。
 ///
@@ -26,6 +27,7 @@ class ArchiveReaderPage extends ConsumerStatefulWidget {
     required this.pdfLocal,
     required this.hasPreviousTextVersion,
     this.body,
+    this.previousBody,
     this.entryId,
   });
 
@@ -35,6 +37,10 @@ class ArchiveReaderPage extends ConsumerStatefulWidget {
   final bool pdfLocal;
   final bool hasPreviousTextVersion;
   final String? body;
+
+  /// 新旧对比用的上一版 L1 正文；由上层从历史版本解密提供。
+  /// 为 null 时对比模式明确说明缺上一版，不假装能 diff。
+  final String? previousBody;
 
   /// 有 entryId 才能把高亮写回 meta；旧调用不传时按钮禁用。
   final String? entryId;
@@ -77,8 +83,10 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
       formatDate: _formatDate,
     );
 
-    return PageScaffold(
-      title: '归档阅读',
+    return Material(
+      color: Colors.transparent,
+      child: PageScaffold(
+        title: '归档阅读',
       subtitle: widget.title,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -176,6 +184,7 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
             Text(reason,
                 style: TextStyle(fontSize: 10.5, color: p.blue)),
         ],
+        ),
       ),
     );
   }
@@ -201,12 +210,75 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
           style: TextStyle(fontSize: 13, color: p.muted),
         );
       case ReaderMode.compare:
-        return Text(
-          '对比模式用于查看新旧两版 L1 正文的并排差异。'
-          '当前已检测到内容变更：${widget.meta.changed ? '是' : '否'}。',
-          style: TextStyle(fontSize: 13, color: p.muted),
-        );
+        final before = widget.previousBody;
+        final after = widget.body;
+        if (before == null || after == null) {
+          return Text(
+            '对比模式需要新旧两版 L1 正文。当前只有'
+            '${after == null ? '零版' : '当前版'}，'
+            '已检测到内容变更：${widget.meta.changed ? '是' : '否'}。'
+            '旧版需由历史版本解密后传入。',
+            style: TextStyle(fontSize: 13, color: p.muted),
+          );
+        }
+        return _buildVersionDiff(before, after, p);
     }
+  }
+
+  /// 用真实行级 diff 渲染 +/- 行（docs/05 §9 对比模式）。
+  /// 超过行数上限时 buildVersionDiff 会降级成统计视图，不跑 O(n·m) DP。
+  Widget _buildVersionDiff(
+    String before,
+    String after,
+    SketchPalette p,
+  ) {
+    final view = buildVersionDiff(before, after);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '新旧正文差异：${view.summary}',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: p.blue,
+          ),
+        ),
+        const SizedBox(height: SketchSpace.sm),
+        if (view.degraded)
+          Text(
+            '版本过大，只显示统计；逐行对比请到历史版本页。',
+            style: TextStyle(fontSize: 12, color: p.muted),
+          )
+        else ...<Widget>[
+          // 外层是 SingleChildScrollView（高度无界），这里不能用 Expanded /
+          // ListView；只展示前 200 行，超出明确提示，避免撑爆布局。
+          for (final line in view.lines.take(200))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text(
+                '${line.marker} ${line.text}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: switch (line.kind) {
+                    DiffLineKind.added => p.green,
+                    DiffLineKind.removed => p.red,
+                    DiffLineKind.context => p.muted,
+                  },
+                ),
+              ),
+            ),
+          if (view.lines.length > 200)
+            Text(
+              '还有 ${view.lines.length - 200} 行未显示，完整对比请到历史版本页。',
+              style: TextStyle(fontSize: 11, color: p.muted),
+            ),
+        ],
+      ],
+    );
   }
 
   String _label(ReaderMode mode) => switch (mode) {

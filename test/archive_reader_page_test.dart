@@ -30,6 +30,7 @@ void main() {
     bool pdfLocal = true,
     bool hasPrevious = true,
     String? body = '归档正文内容',
+    String? previousBody,
   }) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1.0;
@@ -43,6 +44,7 @@ void main() {
           pdfLocal: pdfLocal,
           hasPreviousTextVersion: hasPrevious,
           body: body,
+          previousBody: previousBody,
         ),
       ),
     ));
@@ -51,7 +53,11 @@ void main() {
 
   testWidgets('full + 本地 PDF + 旧版：三个模式可点，纯净默认渲染正文',
       (WidgetTester tester) async {
-    await pumpReader(tester, archiveMeta: meta(changed: true));
+    await pumpReader(
+      tester,
+      archiveMeta: meta(changed: true),
+      previousBody: '归档旧版内容\n第二段',
+    );
     expect(find.text('归档正文内容'), findsOneWidget);
     expect(find.textContaining('归档于'), findsOneWidget);
     expect(find.textContaining('原站存活'), findsOneWidget);
@@ -62,7 +68,9 @@ void main() {
 
     await tester.tap(find.text('对比'));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.textContaining('并排差异'), findsOneWidget);
+    expect(find.textContaining('新旧正文差异'), findsOneWidget);
+    expect(find.textContaining('+'), findsWidgets);
+    expect(find.textContaining('-'), findsWidgets);
   });
 
   testWidgets('PDF 仅云端时原貌/对比不可点，给出按需下载提示',
@@ -152,5 +160,14 @@ void main() {
     final stored = jsonDecode(row!.meta!) as Map<String, Object?>;
     final highlights = stored['highlights'] as List<Object?>;
     expect(highlights, hasLength(1));
+  });
+
+  testWidgets('对比模式缺上一版正文时明确说明，不假装能 diff',
+      (WidgetTester tester) async {
+    await pumpReader(tester, archiveMeta: meta(changed: true));
+    await tester.tap(find.text('对比'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('旧版需由历史版本解密后传入'), findsOneWidget);
+    expect(find.textContaining('新旧正文差异'), findsNothing);
   });
 }

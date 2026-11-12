@@ -17,6 +17,7 @@ import '../../data/archive/archive_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/archive/archive_repository_provider.dart';
 import '../../data/db/tables/entry_tables.dart';
+import '../../data/db/vault_database.dart' show BlobRefRow;
 import '../../data/write/write_gateway.dart';
 
 /// 归档网站总览（docs/11 §3.2）。
@@ -344,6 +345,18 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
   }
 
   Future<void> _openReader(ArchiveEntry entry) async {
+    // 真实接线：L1 正文来自 entry.body；L2 PDF 是否本地可读来自 blob_ref。
+    // 旧版正文需解密 entry_history，当前仍由平台层后续提供（诚实占位）。
+    final db = ref.read(vaultDatabaseProvider);
+    final row = await (db.select(db.entries)
+          ..where((t) => t.id.equals(entry.id)))
+        .getSingleOrNull();
+    final pdfRows = await (db.select(db.blobRefs)
+          ..where((t) => t.entryId.equals(entry.id)))
+        .get();
+    final pdfLocal = pdfRows.any((BlobRefRow r) => r.kind == 2 && r.local == 1);
+    final body = row?.body;
+    if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (BuildContext _) => ArchiveReaderPage(
@@ -351,9 +364,9 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
           title: entry.title ?? entry.meta.title ?? '(无标题)',
           meta: entry.meta,
           archivedAtMs: entry.updatedAt,
-          pdfLocal: false,
+          pdfLocal: pdfLocal,
           hasPreviousTextVersion: false,
-          body: null,
+          body: body,
         ),
       ),
     );
