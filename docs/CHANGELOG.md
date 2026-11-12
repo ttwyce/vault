@@ -4,6 +4,30 @@
 
 ---
 
+## v1.18 · 2026-11-12
+
+### M8 预备：待处理任务页（第 20 屏，已验证）
+
+- 新增 `job_queue_repository.dart`：读真实 `job_queue` 表，
+  状态编码/中文标签、失败重试上限 3 次、指数退避 1/2/4 分钟、
+  前台补偿到期筛选、按类型聚合
+- 新增 `PendingJobsPage`（docs/10 第 20 屏）：展示状态、类型、
+  尝试次数、到期时间；明确「未接后台执行器」，空队列给空状态
+- `SettingsHubPage` 新增「待处理任务」入口
+- 测试：`job_queue_repository_test.dart` 3 条、
+  `pending_jobs_page_test.dart` 3 条 → 全量 **786 → 792**
+
+**边界**：真实后台任务 / 前台补偿执行器 / running 超时回收
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**792/792 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 113）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.17 · 2026-11-12
 
 ### M2：版本对比页（第 23 屏，已验证）

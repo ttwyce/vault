@@ -16,6 +16,7 @@ import '../settings/diagnostics_page.dart';
 import '../settings/export_backup_page.dart';
 import '../settings/fonts_page.dart';
 import '../settings/models_page.dart';
+import '../settings/pending_jobs_page.dart';
 import '../trash/trash_page.dart';
 
 /// 设置中心。
@@ -89,6 +90,12 @@ class SettingsHubPage extends ConsumerWidget {
               title: '导出与备份',
               subtitle: '明文导出二次确认、导入合并判定、/backup/ 隔离与排期',
               onTap: () => _push(context, const ExportBackupPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.archive,
+              title: '待处理任务',
+              subtitle: '前台补偿队列、失败重试与状态聚合',
+              onTap: () => _push(context, const PendingJobsPage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.type,
