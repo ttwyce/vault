@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/core/identity/uuid_v7.dart';
+import 'package:vault/data/agent/http_llm_client.dart';
+import 'package:vault/data/agent/llm_chat_service.dart';
+import 'package:vault/data/agent/openai_compat.dart';
 import 'package:vault/core/sync/hlc.dart';
 import 'package:vault/data/chat/conversation_models.dart';
 import 'package:vault/data/chat/conversation_repository.dart';
@@ -274,4 +277,62 @@ void main() {
     // docs/12 §3.1：当前对话条同时显示时间与引用数。
     expect(find.textContaining('引用 1 条'), findsOneWidget);
   });
+
+  testWidgets('注入 LlmRuntime 后发消息会经真实 SSE 服务层落助手回复',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final runtime = LlmRuntime(
+      endpoint: const LlmEndpoint(
+        id: 'fake',
+        label: '假流式',
+        baseUrl: 'http://127.0.0.1:1/v1',
+        model: 'fake-model',
+      ),
+      apiKey: 'k',
+      client: _FakeStreamingClient(),
+    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: MaterialApp(
+        home: Scaffold(body: ChatPage(llmRuntime: runtime)),
+      ),
+    ));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(find.text('开启新对话'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(find.byType(TextField).last, '问一个问题');
+    await tester.tap(find.text('发送'));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    final rows = await app.db.select(app.db.messages).get();
+    expect(rows, hasLength(2));
+    expect(rows.any((r) => r.role == 1), isTrue);
+    expect(rows.any((r) => r.role == 2 && r.content == '这是流式回答。'), isTrue);
+  });
+}
+
+class _FakeStreamingClient extends HttpLlmClient {
+  _FakeStreamingClient() : super(connectTimeout: const Duration(milliseconds: 10));
+
+  @override
+  Future<LlmStreamResult> streamChat({
+    required LlmEndpoint endpoint,
+    required List<LlmMessage> messages,
+    required String apiKey,
+    List<Map<String, Object?>> tools = const <Map<String, Object?>>[],
+  }) async =>
+      LlmStreamResult(
+        deltas: const <String>['这是流式回答', '。'],
+        statusCode: 200,
+        log: <String, Object?>{'status': 200},
+        error: null,
+      );
+
+  @override
+  void close({bool force = true}) {}
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,7 +19,10 @@ import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/chat/conversation_repository_provider.dart';
 import '../../data/agent/model_availability_provider.dart';
+import '../../data/agent/llm_chat_service.dart';
 import '../../data/agent/model_status.dart';
+import '../../data/agent/openai_compat.dart';
+import '../../data/agent/system_prompt.dart';
 import '../../data/chat/conversation_retention.dart';
 import '../../data/chat/conversation_scroll.dart';
 import '../../data/chat/conversation_writer.dart';
@@ -30,7 +35,11 @@ import 'widgets/conversation_drawer.dart';
 /// 不是分类目录。左上三横杠用独立 Overlay 路由打开会话抽屉（主区零重排），
 /// 右上「开启新对话」进入草稿态（T26：首条消息前不落库）。
 class ChatPage extends ConsumerStatefulWidget {
-  const ChatPage({super.key});
+  const ChatPage({super.key, this.llmRuntime});
+
+  /// 真实 LLM 运行期配置，由启动装配层从安全存储注入；
+  /// null 时只写用户消息（当前诚实状态，不假装能回答）。
+  final LlmRuntime? llmRuntime;
 
   @override
   ConsumerState<ChatPage> createState() => _ChatPageState();
@@ -145,6 +154,48 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!mounted) return;
     _switchTo(next);
     _input.clear();
+
+    // 有 Key / endpoint 才走真实 SSE；没有就停在诚实状态。
+    final runtime = widget.llmRuntime;
+    if (runtime != null) {
+      unawaited(_replyWithLlm(next, trimmed, runtime));
+    }
+  }
+
+  Future<void> _replyWithLlm(
+    ConversationDraftState draft,
+    String question,
+    LlmRuntime runtime,
+  ) async {
+    final service = LlmChatService(
+      db: ref.read(vaultDatabaseProvider),
+      writer: buildConversationWriter(ref.read(vaultDatabaseProvider)),
+      client: runtime.client,
+    );
+    final secrets = await ref
+        .read(credentialRepositoryProvider)
+        .knownSecretValues();
+    final reply = await service.generateAndAppend(
+      endpoint: runtime.endpoint,
+      apiKey: runtime.apiKey,
+      messages: buildPromptMessages(<LlmMessage>[
+        LlmMessage(role: 'user', content: question),
+      ]),
+      draft: draft,
+      knownSecrets: secrets,
+    );
+    if (!mounted) return;
+    if (reply.ok) {
+      setState(() {
+        _messages = ref
+            .read(conversationRepositoryProvider)
+            .messages(reply.draft.currentId!);
+      });
+    } else {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(reply.error ?? '模型不可用')),
+      );
+    }
   }
 
   @override

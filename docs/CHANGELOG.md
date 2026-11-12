@@ -4,6 +4,39 @@
 
 ---
 
+## v1.94 · 2026-11-12
+
+### M7：OpenAI-compatible 真实 SSE 流式链路（已验证）
+
+- 新增 `http_llm_client.dart`：`dart:io` POST `/chat/completions`
+  （stream=true、Bearer Key 只进 Authorization 头、显式 Content-Length），
+  逐行读 `data:` 事件并按**完整行缓冲**解析（跨 TCP chunk 不丢半个
+  JSON）、`[DONE]` 结束；非 200 / 超时 / 断连 / 响应过大明确错误；
+  日志走 `redactedRequestLog` 不含 Key / body。零新依赖 / 零真机
+- 新增 `llm_chat_service.dart`：`LlmRuntime`（endpoint + Key + client，
+  Key 由调用方从安全存储注入，绝不写 settings.json）、
+  `LlmChatService.generateAndAppend` 把流式文本先过
+  `enforceOutputConstraints`（假引用整句移除 / 密码整段拦截 / 300 字 /
+  token 预算），再经 `ConversationWriter` append-only 落助手消息
+- `ChatPage` 新增可选 `LlmRuntime`：有配置时发消息会真实请求并落
+  助手回复；无配置保持诚实状态只写用户消息
+- 测试：`http_llm_client_test.dart` 3 条（本地 SSE 桩：拼接/DONE/Key
+  隔离/429/断连/跨 chunk 事件）、`llm_chat_service_test.dart` 2 条
+  （端到端落库 / 密码拦截）、`conversation_writer_test.dart` +1 条（UI）
+  → 全量 **1007 → 1013**
+
+**边界**：真实云 Key 的安全存储装配、端侧模型推理、MCP transport
+仍缺；App 启动尚未注入 `LlmRuntime`（由后续装配层接）；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1013/1013 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 189）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.93 · 2026-11-12
 
 ### M6：HIBP k-anonymity 真实 HTTPS GET（已验证）
