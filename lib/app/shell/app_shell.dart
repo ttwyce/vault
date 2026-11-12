@@ -222,7 +222,7 @@ class _RailItemState extends State<_RailItem> {
         child: Tooltip(
           message: widget.section.label,
           child: AnimatedContainer(
-            duration: SketchMotion.hover,
+            duration: SketchMotion.of(context, SketchMotion.hover),
             width: 38,
             height: 38,
             transform: Matrix4.rotationZ(

@@ -62,7 +62,7 @@ class _SketchButtonState extends State<SketchButton> {
         onTapCancel: enabled ? () => setState(() => _down = false) : null,
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0, end: _down ? 1 : 0),
-          duration: SketchMotion.press,
+          duration: SketchMotion.of(context, SketchMotion.press),
           curve: Curves.easeOut,
           builder: (context, t, _) {
             return Transform.translate(
@@ -141,7 +141,7 @@ class _SketchIconButtonState extends State<SketchIconButton> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onPressed,
         child: AnimatedContainer(
-          duration: SketchMotion.hover,
+          duration: SketchMotion.of(context, SketchMotion.hover),
           width: widget.size,
           height: widget.size,
           decoration: BoxDecoration(

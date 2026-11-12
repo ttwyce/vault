@@ -4,6 +4,27 @@
 
 ---
 
+## v1.14 · 2026-11-12
+
+### M2：减少动效支持补齐（U8，已验证）
+
+- `SketchButton` 按下 / `SketchIconButton` hover / `AppShell` 两处
+  AnimatedContainer 的 duration 改走 `SketchMotion.of(context, ...)`，
+  系统开启「减少动效」时所有过渡瞬时完成；`_settingsRoute` 原本已尊重
+- 测试：`reduced_motion_test.dart` 2 条（Duration.zero、按钮仍可点击且
+  transform 不产生布局位移）→ 全量 **777 → 779**
+
+**边界**：抽屉滑入 / 桌面三栏动效仍需真机验证；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**779/779 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 109）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.13 · 2026-11-12
 
 ### M2：分类 / 标签建议判定层（已验证）
