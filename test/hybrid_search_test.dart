@@ -144,4 +144,39 @@ void main() {
       expect(plan.chunks.last.end, lessThanOrEqualTo(long.length));
     });
   });
+
+  test('docs/06 §8.1 命中来源标签如实反映关键词/语义状态', () {
+    expect(
+      hitSourceLabel(
+        keywordHit: true,
+        vectorHit: false,
+        vectorEnabled: false,
+      ),
+      contains('语义未启用'),
+    );
+    expect(
+      hitSourceLabel(
+        keywordHit: true,
+        vectorHit: false,
+        vectorEnabled: true,
+      ),
+      '命中：关键词',
+    );
+    expect(
+      hitSourceLabel(
+        keywordHit: true,
+        vectorHit: true,
+        vectorEnabled: true,
+      ),
+      '命中：关键词 + 语义',
+    );
+    expect(
+      hitSourceLabel(
+        keywordHit: false,
+        vectorHit: true,
+        vectorEnabled: true,
+      ),
+      '命中：语义',
+    );
+  });
 }

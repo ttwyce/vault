@@ -224,3 +224,21 @@ ChunkPlan planChunks({
     truncated: truncated,
   );
 }
+
+
+/// docs/06 §8.1：结果卡片上的命中来源标签。
+///
+/// 真实向量召回未接入前，一律如实标「关键词」并附语义状态，
+/// 不写死「两者」骗用户。
+String hitSourceLabel({
+  required bool keywordHit,
+  required bool vectorHit,
+  required bool vectorEnabled,
+}) {
+  if (keywordHit && vectorHit) return '命中：关键词 + 语义';
+  if (keywordHit) {
+    return vectorEnabled ? '命中：关键词' : '命中：关键词（语义未启用）';
+  }
+  if (vectorHit) return '命中：语义';
+  return '命中：—';
+}

@@ -12,6 +12,7 @@ import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../data/db/tables/entry_tables.dart';
+import '../../data/search/hybrid_search.dart' show hitSourceLabel;
 import '../../data/search/search_suggestions.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/entry/entry_models.dart';
@@ -332,7 +333,11 @@ class _SearchTile extends StatelessWidget {
                   style: TextStyle(fontSize: 10.5, color: p.muted),
                 ),
                 Text(
-                  '命中：关键词',
+                  hitSourceLabel(
+                    keywordHit: true,
+                    vectorHit: false,
+                    vectorEnabled: false,
+                  ),
                   style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),
                 if (entry.kind == EntryKind.bookmark)

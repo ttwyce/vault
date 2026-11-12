@@ -47,7 +47,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('命中：关键词'), findsWidgets);
+    expect(find.textContaining('命中：关键词'), findsWidgets);
     expect(find.text('笔记'), findsWidgets);
     expect(find.text('书签'), findsWidgets);
     expect(find.text('归档'), findsWidgets);
