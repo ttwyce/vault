@@ -71,4 +71,23 @@ void main() {
     expect(find.textContaining('端侧模型 · 未就绪'), findsWidgets);
     expect(find.textContaining('检索与工具仍可用'), findsOneWidget);
   });
+
+  testWidgets('当前对话条显示真实模型状态，不写死端侧模型就绪',
+      (WidgetTester tester) async {
+    final app = await TestApp.create();
+    addTearDown(app.dispose);
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: const MaterialApp(home: Scaffold(body: ChatPage())),
+    ));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.textContaining('端侧模型 · 未就绪'), findsWidgets);
+    expect(find.text('端侧模型'), findsNothing,
+        reason: '旧版写死的「端侧模型」标签已移除');
+  });
 }

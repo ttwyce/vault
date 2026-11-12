@@ -185,6 +185,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             label: _draft.hasDraft
                 ? '新草稿会话'
                 : (_draft.currentId ?? '未选择会话'),
+            modelLabel: status.subtitle,
           ),
           Expanded(
             child: ListView(
@@ -308,9 +309,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 }
 
 class _CurrentConversationBar extends StatelessWidget {
-  const _CurrentConversationBar({required this.label});
+  const _CurrentConversationBar({
+    required this.label,
+    required this.modelLabel,
+  });
 
   final String label;
+  final String modelLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +344,7 @@ class _CurrentConversationBar extends StatelessWidget {
               ),
             ),
           ),
-          Text('端侧模型',
+          Text(modelLabel,
               style: TextStyle(fontSize: 10.5, color: p.muted)),
         ],
       ),
