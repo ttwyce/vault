@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/sketch_controls.dart';
@@ -12,6 +13,7 @@ import '../../features/settings/settings_hub_page.dart';
 import '../../features/vault/vault_page.dart';
 import '../chrome/app_actions.dart';
 import '../theme/bottom_nav_fit.dart';
+import 'desktop_shortcuts.dart';
 import '../theme/sketch_metrics.dart';
 import '../theme/sketch_palette.dart';
 
@@ -106,9 +108,35 @@ class _AppShellState extends State<AppShell> {
 
     final body = IndexedStack(index: _index, children: _pages);
 
+    // docs/08 §7：桌面快捷键。用 CallbackShortcuts 仅在 rail 布局启用，
+    // 移动端不抢系统按键；动作表与 desktop_shortcuts.dart 同源。
+    final shortcuts = <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
+        _invokeShortcut(const _ShortcutIntent('n', ctrl: true));
+      },
+      const SingleActivator(LogicalKeyboardKey.keyK, control: true): () {
+        _invokeShortcut(const _ShortcutIntent('k', ctrl: true));
+      },
+      const SingleActivator(LogicalKeyboardKey.tab, control: true): () {
+        _invokeShortcut(const _ShortcutIntent('tab', ctrl: true));
+      },
+      const SingleActivator(LogicalKeyboardKey.tab,
+          control: true, shift: true): () {
+        _invokeShortcut(const _ShortcutIntent('tab', ctrl: true, shift: true));
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true): () {
+        _invokeShortcut(const _ShortcutIntent('right', alt: true));
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () {
+        _invokeShortcut(const _ShortcutIntent('left', alt: true));
+      },
+    };
+
     return AppActions(
       openSettings: _openSettings,
-      child: Scaffold(
+      child: CallbackShortcuts(
+      bindings: breakpoint.useRail ? shortcuts : const <ShortcutActivator, VoidCallback>{},
+      child: Focus(autofocus: breakpoint.useRail, child: Scaffold(
         backgroundColor: palette.bg,
         // 快速记录是全局入口，放在内容区右下而不是塞进某个分区 ——
         // 「想到一句话」不该要求用户先切到「记录」页。
@@ -142,8 +170,46 @@ class _AppShellState extends State<AppShell> {
                 ),
         ),
       ),
+      ),
+      ),
     );
   }
+
+  void _invokeShortcut(_ShortcutIntent intent) {
+    final action = shortcutFor(
+      keyLabel: intent.keyLabel,
+      ctrl: intent.ctrl,
+      shift: intent.shift,
+      alt: intent.alt,
+    );
+    switch (action) {
+      case DesktopShortcutAction.newEntry:
+        _openQuickCapture();
+      case DesktopShortcutAction.search:
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('全库搜索在设置中心 · 搜索页')),
+          );
+        }
+      case DesktopShortcutAction.nextSection:
+      case DesktopShortcutAction.previousSection:
+        setState(() => _index = nextSectionIndex(
+              _index, action, count: AppSection.values.length));
+      case DesktopShortcutAction.none:
+        break;
+    }
+  }
+}
+
+/// 传给 [shortcutFor] 的按键描述（避免 widget 层直接依赖判定层枚举）。
+class _ShortcutIntent {
+  const _ShortcutIntent(
+    this.keyLabel, {this.ctrl = false, this.shift = false, this.alt = false});
+
+  final String keyLabel;
+  final bool ctrl;
+  final bool shift;
+  final bool alt;
 }
 
 // ---------------------------------------------------------------------------

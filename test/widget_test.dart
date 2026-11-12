@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -66,5 +67,20 @@ void main() {
     for (final label in _sections) {
       expect(find.byTooltip(label), findsWidgets, reason: '缺少分区入口：$label');
     }
+  });
+
+  testWidgets('桌面 Ctrl+Tab 循环切换分区', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await pumpShell(tester);
+
+    // 默认在「聊天」；Ctrl+Tab 应切到「记录」。
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('还没有内容，点右上角新建'), findsWidgets,
+        reason: 'Ctrl+Tab 后应切到记录页');
   });
 }

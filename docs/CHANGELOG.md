@@ -4,6 +4,30 @@
 
 ---
 
+## v1.69 · 2026-11-12
+
+### M8：桌面快捷键判定与接线（已验证）
+
+- 新增 `desktop_shortcuts.dart`（docs/08 §7）：Ctrl+N 新建 /
+  Ctrl+K 搜索 / Ctrl+Tab 与 Ctrl+Shift+Tab 与 Alt+←→ 切换分区；
+  分区索引 5 个循环、非切换动作保持原值
+- `AppShell` 在 rail 布局下用 `CallbackShortcuts` 启用（移动端不抢键），
+  新建走快速记录、切换用 `nextSectionIndex`、搜索给引导提示；
+  动作表与判定层同源
+- 测试：`desktop_shortcuts_test.dart` 3 条、`widget_test.dart` +1 条
+  （桌面 Ctrl+Tab 后显示记录页空态）→ 全量 **932 → 936**
+
+**边界**：Ctrl+K 目前只给引导提示，真实全库搜索页聚焦仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**936/936 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 164）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.68 · 2026-11-12
 
 ### M7：对话抽屉键盘导航（已验证）
