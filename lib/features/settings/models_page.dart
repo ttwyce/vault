@@ -14,10 +14,14 @@ import '../../../core/icons/sketch_icons.dart';
 import '../../../core/widgets/sketch_controls.dart';
 import '../../../core/widgets/sketch_frame.dart';
 import '../../../data/search/embedding_manifest.dart';
+import '../../../data/search/http_model_downloader.dart';
 import '../../../data/search/model_downloader.dart';
 
 class ModelsPage extends StatelessWidget {
-  const ModelsPage({super.key});
+  const ModelsPage({super.key, this.downloaderFactory});
+
+  /// 真实下载器由启动装配层注入（需要 models 目录）；测试可传临时目录。
+  final HttpModelDownloader Function()? downloaderFactory;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +39,7 @@ class ModelsPage extends StatelessWidget {
       backgroundColor: p.bg,
       body: PageScaffold(
         title: '模型管理',
-        subtitle: '端侧模型与检索降级（未接真实下载）',
+        subtitle: '端侧模型与检索降级（真实下载按装配层注入）',
         showSettings: false,
         leading: SketchIconButton(
           glyph: SketchGlyph.close,
@@ -143,8 +147,62 @@ class ModelsPage extends StatelessWidget {
                     '（三端四标记需平台层落配置）。',
                     style: TextStyle(fontSize: 10.5, color: Color(0xFF6B6459)),
                   ),
+                  const SizedBox(height: SketchSpace.sm),
+                  SketchButton(
+                    label: '下载首个模型',
+                    dense: true,
+                    onPressed: () => _showDownloadDialog(context, specs.first),
+                  ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDownloadDialog(
+    BuildContext context,
+    EmbeddingModelSpec spec,
+  ) async {
+    String hint = '准备下载 ${spec.name}';
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext sheetContext, StateSetter setDialogState) =>
+            AlertDialog(
+          title: const Text('模型下载'),
+          content: Text(hint),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () async {
+                final factory = downloaderFactory;
+                if (factory == null) {
+                  setDialogState(() => hint = '未装配下载器（需 models 目录）');
+                  return;
+                }
+                if (spec.sources.isEmpty) {
+                  setDialogState(
+                    () => hint = '该模型没有配置下载源，拒绝假装下载');
+                  return;
+                }
+                final downloader = factory();
+                setDialogState(() => hint = '下载中…');
+                final outcome = await downloader.download(
+                  modelId: spec.id,
+                  expectedSha256: spec.sha256,
+                  modelBytes: spec.diskBytes,
+                  sourceUrls: spec.sources,
+                );
+                downloader.close();
+                setDialogState(() => hint = outcome.hint);
+              },
+              child: const Text('开始'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('关闭'),
             ),
           ],
         ),

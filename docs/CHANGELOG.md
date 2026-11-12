@@ -4,6 +4,32 @@
 
 ---
 
+## v2.1 · 2026-11-12
+
+### M5：嵌入模型真实下载链路（已验证）
+
+- 新增 `http_model_downloader.dart`（docs/06 §5）：`dart:io` 真实 GET，
+  `.part` 断点续传（`Range: bytes=N-`，服务器忽略 Range 返回 200 时
+  从头覆盖避免拼接坏文件）、流式进度、完成后 sha256 校验；
+  校验失败删 `.part` 换源，每源独立重试、全源失败才 `corrupt`；
+  磁盘需 ≥ disk_bytes×1.5，状态推进复用 `advanceDownload`
+- `ModelsPage` 新增「下载首个模型」弹窗，注入下载器工厂；
+  未装配 / 无下载源时诚实拒绝，不假装下载
+- 测试：`http_model_downloader_test.dart` 5 条（本地 HttpServer +
+  临时目录：成功落盘 / Range 续传 / 忽略 Range / 校验换源与全失败 /
+  磁盘不足）、`models_page_test.dart` +1 条 → 全量 **1039 → 1045**
+
+**边界**：真实模型镜像 URL / `NSURLIsExcludedFromBackupKey` 等三端
+备份排除配置 / 端侧推理仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1045/1045 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 196）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v2.0 · 2026-11-12
 
 ### M4：内容变更真实重抓与 simhash 修正（已验证）
