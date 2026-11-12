@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/sketch_metrics.dart';
+import '../../app/theme/sketch_card_variant.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
@@ -296,13 +297,16 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                         ),
                       )
                     else
-                      for (final entry in visible)
+                      for (var i = 0; i < visible.length; i++)
                         Padding(
                           padding:
                               const EdgeInsets.only(bottom: SketchSpace.md),
                           child: GestureDetector(
-                            onTap: () => _openReader(entry),
-                            child: _ArchiveTile(entry: entry),
+                            onTap: () => _openReader(visible[i]),
+                            child: _ArchiveTile(
+                              entry: visible[i],
+                              variant: sketchCardVariants(visible.length)[i],
+                            ),
                           ),
                         ),
                     const SizedBox(height: SketchSpace.lg),
@@ -381,9 +385,10 @@ String _formatBytes(int bytes) {
 }
 
 class _ArchiveTile extends StatelessWidget {
-  const _ArchiveTile({required this.entry});
+  const _ArchiveTile({required this.entry, this.variant = 0});
 
   final ArchiveEntry entry;
+  final int variant;
 
   @override
   Widget build(BuildContext context) {
@@ -408,8 +413,8 @@ class _ArchiveTile extends StatelessWidget {
                 : '下次检查 ${meta.policy.wire}';
 
     return SketchCard(
-      variant: meta.url.hashCode.abs() % 4,
-      tilt: meta.url.hashCode.isEven ? SketchTilt.left : SketchTilt.right,
+      variant: variant,
+      tilt: variant.isEven ? SketchTilt.left : SketchTilt.right,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

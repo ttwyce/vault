@@ -4,6 +4,27 @@
 
 ---
 
+## v1.52 · 2026-11-12
+
+### M2/UI：相邻卡片圆角配方轮换（U1，已验证）
+
+- 新增 `sketch_card_variant.dart`（docs/10 §2 ① / §12 U1）：
+  4 套配方按索引轮换、与上一张相同时顺延，保证任意相邻卡片不重复
+- `ArchivePage` 列表从 `url.hashCode % 4` 改为整套轮换
+  （倾斜方向也跟 variant 走），归档页 9 条回归全绿
+- 测试：`sketch_card_variant_test.dart` 3 条 → 全量 **891 → 894**
+
+**边界**：其余页面仍用各自 variant 策略，后续逐个替换；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**894/894 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 147）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.51 · 2026-11-12
 
 ### M7：AI 日记 23:50 排期判定（已验证）
