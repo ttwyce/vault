@@ -4,6 +4,27 @@
 
 ---
 
+## v1.64 · 2026-11-12
+
+### M4：自动完整快照排期判定（已验证）
+
+- 新增 `snapshot_schedule.dart`（docs/05 §5.2）：daily 每日 02:00 /
+  weekly 每周日 02:00 / off / perClip 不参与定时；
+  02:00 前不触发、当天已成功跑过不重复、跨天允许再跑
+- `DiagnosticsPage` 展示规则
+- 测试：`snapshot_schedule_test.dart` 3 条 → 全量 **921 → 924**
+
+**边界**：真实定时器 / 托盘常驻 / L2+L3 抓取执行仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**924/924 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 159）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.63 · 2026-11-12
 
 ### M2：日记月历头汇总（已验证）

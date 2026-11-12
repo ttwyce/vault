@@ -45,6 +45,7 @@ import '../../data/archive/clipboard_archive_hint.dart';
 import '../../data/archive/content_change_policy.dart';
 import '../../data/archive/archive_image_filter.dart';
 import '../../data/archive/archive_settings.dart';
+import '../../data/archive/snapshot_schedule.dart';
 import '../../data/archive/pdf_pagination.dart';
 import '../../data/archive/wayback_client.dart';
 import '../../data/archive/archive_job_queue.dart';
@@ -359,6 +360,8 @@ class DiagnosticsPage extends ConsumerWidget {
               '${PdfFallbackStage.values.length} 级降级到只保留 L1+L3\n'
               'Wayback：availability 响应解析 / 时间戳兜底 / '
               '自动提交默认关闭（${shouldSubmitToWayback(userOptedIn: false)}）\n'
+              '完整快照排期：每日 02:00 / 每周日 02:00 / '
+              '当天已跑不重复（$kSnapshotHour:00 窗口）\n'
               '归档配置：L1 常开、完整快照 ${SnapshotSchedule.values.length} 种排期、'
               '配额 ${const ArchiveSettings().quotaRatio * 100}% '
               '超限只存 L1、不承诺后台自动\n'
