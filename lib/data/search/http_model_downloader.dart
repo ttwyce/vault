@@ -236,13 +236,10 @@ class HttpModelDownloader {
       final bytes = await part.readAsBytes();
       final actual = sha256.convert(bytes).toString();
       return _constantTimeEqualsPublic(expectedSha256, actual);
-    } on TimeoutException {
-      return null;
-    } on SocketException {
-      return null;
-    } on HttpException {
-      return null;
     } on Object {
+      // 四类失败对下载器是同一个结果：本源不可用，换下一个源。
+      // 网络异常分类由 http_* 客户端共用（见 data/network_failure.dart）；
+      // 这里不需要区分类型，也不吞掉非网络异常之外的错误细节。
       return null;
     }
   }

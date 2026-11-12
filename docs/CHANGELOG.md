@@ -4,6 +4,32 @@
 
 ---
 
+## v2.7 · 2026-11-12
+
+### §5 A 装配接线 / 跨链路集成 / 代码收敛（一次性收口）
+
+- **装配注入**：新增 `app_runtime.dart` / `llm_runtime_provider.dart` /
+  `app_runtime_pages.dart`，把 `main()` 算出的本地目录、可选客户端工厂与
+  `ChatPage.llmRuntime` 沿 `VaultGate → AppShell → SettingsHubPage` 下传；
+  `ModelsPage.downloaderFactory`、`ExportBackupPage` 明文导出 / Markdown 导入
+  runner 接真实目录，导出前用 `CredentialRepository.knownSecretValues()` 做
+  泄露扫描，导入走 `WriteGateway`。新增「云端模型」页，Key 只经
+  `flutter_secure_storage`（既有依赖）读写，绝不进 settings.json / 日志 / 表单回显。
+- **跨链路集成**：`test/cross_link_pipeline_test.dart` 用一台本地 `HttpServer`
+  与两个内存库串起 L1 抓取 → L2 PDF 登记 → blob 条件上传 → 跨设备 Markdown
+  迁移 → 按需下载 → 内容变更重抓 → 加密备份上传 / 还原校验；blob 上传器、
+  restore 写回条目仍作为产品缺口显式断言，不在测试里假装完成。
+- **收敛**：`http_*` 客户端重复的 4 类异常分支统一到 `network_failure.dart`
+  （hint 字符串与重试策略不变）；诊断页删重复热键行、修正备份文案过期表述。
+- **边界**：`VaultSyncRuntime` 仍零生产引用；WebDAV 凭据 / blobBaseUrl /
+  三后端不接启动；M0 A5 与 26 个真实同步用例未过，不宣称 M4~M9 完成。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1079/1079 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.6 · 2026-11-12
 
 ### 工程：交接文档整份重写 + 禁止重复工作纪律

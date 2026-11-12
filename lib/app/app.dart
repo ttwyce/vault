@@ -5,6 +5,7 @@ import '../core/fonts/font_providers.dart';
 import 'settings/local_settings.dart';
 import 'settings/local_settings_provider.dart';
 import 'session/auto_lock_watcher.dart';
+import 'session/llm_runtime_provider.dart';
 import 'session/vault_gate.dart';
 import 'theme/sketch_palette.dart';
 import 'theme/sketch_theme.dart';
@@ -19,6 +20,9 @@ class VaultApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fonts = ref.watch(fontServiceProvider);
+    // 安全存储里的云端 Key 异步恢复；没保存过就什么都不做，
+    // AppRuntime 保持 llmRuntime=null（聊天页继续诚实降级）。
+    ref.watch(llmRuntimeBootstrapProvider);
     final initial = initialSettings;
     if (initial != null &&
         ref.read(localSettingsProvider) == const LocalSettings() &&

@@ -6,10 +6,10 @@
 /// 网络失败返回 null，绝不把「未知」当成「安全」。
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../network_failure.dart';
 import 'hibp_client.dart' show HibpRequest;
 
 class HibpFetchResult {
@@ -70,14 +70,17 @@ class HttpHibpClient {
         return acc;
       }).timeout(connectTimeout);
       return HibpFetchResult(body: utf8.decode(bytes), hint: '已取回前缀 $prefix');
-    } on TimeoutException {
-      return const HibpFetchResult(body: null, hint: '查询 HIBP 超时，结果未知');
-    } on SocketException {
-      return const HibpFetchResult(body: null, hint: '网络不可达，结果未知');
-    } on HttpException {
-      return const HibpFetchResult(body: null, hint: 'HIBP 响应异常，结果未知');
-    } on Object {
-      return const HibpFetchResult(body: null, hint: 'HIBP 请求失败，结果未知');
+    } on Object catch (error) {
+      return switch (classifyNetworkFailure(error).kind) {
+        NetworkFailureKind.timeout =>
+          const HibpFetchResult(body: null, hint: '查询 HIBP 超时，结果未知'),
+        NetworkFailureKind.unreachable =>
+          const HibpFetchResult(body: null, hint: '网络不可达，结果未知'),
+        NetworkFailureKind.protocol =>
+          const HibpFetchResult(body: null, hint: 'HIBP 响应异常，结果未知'),
+        NetworkFailureKind.other =>
+          const HibpFetchResult(body: null, hint: 'HIBP 请求失败，结果未知'),
+      };
     }
   }
 }

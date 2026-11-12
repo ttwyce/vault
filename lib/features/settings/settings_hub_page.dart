@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/settings/local_settings_provider.dart';
+import '../../app/session/app_runtime.dart';
+import '../../app/session/app_runtime_pages.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/icons/sketch_icons.dart';
+import '../../data/backup/markdown_exporter.dart';
+import '../../data/backup/markdown_importer.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
@@ -15,6 +19,7 @@ import '../settings/about_page.dart';
 import '../settings/diagnostics_page.dart';
 import '../settings/export_backup_page.dart';
 import '../settings/fonts_page.dart';
+import '../settings/llm_settings_page.dart';
 import '../settings/models_page.dart';
 import '../settings/pending_jobs_page.dart';
 import '../settings/sync_settings_page.dart';
@@ -25,11 +30,21 @@ import '../trash/trash_page.dart';
 /// 之前右上角的齿轮直接跳字体页。加了回收站 / 搜索 / 整理之后，
 /// 一个齿轮只对应一个页面会变成猜谜，所以收敛成一个入口列表。
 class SettingsHubPage extends ConsumerWidget {
-  const SettingsHubPage({super.key});
+  const SettingsHubPage({super.key, this.runtime = AppRuntime.empty});
+
+  /// 由 AppShell 传入；不传时保持未装配状态（既有测试路径）。
+  final AppRuntime runtime;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.sketch;
+    // 导出页的 runner 只在点击时读 db / gateway，裸 ProviderContainer
+    // 的测试只要不点导出按钮就不会触发 Provider 读取。
+    Future<MarkdownExportResult> exportRunner() =>
+        appPlaintextExportRunner(ref);
+    Future<MarkdownImportResult> importRunner() =>
+        appMarkdownImportRunner(ref);
+    final downloaderFactory = runtime.modelDownloaderFactory;
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -87,10 +102,19 @@ class SettingsHubPage extends ConsumerWidget {
               onTap: () => _push(context, const AboutPage()),
             ),
             _SettingsTile(
+              glyph: SketchGlyph.chat,
+              title: '云端模型',
+              subtitle: '自带 Key 只存系统安全区，未配置时不生成回复',
+              onTap: () => _push(context, const LlmSettingsPage()),
+            ),
+            _SettingsTile(
               glyph: SketchGlyph.archive,
               title: '导出与备份',
               subtitle: '明文导出二次确认、导入合并判定、/backup/ 隔离与排期',
-              onTap: () => _push(context, const ExportBackupPage()),
+              onTap: () => _push(context, ExportBackupPage(
+                    plaintextExportRunner: exportRunner,
+                    markdownImportRunner: importRunner,
+                  )),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,
@@ -108,7 +132,8 @@ class SettingsHubPage extends ConsumerWidget {
               glyph: SketchGlyph.type,
               title: '模型管理',
               subtitle: '端侧模型清单、下载源优先级与检索降级四态',
-              onTap: () => _push(context, const ModelsPage()),
+              onTap: () => _push(
+                  context, ModelsPage(downloaderFactory: downloaderFactory)),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,

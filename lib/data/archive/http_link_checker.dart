@@ -6,8 +6,9 @@
 /// 即可完整验证。不写库，落库交给 [LinkCheckService]。
 library;
 
-import 'dart:async';
 import 'dart:io';
+
+import '../network_failure.dart';
 
 class LinkCheckObservation {
   const LinkCheckObservation({
@@ -91,30 +92,47 @@ class HttpLinkChecker {
           finalUrl: current.toString() == url ? null : current.toString(),
           reason: 'HTTP $code',
         );
-      } on SocketException catch (e) {
-        if (attempt == maxRetries) {
+      } on Object catch (error) {
+        final failure = classifyNetworkFailure(error);
+        // DNS / 超时要重试，协议错误立刻返回：这是本客户端独有的策略，
+        // 统一分类只负责识别错误，不替它决定重试。
+        if (failure.kind == NetworkFailureKind.timeout) {
+          if (attempt == maxRetries) {
+            return const LinkCheckObservation(
+              httpStatus: null,
+              retries: 2,
+              finalUrl: null,
+              reason: '请求超时',
+            );
+          }
+          continue;
+        }
+        if (failure.kind == NetworkFailureKind.unreachable) {
+          if (attempt == maxRetries) {
+            return LinkCheckObservation(
+              httpStatus: null,
+              retries: retries,
+              finalUrl: null,
+              reason: '网络不可达：${failure.detail}',
+            );
+          }
+          continue;
+        }
+        if (failure.kind == NetworkFailureKind.protocol) {
           return LinkCheckObservation(
             httpStatus: null,
             retries: retries,
             finalUrl: null,
-            reason: '网络不可达：${e.message}',
+            reason: 'HTTP 协议错误：${failure.detail}',
           );
         }
-      } on TimeoutException {
-        if (attempt == maxRetries) {
-          return const LinkCheckObservation(
-            httpStatus: null,
-            retries: 2,
-            finalUrl: null,
-            reason: '请求超时',
-          );
-        }
-      } on HttpException catch (e) {
-        return LinkCheckObservation(
+        // 其它异常原先不在任何 on 分支里，会冒出 check()；
+        // 这里保持「重试耗尽」的结果，不吞掉成 unreachable。
+        return const LinkCheckObservation(
           httpStatus: null,
-          retries: retries,
+          retries: 2,
           finalUrl: null,
-          reason: 'HTTP 协议错误：${e.message}',
+          reason: '重试耗尽',
         );
       }
     }

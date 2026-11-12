@@ -74,8 +74,8 @@ import '../../data/search/vector_sync_policy.dart';
 /// 发布前自检 / 备份诊断页。
 ///
 /// 把 M8/M9 的确定性判定层接到用户可见入口：六项检查结论、
-/// 加密备份包 manifest 预览、/backup/ 路径与 7 天排期。
-/// **不执行真实打包 / 上传**，也不冒充真实服务器集成验收。
+/// 加密备份 manifest 预览、/backup/ 路径与 7 天排期。
+/// 本页只做展示与演示，不执行真实上传；也不冒充真实服务器集成验收。
 class DiagnosticsPage extends ConsumerWidget {
   const DiagnosticsPage({super.key});
 
@@ -258,8 +258,6 @@ class DiagnosticsPage extends ConsumerWidget {
           const SizedBox(height: SketchSpace.lg),
           const SizedBox(height: SketchSpace.sm),
           Text(
-            '全局热键：默认 $kDefaultGlobalHotkey / '
-            '${HotkeyCheck.values.length} 态判定（保留键 / 冲突 / 可注册）\n'
             '全局热键：默认 $kDefaultGlobalHotkey / '
             '${HotkeyCheck.values.length} 态判定（保留键 / 冲突 / 可注册）\n'
             '桌面布局：${DesktopLayout.values.length} 档（紧凑 / rail / '
@@ -554,7 +552,8 @@ class DiagnosticsPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: SketchSpace.sm),
                 Text(
-                  '真实 zip 打包与 WebDAV /backup/ 上传需 M8 平台层；'
+                  '加密备份已接真实 VLT1 打包与 WebDAV /backup/ 条件上传；'
+                  '还原目前只校验 manifest，不写回条目。'
                   '明文导出必须二次确认。',
                   style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),

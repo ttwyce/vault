@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'app/app.dart';
+import 'app/session/app_runtime.dart';
 import 'app/session/vault_session.dart';
 import 'app/settings/local_settings.dart';
 import 'app/settings/local_settings_provider.dart';
@@ -41,11 +45,21 @@ Future<void> main() async {
     bootError = describeFailure(error);
   }
 
+  // 装配层接线（docs/20 §5 A1）：只算本地目录，不读 / 不存任何凭据，
+  // 不实例化 VaultSyncRuntime。Key 由 LlmConfigService 在 App 里从
+  // 系统安全区异步恢复；Directory 只是路径对象，此时不写盘。
+  final support = await getApplicationSupportDirectory();
+  final runtimeBoot = AppRuntimeBootstrap(
+    modelsRoot: Directory('${support.path}/models'),
+    exportRoot: Directory('${support.path}/exports'),
+  );
+
   runApp(
     ProviderScope(
       overrides: [
         fontServiceProvider.overrideWithValue(fonts),
         settingsStoreProvider.overrideWithValue(settingsStore),
+        appRuntimeBootstrapProvider.overrideWithValue(runtimeBoot),
         vaultBootstrapProvider.overrideWithValue(
           VaultBootstrap(
             storage: storage,

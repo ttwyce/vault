@@ -6,9 +6,10 @@
 /// 用本地 HttpServer 即可完整验证。抓取失败绝不写空正文。
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import '../network_failure.dart';
 
 class ArchiveFetchResult {
   const ArchiveFetchResult({
@@ -93,38 +94,38 @@ class HttpArchiveFetcher {
         hint: '已抓取 L1 正文（${body.length} 字）',
         statusCode: code,
       );
-    } on TimeoutException {
-      return const ArchiveFetchResult(
-        ok: false,
-        title: null,
-        body: null,
-        hint: '页面抓取超时，未写入正文',
-        statusCode: null,
-      );
-    } on SocketException {
-      return const ArchiveFetchResult(
-        ok: false,
-        title: null,
-        body: null,
-        hint: '网络不可达，未写入正文',
-        statusCode: null,
-      );
-    } on HttpException catch (e) {
-      return ArchiveFetchResult(
-        ok: false,
-        title: null,
-        body: null,
-        hint: '页面抓取异常：${e.message}',
-        statusCode: null,
-      );
-    } on Object {
-      return const ArchiveFetchResult(
-        ok: false,
-        title: null,
-        body: null,
-        hint: '页面抓取失败，未写入正文',
-        statusCode: null,
-      );
+    } on Object catch (error) {
+      final failure = classifyNetworkFailure(error);
+      return switch (failure.kind) {
+        NetworkFailureKind.timeout => const ArchiveFetchResult(
+            ok: false,
+            title: null,
+            body: null,
+            hint: '页面抓取超时，未写入正文',
+            statusCode: null,
+          ),
+        NetworkFailureKind.unreachable => const ArchiveFetchResult(
+            ok: false,
+            title: null,
+            body: null,
+            hint: '网络不可达，未写入正文',
+            statusCode: null,
+          ),
+        NetworkFailureKind.protocol => ArchiveFetchResult(
+            ok: false,
+            title: null,
+            body: null,
+            hint: '页面抓取异常：${failure.detail}',
+            statusCode: null,
+          ),
+        NetworkFailureKind.other => const ArchiveFetchResult(
+            ok: false,
+            title: null,
+            body: null,
+            hint: '页面抓取失败，未写入正文',
+            statusCode: null,
+          ),
+      };
     }
   }
 

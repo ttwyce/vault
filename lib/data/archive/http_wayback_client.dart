@@ -6,10 +6,10 @@
 /// 网络失败绝不假装「有存档」。
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../network_failure.dart';
 import 'wayback_client.dart' show WaybackResult, parseWaybackAvailability, shouldSubmitToWayback;
 
 class HttpWaybackClient {
@@ -56,12 +56,12 @@ class HttpWaybackClient {
         return '已提交到 Internet Archive（HTTP ${response.statusCode}）';
       }
       return '提交失败：HTTP ${response.statusCode}';
-    } on TimeoutException {
-      return '提交超时，稍后可手动重试';
-    } on SocketException {
-      return '网络不可达，提交未完成';
-    } on Object {
-      return '提交失败，URL 未确认送达';
+    } on Object catch (error) {
+      return switch (classifyNetworkFailure(error).kind) {
+        NetworkFailureKind.timeout => '提交超时，稍后可手动重试',
+        NetworkFailureKind.unreachable => '网络不可达，提交未完成',
+        _ => '提交失败，URL 未确认送达',
+      };
     }
   }
 
@@ -87,30 +87,29 @@ class HttpWaybackClient {
         return acc;
       }).timeout(connectTimeout);
       return parseWaybackAvailability(utf8.decode(bytes), targetUrl);
-    } on TimeoutException {
-      return const WaybackResult(
-        available: false,
-        archiveUrl: null,
-        hint: '查询 archive.org 超时，建议稍后重试或手动提交',
-      );
-    } on SocketException {
-      return const WaybackResult(
-        available: false,
-        archiveUrl: null,
-        hint: '网络不可达，建议手动提交到 archive.org',
-      );
-    } on HttpException {
-      return const WaybackResult(
-        available: false,
-        archiveUrl: null,
-        hint: 'Wayback 响应异常，建议手动提交到 archive.org',
-      );
-    } on Object {
-      return const WaybackResult(
-        available: false,
-        archiveUrl: null,
-        hint: 'Wayback 响应无法解析，建议手动提交到 archive.org',
-      );
+    } on Object catch (error) {
+      return switch (classifyNetworkFailure(error).kind) {
+        NetworkFailureKind.timeout => const WaybackResult(
+            available: false,
+            archiveUrl: null,
+            hint: '查询 archive.org 超时，建议稍后重试或手动提交',
+          ),
+        NetworkFailureKind.unreachable => const WaybackResult(
+            available: false,
+            archiveUrl: null,
+            hint: '网络不可达，建议手动提交到 archive.org',
+          ),
+        NetworkFailureKind.protocol => const WaybackResult(
+            available: false,
+            archiveUrl: null,
+            hint: 'Wayback 响应异常，建议手动提交到 archive.org',
+          ),
+        NetworkFailureKind.other => const WaybackResult(
+            available: false,
+            archiveUrl: null,
+            hint: 'Wayback 响应无法解析，建议手动提交到 archive.org',
+          ),
+      };
     }
   }
 }

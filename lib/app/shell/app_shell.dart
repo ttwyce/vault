@@ -13,6 +13,7 @@ import '../../features/search/search_page.dart';
 import '../../features/settings/settings_hub_page.dart';
 import '../../features/vault/vault_page.dart';
 import '../chrome/app_actions.dart';
+import '../session/app_runtime.dart';
 import '../theme/bottom_nav_fit.dart';
 import 'desktop_shortcuts.dart';
 import '../theme/sketch_metrics.dart';
@@ -44,7 +45,10 @@ extension AppSectionMeta on AppSection {
 /// 两者是同一套视觉规则（虚线 + 硬阴影 + 倾斜 + 选中项变便签黄），
 /// 见 docs/10 §7.5。
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, this.runtime = AppRuntime.empty});
+
+  /// 启动装配注入；不传时保持全 null 的未装配状态（既有测试路径）。
+  final AppRuntime runtime;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -53,13 +57,18 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
-  static const List<Widget> _pages = <Widget>[
-    ChatPage(),
-    RecordsPage(),
-    DiaryPage(),
-    ArchivePage(),
-    VaultPage(),
-  ];
+  List<Widget> _buildPages() => <Widget>[
+        ChatPage(llmRuntime: widget.runtime.llmRuntime),
+        const RecordsPage(),
+        const DiaryPage(),
+        ArchivePage(
+          checkerFactory: widget.runtime.checkerFactory,
+          waybackClientFactory: widget.runtime.waybackClientFactory,
+          blobBaseUrl: widget.runtime.blobBaseUrl,
+          fetcherFactory: widget.runtime.fetcherFactory,
+        ),
+        VaultPage(hibpClientFactory: widget.runtime.hibpClientFactory),
+      ];
 
   void _select(int index) {
     if (index == _index) return;
@@ -68,7 +77,11 @@ class _AppShellState extends State<AppShell> {
 
   /// 打开设置中心。字体 / 整理 / 搜索 / 回收站都从这一页进。
   void _openSettings() {
-    Navigator.of(context).push<void>(_settingsRoute());
+    Navigator.of(context).push<void>(_settingsRoute()).then((_) {
+      // 设置页可能保存 / 清除了云端 Key；回壳时重建五个分区让 ChatPage
+      // 拿到最新的 LlmRuntime（AppRuntime 在 Riverpod 里已更新）。
+      if (mounted) setState(() {});
+    });
   }
 
   /// 全局快速记录：任何分区都能一键记一条想法。
@@ -82,7 +95,7 @@ class _AppShellState extends State<AppShell> {
     return PageRouteBuilder<void>(
       transitionDuration: SketchMotion.page,
       reverseTransitionDuration: SketchMotion.page,
-      pageBuilder: (_, _, _) => const SettingsHubPage(),
+      pageBuilder: (_, _, _) => SettingsHubPage(runtime: widget.runtime),
       transitionsBuilder: (BuildContext context, Animation<double> animation,
           Animation<double> secondary, Widget child) {
         // 尊重系统「减少动效」
@@ -107,7 +120,7 @@ class _AppShellState extends State<AppShell> {
     final palette = SketchPalette.of(context);
     final breakpoint = SketchBreakpoints.of(MediaQuery.sizeOf(context).width);
 
-    final body = IndexedStack(index: _index, children: _pages);
+    final body = IndexedStack(index: _index, children: _buildPages());
 
     // docs/08 §7：桌面快捷键。用 CallbackShortcuts 仅在 rail 布局启用，
     // 移动端不抢系统按键；动作表与 desktop_shortcuts.dart 同源。

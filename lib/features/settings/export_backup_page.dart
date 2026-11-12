@@ -12,9 +12,9 @@ import '../../data/backup/markdown_importer.dart';
 
 /// 导出与备份页（docs/03 §10）。
 ///
-/// **不打包、不写文件、不联网**：只把明文导出的二次确认流程、
-/// 导入时的无冲突合并判定、/backup/ 隔离与 7 天排期做成可交互演示。
-/// 真实 zip / WebDAV 上传由 M8 平台层按这里的状态执行。
+/// 页面只负责二次确认、导入合并判定、/backup/ 隔离与 7 天排期展示；
+/// 真实写盘 / 打包 / 联网由启动装配注入的 runner 与服务执行，
+/// 未装配时按钮保持禁用或给出明确提示，不假装成功。
 class ExportBackupPage extends StatefulWidget {
   const ExportBackupPage({
     super.key,

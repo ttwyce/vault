@@ -9,6 +9,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import '../network_failure.dart';
 import '../write/write_gateway.dart';
 
 class BlobDownloadResult {
@@ -81,34 +82,34 @@ class HttpBlobDownloader {
         progress: 1,
         hint: '已下载到本地缓存（local=1），云端副本保留',
       );
-    } on TimeoutException {
-      return const BlobDownloadResult(
-        ok: false,
-        bytes: 0,
-        progress: 0,
-        hint: 'blob 下载超时，local 保持 0',
-      );
-    } on SocketException {
-      return const BlobDownloadResult(
-        ok: false,
-        bytes: 0,
-        progress: 0,
-        hint: '网络不可达，local 保持 0',
-      );
-    } on HttpException catch (e) {
-      return BlobDownloadResult(
-        ok: false,
-        bytes: 0,
-        progress: 0,
-        hint: 'blob 下载异常：${e.message}，local 保持 0',
-      );
-    } on Object {
-      return const BlobDownloadResult(
-        ok: false,
-        bytes: 0,
-        progress: 0,
-        hint: 'blob 下载失败，local 保持 0',
-      );
+    } on Object catch (error) {
+      final failure = classifyNetworkFailure(error);
+      return switch (failure.kind) {
+        NetworkFailureKind.timeout => const BlobDownloadResult(
+            ok: false,
+            bytes: 0,
+            progress: 0,
+            hint: 'blob 下载超时，local 保持 0',
+          ),
+        NetworkFailureKind.unreachable => const BlobDownloadResult(
+            ok: false,
+            bytes: 0,
+            progress: 0,
+            hint: '网络不可达，local 保持 0',
+          ),
+        NetworkFailureKind.protocol => BlobDownloadResult(
+            ok: false,
+            bytes: 0,
+            progress: 0,
+            hint: 'blob 下载异常：${failure.detail}，local 保持 0',
+          ),
+        NetworkFailureKind.other => const BlobDownloadResult(
+            ok: false,
+            bytes: 0,
+            progress: 0,
+            hint: 'blob 下载失败，local 保持 0',
+          ),
+      };
     }
   }
 }

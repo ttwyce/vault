@@ -9,6 +9,7 @@ import '../../features/unlock/unlock_page.dart';
 import '../shell/app_shell.dart';
 import '../theme/sketch_metrics.dart';
 import '../theme/sketch_theme.dart';
+import 'app_runtime.dart';
 import 'vault_session.dart';
 
 /// 闸门决定显示哪一屏。
@@ -81,7 +82,10 @@ class VaultGate extends ConsumerWidget {
         // 这样页面不会在派生的 2 秒里被整个替换掉（那会闪一下）。
         return const UnlockPage();
       case GateScreen.shell:
-        return const AppShell();
+        // 装配只在解锁态读：未解锁时没有 db / gateway，页面也不该拿到
+        // 任何运行期配置。AppRuntime 默认全 null，测试容器没有 override 时
+        // 仍是原来的未装配状态。
+        return AppShell(runtime: ref.watch(appRuntimeProvider));
       case GateScreen.fatal:
         return _FatalErrorPage(message: state.error ?? '未知错误');
     }

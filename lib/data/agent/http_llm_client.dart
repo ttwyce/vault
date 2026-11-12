@@ -7,10 +7,10 @@
 /// Key 只放在 Authorization 头，日志走 [redactedRequestLog] 不含 Key / body。
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../network_failure.dart';
 import 'openai_compat.dart';
 
 class LlmStreamResult {
@@ -123,14 +123,18 @@ class HttpLlmClient {
         if (delta != null) deltas.add(delta);
       }
       return _done(endpoint, statusCode, deltas);
-    } on TimeoutException {
-      return _error(endpoint, statusCode, deltas, 'LLM 流式读取超时');
-    } on SocketException {
-      return _error(endpoint, statusCode, deltas, '网络不可达');
-    } on HttpException catch (e) {
-      return _error(endpoint, statusCode, deltas, 'LLM 响应异常：${e.message}');
-    } on Object {
-      return _error(endpoint, statusCode, deltas, 'LLM 请求失败');
+    } on Object catch (error) {
+      final failure = classifyNetworkFailure(error);
+      return switch (failure.kind) {
+        NetworkFailureKind.timeout =>
+          _error(endpoint, statusCode, deltas, 'LLM 流式读取超时'),
+        NetworkFailureKind.unreachable =>
+          _error(endpoint, statusCode, deltas, '网络不可达'),
+        NetworkFailureKind.protocol => _error(
+            endpoint, statusCode, deltas, 'LLM 响应异常：${failure.detail}'),
+        NetworkFailureKind.other =>
+          _error(endpoint, statusCode, deltas, 'LLM 请求失败'),
+      };
     }
   }
 
