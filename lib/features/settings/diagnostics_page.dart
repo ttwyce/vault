@@ -22,6 +22,7 @@ import '../../data/agent/agent_policy.dart'
     show AgentLoopLimits, PolicyAction, PolicyDecision;
 import '../../data/agent/agent_loop.dart' show LoopStop;
 import '../../data/agent/ai_data_clearance.dart';
+import '../../data/agent/agent_fallback_hint.dart';
 import '../../data/agent/ai_diary_schedule.dart';
 import '../../data/agent/daily_summary.dart';
 import '../../data/agent/ai_entry_points.dart';
@@ -315,6 +316,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   '（${VectorDecision.discard.name}）\n'
                   '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
                   '云端任务未授权降级端侧\n'
+                  'Agent 降级：${AgentFailureKind.values.length} 类失败 + '
+                  '6 轮上限 / 拒绝 / 待确认，均明确检索仍可用\n'
                   'AI 日记排期：$kAiDiaryHour:${kAiDiaryMinute.toString().padLeft(2, '0')} '
                   '${AiDiaryPlatform.values.length} 端文案 / 当天已生成不重复 / 前台补偿\n'
                   '清除所有 AI 数据：${AiDataDomain.values.length} 个数据域 / '

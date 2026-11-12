@@ -4,6 +4,28 @@
 
 ---
 
+## v1.56 · 2026-11-12
+
+### M7：Agent 超时 / 失败降级提示（C6，已验证）
+
+- 新增 `agent_fallback_hint.dart`（docs/07 §11 C6）：超时 / 网络 /
+  模型异常 / 预算耗尽四类失败 + 6 轮上限 / 拒绝 / 待确认三态，
+  统一给出「检索仍可用、AI 回答不可用」的诚实文案；
+  预算耗尽不可重试，正常完成不谎称降级
+- `DiagnosticsPage` 展示规则
+- 测试：`agent_fallback_hint_test.dart` 3 条 → 全量 **904 → 907**
+
+**边界**：真实 `runAgentLoop` 失败原因注入 / UI 横幅仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**907/907 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 151）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.55 · 2026-11-12
 
 ### M5：A2 退路之 Dart 内暴力余弦 KNN（已验证）
