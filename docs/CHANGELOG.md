@@ -4,6 +4,30 @@
 
 ---
 
+## v1.20 · 2026-11-12
+
+### M4：阅读器高亮标注写回 meta（已验证）
+
+- 新增 `archive_highlight_writer.dart`（docs/05 §9）：读旧快照 →
+  `mergeHighlights` 合并去重 → 整体替换 `entry(kind=5).meta`
+  → 走唯一 `WriteGateway.writeEntry` 生成新版本与 oplog；
+  非归档 / 坏 meta / 不存在条目一律拒绝，不绕过信封加密与 FTS
+- `ArchiveReaderPage` 新增「标注高亮」按钮（有 entryId 才启用），
+  划词选区可写回真实 meta；`ArchivePage` 跳转传 entryId
+- 测试：`archive_highlight_writer_test.dart` 3 条、
+  `archive_reader_page_test.dart` +1 条 → 全量 **798 → 802**
+
+**边界**：真实文本选区 offset / 高亮渲染 / 与云端 meta 合并仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**802/802 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 115）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.19 · 2026-11-12
 
 ### M3 预备：同步设置页（第 12 屏，已验证）

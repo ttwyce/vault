@@ -286,6 +286,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (BuildContext _) => ArchiveReaderPage(
+          entryId: entry.id,
           title: entry.title ?? entry.meta.title ?? '(无标题)',
           meta: entry.meta,
           archivedAtMs: entry.updatedAt,

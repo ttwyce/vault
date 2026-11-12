@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/archive/archive_highlight_writer.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_reader.dart';
 
@@ -14,7 +17,7 @@ import '../../data/archive/archive_reader.dart';
 /// 用 `resolveReaderModes` 决定哪些模式可点：纯净（L1 正文）/ 原貌（L2 PDF）/
 /// 对比（新旧正文）。PDF 渲染与并排 diff 属于平台层，这里只给出明确的
 /// 「需要先下载 / 没有快照 / 无上一版」提示，绝不假装能显示。
-class ArchiveReaderPage extends StatefulWidget {
+class ArchiveReaderPage extends ConsumerStatefulWidget {
   const ArchiveReaderPage({
     super.key,
     required this.title,
@@ -23,6 +26,7 @@ class ArchiveReaderPage extends StatefulWidget {
     required this.pdfLocal,
     required this.hasPreviousTextVersion,
     this.body,
+    this.entryId,
   });
 
   final String title;
@@ -32,11 +36,14 @@ class ArchiveReaderPage extends StatefulWidget {
   final bool hasPreviousTextVersion;
   final String? body;
 
+  /// 有 entryId 才能把高亮写回 meta；旧调用不传时按钮禁用。
+  final String? entryId;
+
   @override
-  State<ArchiveReaderPage> createState() => _ArchiveReaderPageState();
+  ConsumerState<ArchiveReaderPage> createState() => _ArchiveReaderPageState();
 }
 
-class _ArchiveReaderPageState extends State<ArchiveReaderPage> {
+class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
   ReaderMode _mode = ReaderMode.clean;
   final TextEditingController _selection = TextEditingController();
   String? _askHint;
@@ -123,6 +130,35 @@ class _ArchiveReaderPageState extends State<ArchiveReaderPage> {
                       ? '选区长度合规，可进入 L1 逐次授权流程'
                       : '选区太短/太长，不能问 AI');
                 },
+              ),
+              const SizedBox(width: SketchSpace.sm),
+              SketchButton(
+                label: '标注高亮',
+                dense: true,
+                onPressed: widget.entryId == null
+                    ? null
+                    : () async {
+                        final text = _selection.text.trim();
+                        if (text.isEmpty) {
+                          setState(() => _askHint = '请先粘贴要标注的正文');
+                          return;
+                        }
+                        final changed = await ArchiveHighlightWriter(
+                          db: ref.read(vaultDatabaseProvider),
+                          gateway: ref.read(writeGatewayProvider),
+                        ).addHighlight(
+                          widget.entryId!,
+                          ArchiveHighlight(
+                            text: text,
+                            offset: widget.meta.excerpt.length,
+                          ),
+                        );
+                        if (mounted) {
+                          setState(() => _askHint = changed
+                              ? '高亮已写回 meta（新版本已入 oplog）'
+                              : '高亮无变化');
+                        }
+                      },
               ),
               const SizedBox(width: SketchSpace.sm),
               Expanded(
