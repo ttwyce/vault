@@ -4,6 +4,28 @@
 
 ---
 
+## v1.43 · 2026-11-12
+
+### M3 预备：限流后请求预算减半（已验证）
+
+- 新增 `rate_limit_budget.dart`（docs/04 §7 E_RATE / §10）：
+  E_RATE 每轮减半且下限 1、E_NET/E_CONFLICT/无错误保持、
+  超基线回落 200、致命错误预算归零不再发请求；
+  连续成功 2 轮恢复基线，避免永久半速
+- `DiagnosticsPage` 展示规则
+- 测试：`rate_limit_budget_test.dart` 4 条 → 全量 **867 → 871**
+
+**边界**：协调器 / `RequestBudget` 注入下一轮预算仍待平台接线；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**871/871 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 138）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.42 · 2026-11-12
 
 ### M8：改主密码 / 重置恢复码判定层（已验证）
