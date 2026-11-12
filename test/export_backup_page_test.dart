@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vault/data/backup/backup_models.dart';
 import 'package:vault/data/backup/encrypted_backup_service.dart';
+import 'package:vault/data/backup/markdown_exporter.dart';
+import 'package:vault/data/backup/security_audit.dart';
 import 'package:vault/features/settings/export_backup_page.dart';
+
 
 /// docs/03 §10 导出/备份页测试。
 void main() {
@@ -78,6 +82,44 @@ void main() {
     }
     expect(find.textContaining('已加密上传到 /backup/'), findsWidgets);
   });
+
+
+
+
+
+
+  testWidgets('done 后执行明文导出并展示结果', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(900, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ExportBackupPage(
+          plaintextExportRunner: () async => const MarkdownExportResult(
+            ok: true,
+            stage: PlaintextExportStage.done,
+            writtenFiles: <String>['/tmp/notes/n1.md'],
+            hint: '已导出 1 条正文条目',
+            leaks: <LeakFinding>[],
+          ),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.byType(CheckboxListTile).at(0));
+    await tester.pump();
+    await tester.tap(find.byType(CheckboxListTile).at(1));
+    await tester.pump();
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.text('推进确认流程'));
+      await tester.pump();
+    }
+    expect(find.text('执行明文导出'), findsOneWidget);
+    await tester.tap(find.text('执行明文导出'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('已导出 1 条'), findsOneWidget);
+  });
+
 }
 
 class _FakeBackupService implements BackupUploader {

@@ -4,6 +4,33 @@
 
 ---
 
+## v2.2 · 2026-11-12
+
+### M9：明文 Markdown 导出真实写盘（已验证）
+
+- 新增 `markdown_exporter.dart`（docs/03 §10）：把真实未删除的
+  正文类条目按 kind 写成 `<root>/<kind>/<id>.md`（YAML frontmatter
+  带 id/kind/时间戳 + 正文 + meta 注释）；kind=6 密码条目
+  **绝不导出**，只写占位 README；导出前必须 `confirmed/done`
+  两道确认，且用 `scanForPlaintextLeaks` 扫描已知敏感值，
+  命中即整批拒绝、零文件落盘；id 路径字符净化
+- `ExportBackupPage` 二次确认完成后真实执行导出（装配层注入
+  `plaintextExportRunner`），未装配时诚实提示
+- 测试：`markdown_exporter_test.dart` 4 条（临时目录：阶段守卫 /
+  kind 分目录与密码占位 / 泄露拦截 / 删除条目与 id 净化）、
+  `export_backup_page_test.dart` +1 条 → 全量 **1045 → 1050**
+
+**边界**：标准 zip 加密打包、Markdown 文件夹导入、装配层目录注入
+仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1050/1050 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 197）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v2.1 · 2026-11-12
 
 ### M5：嵌入模型真实下载链路（已验证）

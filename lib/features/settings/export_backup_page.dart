@@ -7,6 +7,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/backup/encrypted_backup_service.dart';
+import '../../data/backup/markdown_exporter.dart';
 
 /// 导出与备份页（docs/03 §10）。
 ///
@@ -14,10 +15,17 @@ import '../../data/backup/encrypted_backup_service.dart';
 /// 导入时的无冲突合并判定、/backup/ 隔离与 7 天排期做成可交互演示。
 /// 真实 zip / WebDAV 上传由 M8 平台层按这里的状态执行。
 class ExportBackupPage extends StatefulWidget {
-  const ExportBackupPage({super.key, this.backupServiceFactory});
+  const ExportBackupPage({
+    super.key,
+    this.backupServiceFactory,
+    this.plaintextExportRunner,
+  });
 
   /// 真实加密备份服务由启动装配层注入（需要 VaultKeys + WebDavBackend）。
   final BackupUploader Function()? backupServiceFactory;
+  /// 装配层把 [MarkdownExporter] + 已知敏感值打包成这个函数；
+  /// 页面只负责二次确认与展示，不直接碰文件系统 / Provider。
+  final Future<MarkdownExportResult> Function()? plaintextExportRunner;
 
   @override
   State<ExportBackupPage> createState() => _ExportBackupPageState();
@@ -32,6 +40,18 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
   final TextEditingController _localHash = TextEditingController();
   ImportAction? _importAction;
   String? _backupHint;
+  String? _exportHint;
+
+  Future<void> _runPlaintextExport() async {
+    final runner = widget.plaintextExportRunner;
+    if (runner == null) {
+      setState(() => _exportHint = '未装配 Markdown 导出器（需导出目录）');
+      return;
+    }
+    final result = await runner();
+    if (!mounted) return;
+    setState(() => _exportHint = result.hint);
+  }
 
   Future<void> _uploadBackup() async {
     final service = widget.backupServiceFactory?.call();
@@ -68,7 +88,7 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     return PageScaffold(
       title: '导出与备份',
-      subtitle: '明文导出需二次确认 · 真实打包仍属平台层',
+      subtitle: '明文导出需二次确认 · 完成后真实写 Markdown 文件夹',
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           SketchSpace.lg,
@@ -111,12 +131,19 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
                       setState(() => _secondConfirmed = v ?? false),
                 ),
                 SketchButton(
-                  label: '推进确认流程',
+                  label: _stage == PlaintextExportStage.done
+                      ? '执行明文导出'
+                      : '推进确认流程',
                   dense: true,
                   onPressed: _stage == PlaintextExportStage.done
-                      ? null
+                      ? _runPlaintextExport
                       : _advance,
                 ),
+                if (_exportHint != null) ...<Widget>[
+                  const SizedBox(height: SketchSpace.xs),
+                  Text(_exportHint!,
+                      style: TextStyle(fontSize: 10.5, color: p.muted)),
+                ],
               ],
             ),
           ),
