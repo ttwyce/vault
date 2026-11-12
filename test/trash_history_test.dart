@@ -104,4 +104,23 @@ void main() {
       expect(button.onPressed, isNull);
     }
   });
+
+  testWidgets('版本对比按钮展示 +/- 差异行', (WidgetTester tester) async {
+    final created = await app.gateway.writeEntry(
+      EntryWrite.create(title: 'v1', body: '甲\n乙'),
+    );
+    final id = created.snapshot.id;
+    await app.gateway.writeEntry(
+      EntryWrite.update(id: id, title: 'v2', body: '甲\n新\n乙'),
+    );
+
+    await pumpPage(tester, HistoryPage(entryId: id));
+    expect(find.text('对比当前'), findsOneWidget);
+    await tester.tap(find.text('对比当前'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.textContaining('与当前内容对比'), findsOneWidget);
+    expect(find.textContaining('+1 / -0'), findsOneWidget);
+    expect(find.text('+ 新'), findsOneWidget);
+  });
 }

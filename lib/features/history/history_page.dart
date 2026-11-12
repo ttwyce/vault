@@ -13,10 +13,15 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../../data/taxonomy/taxonomy_repository.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
+import '../../data/sync/version_diff.dart';
 import '../../data/write/write_gateway.dart';
 
 /// 一次加载的结果。
-typedef HistoryData = ({List<HistoryVersion> versions, bool deleted});
+typedef HistoryData = ({
+  List<HistoryVersion> versions,
+  bool deleted,
+  String currentBody,
+});
 
 /// 某条条目的历史版本列表。
 ///
@@ -49,7 +54,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
         .history(widget.entryId);
     final row =
         await ref.read(entryRepositoryProvider).getRow(widget.entryId);
-    return (versions: versions, deleted: row == null || row.deleted != 0);
+    return (
+      versions: versions,
+      deleted: row == null || row.deleted != 0,
+      currentBody: row?.body ?? '',
+    );
   }
 
   void _refresh() {
@@ -122,6 +131,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
             final data = snapshot.data;
             final versions = data?.versions ?? const <HistoryVersion>[];
             final alreadyDeleted = data?.deleted ?? false;
+            final currentBody = data?.currentBody ?? '';
 
             if (versions.isEmpty) {
               return Center(
@@ -148,6 +158,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                 final version = versions[index - 1];
                 return _HistoryTile(
                   version: version,
+                  // docs/10 第 23 屏：历史版本与当前内容对比，永远可点。
+                  currentBody: currentBody,
                   enabled: !alreadyDeleted && _busyRev == null,
                   busy: _busyRev == version.rev,
                   onRestore: () => _restore(version.rev),
@@ -192,15 +204,57 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 class _HistoryTile extends StatelessWidget {
   const _HistoryTile({
     required this.version,
+    required this.currentBody,
     required this.enabled,
     required this.busy,
     required this.onRestore,
   });
 
   final HistoryVersion version;
+  final String currentBody;
   final bool enabled;
   final bool busy;
   final VoidCallback onRestore;
+
+  void _showDiff(BuildContext context, String currentBody) {
+    final view = buildVersionDiff(version.body, currentBody);
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text('r${version.rev} 与当前内容对比 · ${view.summary}'),
+        content: SizedBox(
+          width: 520,
+          child: view.degraded || view.lines.isEmpty
+              ? const Text('两个版本行数过多或没有差异')
+              : SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      for (final line in view.lines)
+                        Text(
+                          '${line.marker} ${line.text}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: line.kind == DiffLineKind.added
+                                ? const Color(0xFF3C8B5B)
+                                : line.kind == DiffLineKind.removed
+                                    ? const Color(0xFFFF4D4D)
+                                    : const Color(0xFF2D2D2D),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -246,11 +300,22 @@ class _HistoryTile extends StatelessWidget {
             ),
           ],
           const SizedBox(height: SketchSpace.sm),
-          SketchButton(
-            label: busy ? '恢复中…' : '恢复此版本',
-            tone: SketchTone.primary,
-            dense: true,
-            onPressed: enabled ? onRestore : null,
+          Row(
+            children: <Widget>[
+              SketchButton(
+                label: busy ? '恢复中…' : '恢复此版本',
+                tone: SketchTone.primary,
+                dense: true,
+                onPressed: enabled ? onRestore : null,
+              ),
+              const SizedBox(width: SketchSpace.sm),
+              SketchButton(
+                label: '对比当前',
+                tone: SketchTone.ghost,
+                dense: true,
+                onPressed: () => _showDiff(context, currentBody),
+              ),
+            ],
           ),
         ],
       ),

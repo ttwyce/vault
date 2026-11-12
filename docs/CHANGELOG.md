@@ -4,6 +4,29 @@
 
 ---
 
+## v1.17 · 2026-11-12
+
+### M2：版本对比页（第 23 屏，已验证）
+
+- 新增 `version_diff.dart`（docs/10 第 23 屏）：把 `line_diff` 的 hunks
+  翻译成可读的 +/- / 上下文展示行（带旧/新行号），超 1200 行降级为
+  统计视图不跑 O(n·m) DP
+- `HistoryPage` 每个历史版本新增「对比当前」按钮，弹窗展示与当前正文的
+  行级差异；复用真实 `entry.body`，不造假数据
+- 测试：`version_diff_test.dart` 4 条、`trash_history_test.dart` +1 条
+  → 全量 **781 → 786**
+
+**边界**：只对比正文文本，不含标题/标签/附件差异；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**786/786 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 112）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.16 · 2026-11-12
 
 ### M5：模型管理页（第 18 屏，已验证）
