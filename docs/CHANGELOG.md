@@ -4,6 +4,28 @@
 
 ---
 
+## v1.87 · 2026-11-12
+
+### M7：AI 日记只读与删除（已验证）
+
+- `DiaryPage` 点击 kind=4 AI 日记不再进编辑器（docs/07 §6.3），
+  改为只读弹窗显示真实正文 + 「删除」；删除经
+  `WriteGateway.writeEntry(EntryWrite.delete)` 软删并重载，
+  用户日记仍走编辑器
+- 测试：`diary_page_test.dart` +1 条（只读无输入框、软删后列表消失）
+  → 全量 **982 → 983**
+
+**边界**：「重新生成」按钮仍未接（需真实 LLM / 活动重算）；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**983/983 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 182）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.86 · 2026-11-12
 
 ### M5：搜索结果卡显示真实归档状态（已验证）

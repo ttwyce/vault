@@ -143,4 +143,28 @@ void main() {
     expect(find.textContaining('23:50'), findsWidgets);
     expect(find.textContaining('不做后台承诺'), findsOneWidget);
   });
+
+  testWidgets('AI 日记只读查看不进编辑器，可删除', (WidgetTester tester) async {
+    final created = await app.gateway.writeEntry(EntryWrite.create(
+      id: 'ai-readonly',
+      kind: EntryKind.aiDiary,
+      title: 'AI 只读日记',
+      body: '自动生成的第一人称反思',
+      meta: '{"date":"2026-11-08"}',
+    ));
+    await pumpDiary(tester);
+    await tester.tap(find.text('AI 只读日记'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('自动生成的第一人称反思'), findsWidgets);
+    expect(find.byType(TextField), findsNothing,
+        reason: 'AI 日记不可编辑，不应出现编辑器输入框');
+    await tester.tap(find.text('删除'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    final row = await app.repo.getRow(created.snapshot.id);
+    expect(row!.deleted, 1, reason: '经 WriteGateway 软删，不直接抹行');
+    expect(find.text('AI 只读日记'), findsNothing);
+  });
 }

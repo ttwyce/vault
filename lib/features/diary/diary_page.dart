@@ -18,6 +18,7 @@ import '../../data/entry/entry_models.dart';
 import '../../data/diary/diary_meta.dart';
 import '../../data/diary/diary_month_summary.dart';
 import '../../data/diary/diary_streak.dart';
+import '../../data/write/write_gateway.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
 
@@ -158,6 +159,50 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
       ),
     );
     await _load();
+  }
+
+  /// docs/07 §6.3：AI 日记不可编辑，只能只读查看 / 删除；
+  /// 用户日记仍走编辑器。
+  Future<void> _openDiaryTile(EntrySummary entry) async {
+    if (entry.kind != EntryKind.aiDiary) {
+      _openEditor(entryId: entry.id);
+      return;
+    }
+    final row = await ref.read(entryRepositoryProvider).getRow(entry.id);
+    if (!mounted || row == null) return;
+    await showDialog<void>(
+      // ignore: use_build_context_synchronously
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(entry.title),
+        content: SingleChildScrollView(
+          child: Text(
+            row.body?.trim().isNotEmpty == true
+                ? row.body!
+                : '（这条 AI 日记没有正文）',
+            style: const TextStyle(fontSize: 12.5, height: 1.6),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await ref.read(writeGatewayProvider).writeEntry(
+                    EntryWrite.delete(id: entry.id),
+                  );
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              await _load();
+            },
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openEditor({String? entryId}) {
@@ -396,7 +441,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
           index: i,
           citations: _citationsById[group.entries[i].id] ??
               const <String>[],
-          onTap: () => _openEditor(entryId: group.entries[i].id),
+          onTap: () => _openDiaryTile(group.entries[i]),
         ));
         widgets.add(const SizedBox(height: SketchSpace.sm));
       }
@@ -431,7 +476,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
           entry: entries[i],
           index: i,
           citations: _citationsById[entries[i].id] ?? const <String>[],
-          onTap: () => _openEditor(entryId: entries[i].id),
+          onTap: () => _openDiaryTile(entries[i]),
         ));
         if (i != entries.length - 1) {
           widgets.add(const SizedBox(height: SketchSpace.sm));
