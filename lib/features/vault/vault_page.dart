@@ -291,6 +291,33 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 style: TextStyle(fontSize: 10.5, color: sheetContext.sketch.blue),
               ),
               const SizedBox(height: SketchSpace.md),
+              SketchButton(
+                label: '复制密码（30 秒后清除）',
+                dense: true,
+                onPressed: () async {
+                  final secret =
+                      await repo.passwordForClipboard(id);
+                  if (secret.isEmpty) {
+                    if (sheetContext.mounted) {
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        const SnackBar(content: Text('该账号没有保存密码')),
+                      );
+                    }
+                    return;
+                  }
+                  await SensitiveClipboard(
+                    port: const FlutterClipboardPort(),
+                  ).copy(secret);
+                  if (sheetContext.mounted) {
+                    ScaffoldMessenger.of(sheetContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('密码已复制，30 秒后自动清除，此页不显示明文'),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: SketchSpace.sm),
               if (detail.totpCode != null)
                 SketchButton(
                   label: '复制当前 TOTP（30 秒后清除）',

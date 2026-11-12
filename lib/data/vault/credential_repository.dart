@@ -122,6 +122,18 @@ class CredentialRepository {
     return Set<String>.unmodifiable(out);
   }
 
+  /// 解出密码明文供「手动复制」写入剪贴板（docs/11 §4.5）。
+  ///
+  /// 返回值只在调用方内存里存在，UI 不展示、日志不记录；
+  /// 调用方必须走 [SensitiveClipboard] 的 30 秒自动清除通道。
+  Future<String> passwordForClipboard(String credentialId) async {
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (row == null) return '';
+    return _passwordOf(row);
+  }
+
   /// 解出密码明文（只在内存里用于强度估算，绝不写日志 / 报告）。
   Future<String> _passwordOf(CredentialRow row) async {
     final raw = row.password;

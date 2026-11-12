@@ -4,6 +4,27 @@
 
 ---
 
+## v1.25 · 2026-11-12
+
+### M6：密码手动复制通道（已验证）
+
+- `CredentialRepository.passwordForClipboard()` 解密密码仅供内存局部变量，
+  UI 不展示、日志不记录；`VaultPage` 新增「复制密码（30 秒后清除）」
+  按钮，走 `SensitiveClipboard` 自动清除通道
+- 测试：`vault_page_test.dart` +1 条（按钮可见、明文零展示、
+  复制后仍不展示明文、repo 返回真实值）→ 全量 **814 → 815**
+
+**边界**：系统剪贴板真实 30 秒清除需真机验证；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**815/815 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 120）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.24 · 2026-11-12
 
 ### M6：密码备注 Markdown 预览（已验证）

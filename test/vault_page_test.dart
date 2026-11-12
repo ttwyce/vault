@@ -333,4 +333,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(await repo.notes('cred-notes-preview'), '**重点**');
   });
+
+  testWidgets('详情提供密码复制通道，且页面始终不展示明文',
+      (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-copy',
+      kind: EntryKind.credential,
+      title: '可复制账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-copy'),
+        );
+    await repo.setPassword('cred-copy', 'MySecret!234');
+    await pumpVault(tester);
+    await tester.tap(find.text('可复制账号'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('复制密码（30 秒后清除）'), findsOneWidget);
+    expect(find.text('MySecret!234'), findsNothing);
+    expect(await repo.passwordForClipboard('cred-copy'), 'MySecret!234');
+    await tester.tap(find.text('复制密码（30 秒后清除）'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+    expect(find.text('MySecret!234'), findsNothing);
+  });
 }
