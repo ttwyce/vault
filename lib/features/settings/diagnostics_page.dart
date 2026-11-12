@@ -21,6 +21,7 @@ import '../../data/activity/activity_logger.dart';
 import '../../data/agent/agent_policy.dart'
     show AgentLoopLimits, PolicyAction, PolicyDecision;
 import '../../data/agent/agent_loop.dart' show LoopStop;
+import '../../data/agent/ai_entry_points.dart';
 import '../../data/agent/openai_compat.dart';
 import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
@@ -306,6 +307,8 @@ class DiagnosticsPage extends ConsumerWidget {
             fill: p.surface,
             tilt: SketchTilt.left,
             child: Text(
+              'AI 入口：L0 数据禁入 prompt，'
+              '${AiEntryPoint.values.length} 类入口云端必弹逐次授权并显示发送字数\n'
               '剪藏分享：多 URL 去重、纯文本落想法、'
               'Extension 只接收不抓取（${ShareIntentKind.archiveUrls.name}）\n'
               '归档维护计划器：重检查 / Wayback 回退 / 本地缓存清理 / '

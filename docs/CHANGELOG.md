@@ -4,6 +4,28 @@
 
 ---
 
+## v1.26 · 2026-11-12
+
+### M7：AI 入口与隐私提示判定层（C4，已验证）
+
+- 新增 `ai_entry_points.dart`（docs/07 §10.2 / C4）：助手 Tab /
+  搜索升级 / 阅读器划词 / 相关推荐四入口的可见性与隐私级别；
+  L0 数据（密码/日记/备注）永远禁止进入 prompt、模型未就绪与缺上下文
+  给明确引导、云端入口必弹逐次授权并显示发送字数
+- `DiagnosticsPage` 展示规则
+- 测试：`ai_entry_points_test.dart` 3 条 → 全量 **815 → 818**
+
+**边界**：真实「问 AI」入口 UI / 云端 transport / 授权弹窗接线
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**818/818 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 121）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.25 · 2026-11-12
 
 ### M6：密码手动复制通道（已验证）
