@@ -1,10 +1,8 @@
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'widgets/markdown_preview_view.dart';
-import 'package:intl/intl.dart';
 
 import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
@@ -17,6 +15,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart' show CategoryRow;
 import '../../data/entry/entry_models.dart';
+import '../../data/diary/diary_meta.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../../data/taxonomy/taxonomy_models.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
@@ -148,9 +147,12 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         // 日记的日期是显式字段（补写需求），新建时落今天。
         String? meta;
         if (_kind == EntryKind.diary) {
-          meta = jsonEncode(<String, Object?>{
-            'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-          });
+          final now = DateTime.now();
+          meta = buildDiaryMeta(
+            date: diaryKey(now),
+            body: body,
+            createdAtMs: now.millisecondsSinceEpoch,
+          ).toJsonString();
         }
         final created = await gateway.writeEntry(
           EntryWrite.create(kind: _kind, title: title, body: body, meta: meta),
@@ -163,7 +165,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             id: widget.entryId!,
             title: title,
             body: body,
-            meta: _existingMeta,
+            meta: _refreshedDiaryMeta(_existingMeta, body),
           ),
         );
         entryId = widget.entryId!;
@@ -371,6 +373,25 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         EntryKind.bookmark => '归档',
         EntryKind.credential => '密码',
       };
+
+  /// 编辑日记时保留 weather/mood/location/date，只刷新字数与补写标记。
+  String? _refreshedDiaryMeta(String? raw, String body) {
+    if (_kind != EntryKind.diary || raw == null || raw.trim().isEmpty) {
+      return raw;
+    }
+    final DiaryMeta old;
+    try {
+      old = DiaryMeta.fromJson(raw);
+    } on Object {
+      return raw; // 坏 meta 不猜测、不覆盖，交给读侧隔离。
+    }
+    final now = DateTime.now();
+    return old.copyWith(
+      wordCount: countDiaryWords(body),
+      backfilled:
+          isBackfilled(date: old.date, createdAtMs: now.millisecondsSinceEpoch),
+    ).toJsonString();
+  }
 
   @override
   Widget build(BuildContext context) {

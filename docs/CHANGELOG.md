@@ -4,6 +4,30 @@
 
 ---
 
+## v1.21 · 2026-11-12
+
+### M2：日记 meta 模型与编辑器接线（已验证）
+
+- 新增 `diary_meta.dart`（docs/11 §1.3）：date/weather/mood/location/
+  word_count/backfilled 的 JSON 往返与严格校验（日期格式、
+  mood 枚举、坏 JSON 拒绝）；中文按字/英文按词统计、忽略 Markdown 标记；
+  归属日期早于创建当天即补写
+- `EditorPage` 新建日记改为写完整 meta，编辑时保留天气/心情/日期
+  只刷新字数与补写标记；坏 meta 不猜测不覆盖
+- 测试：`diary_meta_test.dart` 4 条、`editor_page_test.dart` +1 条
+  → 全量 **802 → 807**
+
+**边界**：天气/心情选择 UI、location 录入、补写指定日期入口仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**807/807 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 116）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.20 · 2026-11-12
 
 ### M4：阅读器高亮标注写回 meta（已验证）

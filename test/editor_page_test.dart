@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
+import 'package:vault/data/diary/diary_meta.dart';
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/features/editor/editor_page.dart';
 
@@ -145,5 +146,22 @@ void main() {
     await tester.tap(find.text('编辑'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('预览'), findsOneWidget);
+  });
+
+  testWidgets('新建日记保存完整 meta（date/word_count/backfilled）',
+      (WidgetTester tester) async {
+    await pumpEditor(tester, kind: EntryKind.diary);
+    await tester.enterText(find.byType(TextField).first, '日记标题');
+    await tester.enterText(find.byType(TextField).last, '今天同步成功');
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await app.db.select(app.db.entries).get();
+    expect(rows, hasLength(1));
+    final meta = DiaryMeta.fromJson(rows.single.meta);
+    expect(meta.date, diaryKey(DateTime.now()));
+    expect(meta.wordCount, 6);
+    expect(meta.backfilled, isFalse);
   });
 }
