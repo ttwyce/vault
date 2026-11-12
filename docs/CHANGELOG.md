@@ -4,6 +4,29 @@
 
 ---
 
+## v1.11 · 2026-11-12
+
+### M2/M8：主题对比度审计（U3，已验证）
+
+- 新增 `contrast_audit.dart`（docs/10 §10 / U3）：WCAG 2.1 相对亮度与
+  对比度计算，审计亮/暗两套色板 ink·muted 在 bg/surface/note/noteAlt
+  共 16 组组合；兼容新版 Flutter 归一化 Color 通道与旧版 0~255 通道
+- 测试验证 WCAG 黑白 21:1、同色 1:1、文档给出的 13.2:1/5.4:1 达标，
+  **亮暗双主题全部 16/16 ≥ 4.5:1**；不达标色板能逐项报告失败原因
+- `DiagnosticsPage` 显示 U3 结论
+- 测试：`contrast_audit_test.dart` 4 条 → 全量 **765 → 769**
+
+**边界**：只审计色板常量，不覆盖运行时动态色 / 图片上文字；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**769/769 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 106）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.10 · 2026-11-12
 
 ### M3 预备：首次绑定已有 vault 三选一策略（已验证）

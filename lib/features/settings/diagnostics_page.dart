@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
+import '../../app/theme/contrast_audit.dart';
+import '../../app/theme/sketch_palette.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
@@ -227,6 +229,12 @@ class DiagnosticsPage extends ConsumerWidget {
             },
           ),
           const SizedBox(height: SketchSpace.lg),
+          const SizedBox(height: SketchSpace.sm),
+          Text(
+            'U3 对比度：亮/暗双主题 ink·muted 在 4 类底面上均 '
+            '≥ $kMinBodyContrast:1（${_contrastSummary()}）',
+            style: TextStyle(fontSize: 10.5, color: p.blue),
+          ),
           Text(
             '发布前确定性自检（不替代真实服务器集成用例）',
             style: TextStyle(fontSize: 12, color: p.muted),
@@ -498,4 +506,28 @@ class _CheckTile extends StatelessWidget {
       ),
     );
   }
+}
+
+
+String _contrastSummary() {
+  var passed = 0;
+  var total = 0;
+  for (final palette in <SketchPalette>[
+    SketchPalette.light,
+    SketchPalette.dark,
+  ]) {
+    final report = auditPaletteContrast(
+      bg: palette.bg,
+      surface: palette.surface,
+      note: palette.note,
+      noteAlt: palette.noteAlt,
+      ink: palette.ink,
+      muted: palette.muted,
+    );
+    total += report.checks.length;
+    passed += report.checks
+        .where((ContrastCheck c) => c.passed)
+        .length;
+  }
+  return '$passed/$total';
 }
