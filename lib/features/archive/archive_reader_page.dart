@@ -10,8 +10,10 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/archive/archive_highlight_writer.dart';
 import '../../data/archive/archive_meta.dart';
+import '../../data/archive/archive_cache_policy.dart';
 import '../../data/archive/archive_reader.dart';
 import '../../data/sync/version_diff.dart';
+import 'widgets/archive_download_banner.dart';
 
 /// 归档阅读器（docs/05 §9）。
 ///
@@ -28,6 +30,8 @@ class ArchiveReaderPage extends ConsumerStatefulWidget {
     required this.hasPreviousTextVersion,
     this.body,
     this.previousBody,
+    this.textDownload,
+    this.pdfDownload,
     this.entryId,
   });
 
@@ -41,6 +45,8 @@ class ArchiveReaderPage extends ConsumerStatefulWidget {
   /// 新旧对比用的上一版 L1 正文；由上层从历史版本解密提供。
   /// 为 null 时对比模式明确说明缺上一版，不假装能 diff。
   final String? previousBody;
+  final DownloadRequest? textDownload;
+  final DownloadRequest? pdfDownload;
 
   /// 有 entryId 才能把高亮写回 meta；旧调用不传时按钮禁用。
   final String? entryId;
@@ -194,6 +200,10 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
       case ReaderMode.clean:
         final body = widget.body;
         if (body == null || body.trim().isEmpty) {
+          final request = widget.textDownload;
+          if (request != null) {
+            return ArchiveDownloadBanner(request: request);
+          }
           return Text(
             widget.meta.hasText
                 ? 'L1 正文层尚未按需下载。'
@@ -204,10 +214,21 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
         return Text(body,
             style: TextStyle(fontSize: 14.5, height: 1.9, color: p.ink));
       case ReaderMode.original:
-        return Text(
-          '原貌模式需要 L2 PDF 快照。当前标记为${widget.pdfLocal ? '已本地缓存' : '仅云端'}，'
-          'PDF 渲染由平台层提供。',
-          style: TextStyle(fontSize: 13, color: p.muted),
+        final pdfRequest = widget.pdfDownload;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '原貌模式需要 L2 PDF 快照。当前标记为'
+              '${widget.pdfLocal ? '已本地缓存' : '仅云端'}，'
+              'PDF 渲染由平台层提供。',
+              style: TextStyle(fontSize: 13, color: p.muted),
+            ),
+            if (pdfRequest != null) ...<Widget>[
+              const SizedBox(height: SketchSpace.sm),
+              ArchiveDownloadBanner(request: pdfRequest),
+            ],
+          ],
         );
       case ReaderMode.compare:
         final before = widget.previousBody;

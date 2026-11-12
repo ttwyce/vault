@@ -368,4 +368,35 @@ void main() {
     expect(written.excerpt.length, 200);
     expect(written.readingTimeMin, greaterThan(0));
   });
+
+  testWidgets('L1 正文仅存云端时阅读器显示按需下载骨架屏',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/cloud-text',
+      site: 'example.com',
+      status: ArchiveStatus.text,
+      title: '仅云端正文',
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-cloud-text',
+      kind: EntryKind.bookmark,
+      title: '仅云端正文',
+      meta: meta.toJsonString(),
+    ));
+    await app.db.into(app.db.blobRefs).insert(
+          BlobRefsCompanion.insert(
+            entryId: 'arch-cloud-text',
+            blobHash: 'text-hash',
+            kind: 1,
+            bytes: 4096,
+            createdAt: 1731052800000,
+          ),
+        );
+    await pumpArchive(tester);
+    await tester.tap(find.text('仅云端正文'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    expect(find.textContaining('骨架屏并自动下载'), findsOneWidget);
+  });
 }

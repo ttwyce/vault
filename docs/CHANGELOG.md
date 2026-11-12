@@ -4,6 +4,31 @@
 
 ---
 
+## v1.82 · 2026-11-12
+
+### M4：按需下载 UI 骨架屏与 PDF 进度条（已验证）
+
+- 新增 `ArchiveDownloadBanner`（docs/05 §7）：按 `DownloadRequest`
+  渲染 L1 正文骨架屏（自动下载说明）/ L2 PDF 进度条（需用户点
+  「查看原貌」、显示字节百分比）/ 完成态（local=1、云端副本保留）
+- `ArchivePage._openReader` 从真实 `blob_ref` 取 L1(kind=1) 与
+  L2(kind=2) 的 hash / local，交给 `ArchiveReaderPage`；
+  无正文时显示骨架屏、原貌模式仅云端时显示进度条
+- 测试：`archive_download_banner_test.dart` 3 条、
+  `archive_page_test.dart` +1 条（真实 blob_ref 驱动骨架屏）
+  → 全量 **967 → 971**
+
+**边界**：真实下载传输 / 写入 local=1 / 缓存 LRU 执行仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**971/971 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 177）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.81 · 2026-11-12
 
 ### M4：归档正文派生 meta（已验证）

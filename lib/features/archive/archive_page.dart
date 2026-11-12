@@ -11,6 +11,7 @@ import '../../core/widgets/sketch_frame.dart';
 import 'archive_reader_page.dart';
 import '../../data/archive/archive_duplicate.dart';
 import '../../data/archive/archive_body_meta_writer.dart';
+import '../../data/archive/archive_cache_policy.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
@@ -363,6 +364,33 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     final pdfLocal = pdfRows.any((BlobRefRow r) => r.kind == 2 && r.local == 1);
     final body = row?.body;
 
+    // docs/05 §7 按需下载：从 blob_ref 取各层 hash/local，交给阅读器
+    // 渲染骨架屏与进度条；本地已有则 request 为 null。
+    final textBlob = (await (db.select(db.blobRefs)
+          ..where((t) => t.entryId.equals(entry.id)))
+        .get())
+        .where((BlobRefRow r) => r.kind == 1)
+        .firstOrNull;
+    final pdfBlob = pdfRows
+        .where((BlobRefRow r) => r.kind == 2)
+        .firstOrNull;
+    final textRequest = textBlob == null
+        ? null
+        : planOnDemandRequest(
+            entryId: entry.id,
+            blobHash: textBlob.blobHash,
+            layer: OnDemandLayer.text,
+            local: textBlob.local == 1,
+          );
+    final pdfRequest = pdfBlob == null
+        ? null
+        : planOnDemandRequest(
+            entryId: entry.id,
+            blobHash: pdfBlob.blobHash,
+            layer: OnDemandLayer.pdf,
+            local: pdfBlob.local == 1,
+          );
+
     String? previousBody;
     final historyRows = await (db.select(db.entryHistory)
           ..where((t) => t.entryId.equals(entry.id)))
@@ -403,6 +431,8 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
           hasPreviousTextVersion: hasPrevious,
           body: body,
           previousBody: previousBody,
+          textDownload: textRequest,
+          pdfDownload: pdfRequest,
         ),
       ),
     );
