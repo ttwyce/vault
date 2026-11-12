@@ -102,4 +102,47 @@ void main() {
     rows = await app.db.select(app.db.linkChecks).get();
     expect(rows, hasLength(2));
   });
+
+  test('按 recheck_policy 定间隔：weekly 7 天 / monthly 30 天 / never 永不',
+      () {
+    LinkCheckOutcome outcome({
+      required RecheckPolicy policy,
+      required int elapsedMs,
+    }) =>
+        decideLinkCheck(
+          httpStatus: 200,
+          retries: 0,
+          previousSimhash: null,
+          currentSimhash: null,
+          nowMs: 100000 + elapsedMs,
+          previousCheckedAt: 100000,
+          policy: policy,
+        );
+
+    // 10 天：weekly 已到期、monthly 未到期。
+    expect(
+      outcome(policy: RecheckPolicy.weekly, elapsedMs: 10 * 86400000)
+          .shouldRecord,
+      isTrue,
+    );
+    final monthly = outcome(
+      policy: RecheckPolicy.monthly,
+      elapsedMs: 10 * 86400000,
+    );
+    expect(monthly.shouldRecord, isFalse);
+    expect(monthly.reasons.join(), contains('30 天'));
+
+    // 31 天：monthly 到期；never 永远不自动重检查。
+    expect(
+      outcome(policy: RecheckPolicy.monthly, elapsedMs: 31 * 86400000)
+          .shouldRecord,
+      isTrue,
+    );
+    final never = outcome(
+      policy: RecheckPolicy.never,
+      elapsedMs: 365 * 86400000,
+    );
+    expect(never.shouldRecord, isFalse);
+    expect(never.reasons.join(), contains('never'));
+  });
 }

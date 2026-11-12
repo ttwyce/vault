@@ -49,6 +49,7 @@ LinkCheckOutcome decideLinkCheck({
   int? nowMs,
   int? previousCheckedAt,
   int recheckIntervalMs = kRecheckIntervalMs,
+  RecheckPolicy policy = RecheckPolicy.monthly,
 }) {
   final result = classifyHttpStatus(httpStatus, retries: retries);
   final contentChanged =
@@ -66,13 +67,25 @@ LinkCheckOutcome decideLinkCheck({
     reasons.add('最终跳转 URL：$finalUrl');
   }
 
-  // 距上次检查未过间隔时不重复落证据（避免同一天刷屏）。
+  // 按该条目的 recheck_policy 定间隔（docs/11 §3.4）：
+  // weekly 7 天 / monthly 30 天 / never 永不自动重检查。
+  final intervalMs = switch (policy) {
+    RecheckPolicy.weekly => 7 * 86400000,
+    RecheckPolicy.monthly => kRecheckIntervalMs,
+    RecheckPolicy.never => null,
+  };
+  final effectiveInterval = recheckIntervalMs == kRecheckIntervalMs
+      ? intervalMs
+      : recheckIntervalMs;
   var shouldRecord = true;
-  if (nowMs != null &&
-      previousCheckedAt != null &&
-      nowMs - previousCheckedAt < recheckIntervalMs) {
+  if (effectiveInterval == null) {
     shouldRecord = false;
-    reasons.add('距上次检查未过间隔，跳过本次落库');
+    reasons.add('策略为 never，不做自动重检查');
+  } else if (nowMs != null &&
+      previousCheckedAt != null &&
+      nowMs - previousCheckedAt < effectiveInterval) {
+    shouldRecord = false;
+    reasons.add('距上次检查未过 ${effectiveInterval ~/ 86400000} 天，跳过本次落库');
   }
 
   return LinkCheckOutcome(
@@ -102,6 +115,7 @@ class LinkCheckService {
     required String? currentSimhash,
     String? finalUrl,
     required int nowMs,
+    RecheckPolicy policy = RecheckPolicy.monthly,
   }) async {
     final previous = await (db.select(db.linkChecks)
           ..where((t) => t.entryId.equals(entryId))
@@ -118,6 +132,7 @@ class LinkCheckService {
       finalUrl: finalUrl,
       nowMs: nowMs,
       previousCheckedAt: previous?.checkedAt,
+      policy: policy,
     );
     if (outcome.shouldRecord) {
       await gateway.recordLinkCheck(

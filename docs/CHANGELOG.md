@@ -4,6 +4,30 @@
 
 ---
 
+## v1.59 · 2026-11-12
+
+### M4：死链重检查按 recheck_policy 定间隔（已验证）
+
+- `decideLinkCheck` 新增 `policy` 参数：weekly 7 天 / monthly 30 天 /
+  never 永不自动重检查；`LinkCheckService.run` 透传该策略，
+  默认 monthly 保持原有编排不变
+- 修掉过去「所有条目固定 30 天」与 `ArchiveMeta.recheck_policy`
+  口径不一致的问题；理由文案写明实际天数 / never
+- 测试：`link_check_service_test.dart` +1 条（10 天 weekly 到期、
+  monthly 未到期；31 天 monthly 到期；never 365 天仍跳过）
+  → 全量 **908 → 909**
+
+**边界**：真实 HEAD 请求 / 批量任务读 meta 传 policy 仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**909/909 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 154）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.58 · 2026-11-12
 
 ### M2：编辑器分类/标签建议接线（已验证）
