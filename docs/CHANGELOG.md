@@ -4,6 +4,28 @@
 
 ---
 
+## v1.61 · 2026-11-12
+
+### M5：置顶 meta 接入混合检索重排（已验证）
+
+- `EntryRepository.searchHybrid` 对 kind=1/2 读 `NoteMeta.pinned`
+  并传给 `rerankScore(pinned:)`；其它 kind 忽略 meta 中的 pinned，
+  坏 meta 由 `NoteMeta.fromJson` 回默认不置顶
+- 测试：`hybrid_search_integration_test.dart` +1 条
+  （相同 FTS 名次下旧置顶条目凭 ×1.5 排到新条目之前）
+  → 全量 **914 → 915**
+
+**边界**：置顶开关 UI 仍缺（当前 meta 默认 false）；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**915/915 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 156）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.60 · 2026-11-12
 
 ### M2：笔记 / 想法 meta 模型与编辑器接线（已验证）

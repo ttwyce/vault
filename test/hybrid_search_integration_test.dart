@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/entry/entry_models.dart';
+import 'package:vault/data/entry/note_meta.dart';
 import 'package:vault/data/write/write_gateway.dart';
 
 import 'support/test_harness.dart';
@@ -21,12 +22,14 @@ void main() {
     String body, {
     EntryKind kind = EntryKind.note,
     int updatedAt = _now,
+    String? meta,
   }) async {
     await app.gateway.writeEntry(EntryWrite.create(
       id: id,
       kind: kind,
       title: title,
       body: body,
+      meta: meta,
     ));
     if (updatedAt != _now) {
       await app.db.customStatement(
@@ -82,5 +85,17 @@ void main() {
   test('超短 / 空白查询不进 FTS，返回空', () async {
     await add('e1', '同步', '正文');
     expect(await app.repo.searchHybrid(' ', nowMs: _now), isEmpty);
+  });
+
+  test('置顶笔记在相同 FTS 名次下排到前面', () async {
+    // 两条都命中「同步」；旧的那条置顶，验证 meta.pinned 参与重排。
+    await add('older', '同步旧文', '同步正文',
+        updatedAt: _now - 10 * 86400000,
+        meta: const NoteMeta(pinned: true, wordCount: 4).toJsonString());
+    await add('newer', '同步新文', '同步正文',
+        meta: const NoteMeta(pinned: false, wordCount: 4).toJsonString());
+    final results = await app.repo.searchHybrid('同步', nowMs: _now);
+    expect(results, hasLength(2));
+    expect(results.first.id, 'older', reason: '置顶 ×1.5 超过时间衰减');
   });
 }

@@ -5,6 +5,7 @@ import '../db/vault_database.dart';
 import '../search/cjk_segmenter.dart';
 import '../search/hybrid_search.dart';
 import 'entry_models.dart';
+import 'note_meta.dart';
 
 /// 条目的**只读**仓库。
 ///
@@ -115,10 +116,14 @@ class EntryRepository {
       final summary = await _summaryForRow(row);
       // 没有向量分数时 rrfScore 用 FTS 名次近似，仍按时间衰减重排。
       final rank = index + 1;
+      final pinned = (row.kind == EntryKind.note.code ||
+              row.kind == EntryKind.thought.code) &&
+          NoteMeta.fromJson(row.meta).pinned;
       final score = rerankScore(
         rrfScore: 1 / (60 + rank),
         updatedAtMs: row.updatedAt,
         nowMs: nowMs,
+        pinned: pinned,
       );
       scored.add((summary: summary, score: score));
     }
