@@ -15,6 +15,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/search/hybrid_search.dart' show hitSourceLabel;
+import '../../data/search/search_result_cache.dart';
 import '../../data/search/search_suggestions.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/entry/entry_models.dart';
@@ -43,6 +44,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   String _query = '';
   Future<List<EntrySummary>> _results =
       Future<List<EntrySummary>>.value(const <EntrySummary>[]);
+  final SearchResultCache<List<EntrySummary>> _cache =
+      SearchResultCache<List<EntrySummary>>();
 
   @override
   void initState() {
@@ -70,24 +73,41 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final repo = ref.read(entryRepositoryProvider);
     final trimmed = _query.trim();
     // 先算 Future 再 setState：箭头闭包返回 Future 会被 Flutter 断言拦下。
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final cached = trimmed.isEmpty
+        ? null
+        : _cache.read(trimmed, nowMs);
+    final bool cacheHit = cached != null;
     final next = trimmed.isEmpty
         ? Future<List<EntrySummary>>.value(const <EntrySummary>[])
-        : repo.searchHybrid(trimmed, nowMs: DateTime.now().millisecondsSinceEpoch,
-        includeAiDiary: ref.read(localSettingsProvider).includeAiDiaryInSearch,
-        limit: 50);
+        : cacheHit
+            ? Future<List<EntrySummary>>.value(cached)
+            : repo.searchHybrid(
+                trimmed,
+                nowMs: nowMs,
+                includeAiDiary:
+                    ref.read(localSettingsProvider).includeAiDiaryInSearch,
+                limit: 50,
+              );
     setState(() {
       _results = next;
     });
 
-    if (trimmed.isNotEmpty) {
-      // 埋点不阻塞界面；失败也不该让搜索框报错。
-      unawaited(_logSearch(trimmed, next));
+    if (trimmed.isNotEmpty && !cacheHit) {
+      // 埋点不阻塞界面；失败也不该让搜索框报错。相同 query 5 分钟内
+      // 只记一次（docs/07 §7.2），避免打字机式刷屏。
+      unawaited(_logSearchAndCache(trimmed, next, nowMs));
     }
   }
 
-  Future<void> _logSearch(String query, Future<List<EntrySummary>> results) async {
+  Future<void> _logSearchAndCache(
+    String query,
+    Future<List<EntrySummary>> results,
+    int nowMs,
+  ) async {
     try {
       final rows = await results;
+      _cache.write(query, rows, nowMs);
       await ref.read(activityLoggerProvider).recordSearch(
             query,
             resultCount: rows.length,

@@ -4,6 +4,28 @@
 
 ---
 
+## v1.30 · 2026-11-12
+
+### M5/M7：检索结果 5 分钟缓存（已验证）
+
+- 新增 `search_result_cache.dart`（docs/07 §7.2）：查询词归一化做 key、
+  storedAt 独立判 TTL、FIFO 容量淘汰；修正「5 分钟分桶」与「5 分钟 TTL」
+  窗口错位导致的边界提前失效
+- `SearchPage` 接缓存：相同 query 5 分钟内复用结果且不重复 FTS / 搜索埋点，
+  避免打字机式刷屏
+- 测试：`search_result_cache_test.dart` 3 条、`search_page_test.dart` +1 条
+  → 全量 **823 → 827**
+
+**边界**：缓存不持久化，进程重启后失效；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**827/827 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 125）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.29 · 2026-11-12
 
 ### M7：当前对话条模型状态对齐（已验证）

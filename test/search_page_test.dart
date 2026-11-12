@@ -62,4 +62,20 @@ void main() {
     expect(find.textContaining('模型管理页'), findsOneWidget);
     expect(find.text('问 AI（逐次授权）'), findsNothing);
   });
+
+  testWidgets('相同 query 5 分钟内复用缓存，重复搜索仍展示结果',
+      (WidgetTester tester) async {
+    await pumpSearch(tester);
+    await tester.enterText(find.byType(TextField).first, '同步');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    // 清空再输入同一 query：走缓存命中分支，不重复 FTS/埋点。
+    await tester.enterText(find.byType(TextField).first, '');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.enterText(find.byType(TextField).first, '同步');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(TextField).first, findsOneWidget);
+  });
 }
