@@ -27,6 +27,7 @@ import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
+import '../../core/crypto/passphrase_change_policy.dart';
 import '../../core/sync/first_bind_policy.dart';
 import '../../core/sync/sync_checkpoint.dart';
 import '../../core/sync/sync_state_machine.dart' show SyncPhase;
@@ -414,6 +415,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   style: TextStyle(fontSize: 11, color: p.red),
                 ),
                 Text(
+                  '改主密码 / 重置恢复码：表单校验 + 二次确认，'
+                  '${VaultCredentialAction.values.length - 1} 类动作、旧码立即失效\n'
                   '解锁策略：生物识别失败 $kMaxBiometricFailures 次强制主密码 / '
                   '主密码 $kMaxPassphraseFailures 次锁定 5 分钟\n'
                   '同步回归 ${auditSyncRegression().total} 用例：'

@@ -4,6 +4,28 @@
 
 ---
 
+## v1.42 · 2026-11-12
+
+### M8：改主密码 / 重置恢复码判定层（已验证）
+
+- 新增 `passphrase_change_policy.dart`（docs/18 §9 / docs/16 §5）：
+  当前密码非空、新密码 ≥8 字且非弱模式、两次一致、不与旧相同；
+  允许时提示「重新包裹同一把 DEK，条目密文不变」并需二次确认；
+  重置恢复码必须二次确认、旧码立即失效
+- `DiagnosticsPage` 展示规则
+- 测试：`passphrase_change_policy_test.dart` 3 条 → 全量 **864 → 867**
+
+**边界**：真实 `VaultLock.changePassphrase` / `regenerateRecoveryCode`
+设置页入口与 `meta.enc` 写回仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**867/867 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 137）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.41 · 2026-11-12
 
 ### M8：后台自动锁定（已验证）
