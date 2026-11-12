@@ -4,6 +4,30 @@
 
 ---
 
+## v1.76 · 2026-11-12
+
+### M3：T24 secret 字段跨设备同步专属测试（已验证）
+
+- 新增 `credential_secret_sync_test.dart`（docs/09 §12 T24）：
+  设备 A 写 `secret:true` 自定义字段 → 密文落库 → 设备 B
+  用独立 repository 实例解密读回值一致且仍标 secret；
+  `CredentialGuard.redact` 不输出 custom_fields 明文，
+  `containsSecret` 守住回答边界
+- 复核 T21/T22/T23/T25/T26 已有专属测试，矩阵 `allPassed`
+  在真实服务器结果注入前仍恒 false
+- 测试：新增 2 条 → 全量 **950 → 952**
+
+**边界**：T24 的「真实 WebDAV 传输 + 跨进程密钥」仍需真实环境；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**952/952 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§12）、14（Day 171）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.75 · 2026-11-12
 
 ### M6：TOTP 与轻量 meta 标记闭环（已验证）
