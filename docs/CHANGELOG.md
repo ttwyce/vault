@@ -4,6 +4,27 @@
 
 ---
 
+## v1.66 · 2026-11-12
+
+### M7：AI 日记引用可溯源入口（已验证）
+
+- `DiaryPage` 从真实 `entry.meta.citations` 收集 AI 日记引用；
+  `_DiaryTile` 显示「可溯源 · 引用 N 条」chip，弹窗列出 entry id
+  并可点开 `EditorPage` 直达原文（docs/07 §6.1「必须可溯源」）
+- 坏 meta 跳过不让整页崩；无引用时不显示 chip
+- 测试：`diary_page_test.dart` +1 条 → 全量 **927 → 928**
+
+**边界**：引用标题/摘要卡片渲染、单句级引用定位仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**928/928 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 161）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.65 · 2026-11-12
 
 ### M2：日记天气 / 心情选择（已验证）

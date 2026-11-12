@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -45,6 +47,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
   DiaryMonthSummary _monthSummary = planDiaryMonthSummary(
     const <DiaryDayEntry>[],
   );
+  Map<String, List<String>> _citationsById = const <String, List<String>>{};
   int? _selectedDay;
   bool _loading = true;
 
@@ -65,7 +68,23 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     final db = ref.read(vaultDatabaseProvider);
     final rows = await db.select(db.entries).get();
     final monthEntries = <DiaryDayEntry>[];
+    final citationsById = <String, List<String>>{};
     for (final row in rows) {
+      if (row.kind == EntryKind.aiDiary.code &&
+          row.meta != null &&
+          row.meta!.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(row.meta!);
+          if (decoded is Map && decoded['citations'] is List) {
+            citationsById[row.id] = <String>[
+              for (final id in decoded['citations'] as List)
+                if (id is String) id,
+            ];
+          }
+        } on Object {
+          // 坏 meta 跳过，不让整页崩（与月历头同一原则）。
+        }
+      }
       if (row.deleted != 0 ||
           (row.kind != EntryKind.diary.code &&
               row.kind != EntryKind.aiDiary.code)) {
@@ -90,6 +109,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     setState(() {
       _byDay = data;
       _monthSummary = summary;
+      _citationsById = citationsById;
       _loading = false;
     });
   }
@@ -351,6 +371,8 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
         widgets.add(_DiaryTile(
           entry: group.entries[i],
           index: i,
+          citations: _citationsById[group.entries[i].id] ??
+              const <String>[],
           onTap: () => _openEditor(entryId: group.entries[i].id),
         ));
         widgets.add(const SizedBox(height: SketchSpace.sm));
@@ -385,6 +407,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
         widgets.add(_DiaryTile(
           entry: entries[i],
           index: i,
+          citations: _citationsById[entries[i].id] ?? const <String>[],
           onTap: () => _openEditor(entryId: entries[i].id),
         ));
         if (i != entries.length - 1) {
@@ -645,11 +668,13 @@ class _DiaryTile extends StatelessWidget {
     required this.entry,
     required this.index,
     required this.onTap,
+    this.citations = const <String>[],
   });
 
   final EntrySummary entry;
   final int index;
   final VoidCallback onTap;
+  final List<String> citations;
 
   @override
   Widget build(BuildContext context) {
@@ -702,6 +727,18 @@ class _DiaryTile extends StatelessWidget {
                 style: TextStyle(fontSize: 12, height: 1.6, color: p.muted),
               ),
             ],
+            if (isAi && citations.isNotEmpty) ...<Widget>[
+              const SizedBox(height: SketchSpace.xs),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showCitations(context, citations),
+                child: SketchTag(
+                  '可溯源 · 引用 ${citations.length} 条',
+                  tone: SketchTone.blue,
+                  dense: true,
+                ),
+              ),
+            ],
             const SizedBox(height: SketchSpace.sm),
             Text(
               time,
@@ -712,4 +749,42 @@ class _DiaryTile extends StatelessWidget {
       ),
     );
   }
+
+  void _showCitations(BuildContext context, List<String> ids) {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('引用原文'),
+        content: SizedBox(
+          width: 320,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                for (final id in ids)
+                  ListTile(
+                    dense: true,
+                    title: Text(id, style: const TextStyle(fontSize: 11)),
+                    onTap: () {
+                      Navigator.of(dialogContext).pop();
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => EditorPage(entryId: id),
+                      ));
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
 }

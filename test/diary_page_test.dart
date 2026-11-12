@@ -117,4 +117,22 @@ void main() {
     expect(find.textContaining('本月 2 篇'), findsOneWidget);
     expect(find.textContaining('平均 320 字'), findsOneWidget);
   });
+
+  testWidgets('AI 日记带 citations 时显示可溯源入口并可打开引用',
+      (WidgetTester tester) async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      kind: EntryKind.aiDiary,
+      title: 'AI 总结',
+      body: '自动生成的内容',
+      meta: '{"date":"2026-11-08","citations":["e1","e2"]}',
+    ));
+    await pumpDiary(tester);
+    expect(find.textContaining('可溯源 · 引用 2 条'), findsOneWidget);
+    await tester.tap(find.textContaining('可溯源 · 引用 2 条'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('引用原文'), findsOneWidget);
+    expect(find.text('e1'), findsOneWidget);
+    expect(find.text('e2'), findsOneWidget);
+  });
 }
