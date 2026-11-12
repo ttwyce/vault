@@ -483,13 +483,14 @@ class _ArchiveTile extends StatelessWidget {
       if (meta.changed) ('内容有变更', SketchTone.blue),
     ];
     final wayback = planWaybackBadge(meta);
+    final nextCheck = meta.nextCheckAt();
     final trailing = wayback.visible
         ? wayback.label
         : meta.isDeadLink
             ? '试 Wayback'
             : meta.changed
                 ? '对比'
-                : '下次检查 ${meta.policy.wire}';
+                : _nextCheckLabel(meta, nextCheck);
 
     return SketchCard(
       variant: variant,
@@ -560,5 +561,16 @@ class _ArchiveTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// docs/11 §3.2「下次检查 12-01」：按 recheck_policy 与上次检查时刻算。
+  static String _nextCheckLabel(ArchiveMeta meta, int? nextCheckAtMs) {
+    if (meta.policy == RecheckPolicy.never) return '不自动重检查';
+    if (meta.lastCheckedAt == null || nextCheckAtMs == null) {
+      return '待首次检查';
+    }
+    final date = DateTime.fromMillisecondsSinceEpoch(nextCheckAtMs);
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '下次检查 ${two(date.month)}-${two(date.day)}';
   }
 }

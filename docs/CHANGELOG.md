@@ -4,6 +4,29 @@
 
 ---
 
+## v1.84 · 2026-11-12
+
+### M4：归档 tile 显示下次检查日期（已验证）
+
+- `_ArchiveTile` 尾部从写死的「下次检查 monthly」改为按
+  `ArchiveMeta.nextCheckAt()` 算出「下次检查 MM-dd」；
+  `never` 显示「不自动重检查」、从未检查过显示「待首次检查」
+  （docs/11 §3.2 页面结构）
+- 死链 / Wayback / 内容变更徽章优先级保持不变
+- 测试：`archive_page_test.dart` +2 条（monthly 日期换算、never 文案）
+  → 全量 **972 → 974**
+
+**边界**：真实批量 HEAD 任务执行仍属平台层；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**974/974 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 179）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.83 · 2026-11-12
 
 ### M7：AI 日记排期判定接进日记页（已验证）

@@ -399,4 +399,36 @@ void main() {
     }
     expect(find.textContaining('骨架屏并自动下载'), findsOneWidget);
   });
+
+  testWidgets('归档 tile 显示按 recheck_policy 算出的下次检查日期',
+      (WidgetTester tester) async {
+    await addArchive(
+      id: 'a-next',
+      url: 'https://example.com/next',
+      status: ArchiveStatus.full,
+      title: '带检查日期',
+    );
+    await pumpArchive(tester);
+    // lastCheckedAt=1731052800000（2024-11-08）+ monthly 30 天 → 12-08
+    expect(find.textContaining('下次检查 12-08'), findsOneWidget);
+  });
+
+  testWidgets('recheck_policy=never 的归档显示不自动重检查',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/never',
+      site: 'example.com',
+      status: ArchiveStatus.full,
+      policy: RecheckPolicy.never,
+      lastCheckedAt: 1731052800000,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'a-never',
+      kind: EntryKind.bookmark,
+      title: '不重检查',
+      meta: meta.toJsonString(),
+    ));
+    await pumpArchive(tester);
+    expect(find.textContaining('不自动重检查'), findsOneWidget);
+  });
 }
