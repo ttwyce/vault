@@ -4,6 +4,27 @@
 
 ---
 
+## v1.44 · 2026-11-12
+
+### M3 预备：写入后 8 秒 debounce 同步触发（已验证）
+
+- 新增 `sync_kick_policy.dart`（docs/04 §12）：多次写入合并窗口、
+  最后一次写入静默满 8s 才 kick；未解锁 / 后台 / 已有同步进行中
+  推迟到前台补偿；时间戳倒退保守不触发；给出剩余等待
+- `DiagnosticsPage` 展示规则
+- 测试：`sync_kick_policy_test.dart` 3 条 → 全量 **871 → 874**
+
+**边界**：真实 `SyncScheduler.kick()` / 定时器 / 写入口联动
+仍待平台接线且需 A5；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**874/874 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 139）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.43 · 2026-11-12
 
 ### M3 预备：限流后请求预算减半（已验证）

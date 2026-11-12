@@ -30,6 +30,7 @@ import '../../data/agent/daily_summary.dart' show SummaryGranularity;
 import '../../core/crypto/passphrase_change_policy.dart';
 import '../../core/sync/first_bind_policy.dart';
 import '../../core/sync/rate_limit_budget.dart';
+import '../../core/sync/sync_kick_policy.dart';
 import '../../core/sync/sync_checkpoint.dart';
 import '../../core/sync/sync_state_machine.dart' show SyncPhase;
 import '../../core/sync/sync_status_ui.dart';
@@ -377,6 +378,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   style: TextStyle(fontSize: 10.5, color: p.muted),
                 ),
                 Text(
+                  '写入后 debounce ${kSyncKickDebounceMs ~/ 1000}s 才触发同步，'
+                  '未解锁/后台/同步中推迟到前台补偿\n'
                   'E_RATE 请求预算每次减半（基线 $kDefaultSyncBudget，下限 1）/'
                   ' 连续成功 2 轮恢复，致命错误预算归零\n'
                   '首次绑定已有 vault：${planFirstBind(cloudHasVault: true, localHasData: true).length} 选一'
