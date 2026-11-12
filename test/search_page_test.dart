@@ -52,4 +52,14 @@ void main() {
     expect(find.text('书签'), findsWidgets);
     expect(find.text('归档'), findsWidgets);
   });
+
+  testWidgets('空结果默认显示模型未就绪引导，不谎称可问 AI',
+      (WidgetTester tester) async {
+    await pumpSearch(tester);
+    await tester.enterText(find.byType(TextField).first, '不存在的词xyz');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('模型管理页'), findsOneWidget);
+    expect(find.text('问 AI（逐次授权）'), findsNothing);
+  });
 }

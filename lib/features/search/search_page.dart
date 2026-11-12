@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/settings/local_settings_provider.dart';
 import '../../app/session/vault_session.dart';
+import '../../data/agent/ai_entry_points.dart';
+import '../../data/agent/model_availability_provider.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
 import '../../app/theme/sketch_theme.dart';
@@ -196,6 +198,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             ftsHadResults: false,
             vectorHadResults: false,
           );
+          final availability = ref.watch(modelAvailabilityProvider);
+          final aiPlan = planAiEntry(
+            entry: AiEntryPoint.searchUpgrade,
+            modelAvailable:
+                availability.onDeviceModelReady || availability.hasCloudKey,
+            hasContext: trimmed.isNotEmpty,
+            contextChars: trimmed.length,
+          );
           return Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
@@ -233,6 +243,33 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                     hint.modelTip,
                     style: TextStyle(fontSize: 10.5, color: p.blue),
                   ),
+                  const SizedBox(height: SketchSpace.sm),
+                  if (aiPlan.visible)
+                    SketchButton(
+                      label: '问 AI（逐次授权）',
+                      dense: true,
+                      onPressed: () {
+                        showDialog<void>(
+                          context: context,
+                          builder: (BuildContext dialogContext) => AlertDialog(
+                            title: const Text('隐私提示'),
+                            content: Text(buildPrivacyNotice(aiPlan)),
+                            actions: <Widget>[
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(),
+                                child: const Text('取消'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    Text(
+                      aiPlan.hint,
+                      style: TextStyle(fontSize: 10.5, color: p.muted),
+                    ),
                 ],
               ),
             ),

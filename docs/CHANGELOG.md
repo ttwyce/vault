@@ -4,6 +4,27 @@
 
 ---
 
+## v1.27 · 2026-11-12
+
+### M7：搜索空结果「问 AI」入口接线（已验证）
+
+- `SearchPage` 空结果区按 `modelAvailabilityProvider` 与
+  `planAiEntry(searchUpgrade)` 判定：模型未就绪显示「去模型管理页」引导，
+  就绪才出现「问 AI（逐次授权）」并弹含发送字数的隐私提示（C4）；
+  默认状态不谎称可问答
+- 测试：`search_page_test.dart` +1 条 → 全量 **818 → 819**
+
+**边界**：真实问答 transport / 授权后发送仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**819/819 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 122）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.26 · 2026-11-12
 
 ### M7：AI 入口与隐私提示判定层（C4，已验证）
