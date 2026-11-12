@@ -24,6 +24,7 @@ import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/agent/daily_summary.dart' show SummaryGranularity;
+import '../../core/sync/first_bind_policy.dart';
 import '../../core/sync/sync_checkpoint.dart';
 import '../../core/sync/sync_state_machine.dart' show SyncPhase;
 import '../../core/sync/sync_status_ui.dart';
@@ -323,6 +324,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   style: TextStyle(fontSize: 10.5, color: p.muted),
                 ),
                 Text(
+                  '首次绑定已有 vault：${planFirstBind(cloudHasVault: true, localHasData: true).length} 选一'
+                  '（合并推荐 / 云端为准先入 trash / 本地为准需二次确认入 quarantine）\n'
                   '预算 200 请求耗尽时保存分片游标（已完成不重复入列）；'
                   '水位一致且 7 天内才续跑，否则保守重跑。',
                   style: TextStyle(fontSize: 10.5, color: p.muted),

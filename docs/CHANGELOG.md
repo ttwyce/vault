@@ -4,6 +4,28 @@
 
 ---
 
+## v1.10 · 2026-11-12
+
+### M3 预备：首次绑定已有 vault 三选一策略（已验证）
+
+- 新增 `first_bind_policy.dart`（docs/04 §8.1）：云端与本地都有数据时
+  三选一（合并推荐 / 以云端为准先备份到 trash / 以本地为准先下载到
+  quarantine 且需二次确认），云端或本地为空时不弹选择
+- `executionFor` 给每个选项输出可执行步骤清单并要求重建 FTS/向量索引
+- `DiagnosticsPage` 展示策略
+- 测试：`first_bind_policy_test.dart` 3 条 → 全量 **762 → 765**
+
+**边界**：真实 meta.enc 探测 / 备份覆盖 / 绑定 UI 仍属平台层，且需 A5；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**765/765 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 105）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.09 · 2026-11-12
 
 ### M6：CredentialGuard 自定义字段细粒度脱敏（已验证）
