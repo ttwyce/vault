@@ -4,6 +4,27 @@
 
 ---
 
+## v1.32 · 2026-11-12
+
+### M4：归档内容闸门（反爬 / 付费墙，已验证）
+
+- 新增 `archive_content_gate.dart`（docs/05 §4.1）：从标题/正文/HTML 类名
+  与特征词判定 blocked（反爬/JS 验证）、paywalled（付费墙）、ok；
+  正文不足 120 字按加载失败处理，一律「只存元数据」有可测依据
+- `DiagnosticsPage` 展示规则
+- 测试：`archive_content_gate_test.dart` 3 条 → 全量 **831 → 834**
+
+**边界**：真实 WebView 加载 / readability 注入 / HTML 全文解析仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**834/834 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 127）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.31 · 2026-11-12
 
 ### M4：归档 URL 去重（已验证）
