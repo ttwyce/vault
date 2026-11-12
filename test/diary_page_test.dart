@@ -135,4 +135,12 @@ void main() {
     expect(find.text('e1'), findsOneWidget);
     expect(find.text('e2'), findsOneWidget);
   });
+
+  testWidgets('页面显示 AI 日记 23:50 排期判定与平台说明',
+      (WidgetTester tester) async {
+    await pumpDiary(tester);
+    expect(find.textContaining('AI 日记排期'), findsOneWidget);
+    expect(find.textContaining('23:50'), findsWidgets);
+    expect(find.textContaining('不做后台承诺'), findsOneWidget);
+  });
 }

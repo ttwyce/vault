@@ -11,6 +11,7 @@ import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/agent/ai_diary_schedule.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/entry/entry_models.dart';
@@ -215,6 +216,11 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
             _monthSummary.label,
             style: TextStyle(fontSize: 10.5, color: context.sketch.muted),
           ),
+          const SizedBox(height: SketchSpace.xs),
+          Text(
+            _aiDiaryHint(),
+            style: TextStyle(fontSize: 10.5, color: context.sketch.blue),
+          ),
           const SizedBox(height: SketchSpace.md),
           ..._buildEntrySection(),
         ],
@@ -319,6 +325,23 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
         ),
       ],
     );
+  }
+
+  /// docs/07 §5.2：把 23:50 排期判定显示给用户，不自动写库。
+  String _aiDiaryHint() {
+    final now = DateTime.now();
+    final today = diaryKey(now);
+    final todayEntries = _byDay[now.day] ?? const <EntrySummary>[];
+    final generated = todayEntries.any(
+      (EntrySummary e) => e.kind == EntryKind.aiDiary,
+    );
+    final decision = decideAiDiaryGeneration(
+      now: now,
+      generatedDate: generated ? today : null,
+      // 移动端为主：不做后台常驻承诺。
+      platform: AiDiaryPlatform.android,
+    );
+    return 'AI 日记排期：${decision.reason} · ${decision.platformHint}';
   }
 
   List<Widget> _buildEntrySection() {
