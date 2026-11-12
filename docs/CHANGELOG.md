@@ -4,6 +4,31 @@
 
 ---
 
+## v1.97 · 2026-11-12
+
+### M5：向量同步真实 WebDAV 传输（已验证）
+
+- 新增 `vector_sync_transport.dart`（docs/06 §7）：走真实
+  `WebDavBackend` 的 GET / 条件 PUT，路径 `CloudLayout.vectorPath`
+  （`/vault/vec/<name>`），封包为 `VectorEnvelope` JSON；
+  下载后必过 `checkVectorEnvelope`，model_id / dim / dtype 不匹配、
+  坏 JSON / 404 一律丢弃并标记需重算；上传规格不符不发 PUT，
+  创建用 `If-None-Match: *`、更新必须带 ETag（412 不覆盖云端）
+- 用本地 HttpServer + 真实 `HttpClientWebDavBackend` 完整验证，
+  不依赖真机 / 新依赖；诊断页展示规则
+- 测试：`vector_sync_transport_test.dart` 4 条 → 全量 **1021 → 1025**
+
+**边界**：向量封包的实际加密 / 写入 `entry_vec` / App 启动装配
+仍缺（默认开关关闭）；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1025/1025 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 192）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.96 · 2026-11-12
 
 ### M4：网页 L1 真实抓取与写回（已验证）
