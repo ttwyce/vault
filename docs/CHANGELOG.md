@@ -4,6 +4,29 @@
 
 ---
 
+## v1.65 · 2026-11-12
+
+### M2：日记天气 / 心情选择（已验证）
+
+- `EditorPage` 对 kind=3 显示「天气 / 心情」循环切换 chip
+  （未填 → 晴/阴/雨/雪/多云 → 未填；心情用 `kDiaryMoods`），
+  不弹层打断输入；新建与编辑都写入 `DiaryMeta`，编辑态回显
+- `DiaryMeta.copyWith` 新增 `clearWeather` / `clearMood`，
+  修掉可空字段无法清空的问题；`_refreshedDiaryMeta` 合并选择结果
+- 测试：`editor_page_test.dart` +2 条（选择落库、清除保留心情）、
+  `diary_meta_test.dart` +1 条（clear 语义）→ 全量 **924 → 927**
+
+**边界**：地点录入 / 年度回顾 / PDF 手账仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**927/927 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 160）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.64 · 2026-11-12
 
 ### M4：自动完整快照排期判定（已验证）

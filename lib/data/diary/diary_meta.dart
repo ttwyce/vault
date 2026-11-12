@@ -71,11 +71,13 @@ class DiaryMeta {
     String? location,
     int? wordCount,
     bool? backfilled,
+    bool clearWeather = false,
+    bool clearMood = false,
   }) =>
       DiaryMeta(
         date: date ?? this.date,
-        weather: weather ?? this.weather,
-        mood: mood ?? this.mood,
+        weather: clearWeather ? null : (weather ?? this.weather),
+        mood: clearMood ? null : (mood ?? this.mood),
         location: location ?? this.location,
         wordCount: wordCount ?? this.wordCount,
         backfilled: backfilled ?? this.backfilled,

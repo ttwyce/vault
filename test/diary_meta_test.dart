@@ -67,4 +67,17 @@ void main() {
     expect(built.wordCount, greaterThan(0));
     expect(built.mood, '一般');
   });
+
+  test('copyWith clearWeather/clearMood 能真正清空可空字段', () {
+    final meta = DiaryMeta.fromJson(<String, Object?>{
+      'date': '2026-11-08',
+      'weather': '晴',
+      'mood': '好',
+    });
+    final cleared = meta.copyWith(clearWeather: true, clearMood: true);
+    expect(cleared.weather, isNull);
+    expect(cleared.mood, isNull);
+    expect(cleared.date, '2026-11-08');
+    expect(meta.copyWith(weather: '雨').weather, '雨');
+  });
 }

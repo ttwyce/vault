@@ -74,6 +74,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   List<String> _tagIds = const <String>[];
   TaxonomySuggestion? _suggestion;
   bool _pinned = false;
+  String? _diaryWeather;
+  String? _diaryMood;
 
   @override
   void initState() {
@@ -107,6 +109,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     String? categoryId;
     List<String> tagIds = const <String>[];
     bool pinned = false;
+    String? weather;
+    String? mood;
 
     final id = widget.entryId;
     if (id != null) {
@@ -120,6 +124,10 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         kind = EntryKind.fromCode(row.kind) ?? widget.initialKind;
         if (kind == EntryKind.note || kind == EntryKind.thought) {
           pinned = NoteMeta.fromJson(existingMeta).pinned;
+        } else if (kind == EntryKind.diary) {
+          final diaryMeta = DiaryMeta.fromJson(existingMeta);
+          weather = diaryMeta.weather;
+          mood = diaryMeta.mood;
         }
         final taxonomyRepo = ref.read(taxonomyRepositoryProvider);
         categoryId = await taxonomyRepo.categoryForEntry(id);
@@ -138,6 +146,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
       _existingMeta = existingMeta;
       _kind = kind;
       _pinned = pinned;
+      _diaryWeather = weather;
+      _diaryMood = mood;
       _error = notFound;
       _loading = false;
     });
@@ -169,6 +179,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             date: date,
             body: body,
             createdAtMs: now.millisecondsSinceEpoch,
+            weather: _diaryWeather,
+            mood: _diaryMood,
           ).toJsonString();
         } else if (_kind == EntryKind.note ||
             _kind == EntryKind.thought) {
@@ -411,6 +423,10 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     }
     final now = DateTime.now();
     return old.copyWith(
+      weather: _diaryWeather,
+      mood: _diaryMood,
+      clearWeather: _diaryWeather == null,
+      clearMood: _diaryMood == null,
       wordCount: countDiaryWords(body),
       backfilled:
           isBackfilled(date: old.date, createdAtMs: now.millisecondsSinceEpoch),
@@ -521,6 +537,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
               ),
             ),
           _buildTaxonomyRow(),
+          _buildDiaryMetaRow(),
           _buildSuggestionRow(),
           _buildMarkdownBar(),
           Expanded(
@@ -639,6 +656,58 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         ],
       ),
     );
+  }
+
+  /// 日记的天气 / 心情选择（docs/11 §1.5）。只写 meta，不动正文。
+  Widget _buildDiaryMetaRow() {
+    if (_kind != EntryKind.diary) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SketchSpace.sm),
+      child: Wrap(
+        spacing: SketchSpace.sm,
+        children: <Widget>[
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _saving ? null : _cycleWeather,
+            child: SketchTag(
+              '天气：${_diaryWeather ?? "未填"}',
+              tone: SketchTone.ghost,
+              dense: true,
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _saving ? null : _cycleMood,
+            child: SketchTag(
+              '心情：${_diaryMood ?? "未填"}',
+              tone: SketchTone.ghost,
+              dense: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 天气 / 心情用「点一下换下一个」的轻量循环选择，避免弹层打断输入。
+  static const List<String?> _weatherOptions = <String?>[
+    null, '晴', '阴', '雨', '雪', '多云',
+  ];
+
+  static const List<String?> _moodOptions = <String?>[
+    null, '平静', '好', '一般', '糟',
+  ];
+
+  void _cycleWeather() {
+    final i = _weatherOptions.indexOf(_diaryWeather);
+    setState(() => _diaryWeather =
+        _weatherOptions[(i + 1) % _weatherOptions.length]);
+  }
+
+  void _cycleMood() {
+    final i = _moodOptions.indexOf(_diaryMood);
+    setState(
+        () => _diaryMood = _moodOptions[(i + 1) % _moodOptions.length]);
   }
 
   Widget _buildSuggestionRow() {

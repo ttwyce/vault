@@ -288,4 +288,59 @@ void main() {
     expect(meta.pinned, isTrue);
     expect(meta.wordCount, 6);
   });
+
+  testWidgets('日记可选天气/心情并写入 meta',
+      (WidgetTester tester) async {
+    await pumpEditor(tester, kind: EntryKind.diary);
+    expect(find.textContaining('天气：未填'), findsOneWidget);
+    // 循环选择：未填 → 晴 → 阴；心情：未填 → 平静。
+    await tester.tap(find.textContaining('天气：未填'));
+    await tester.pump();
+    await tester.tap(find.textContaining('天气：晴'));
+    await tester.pump();
+    expect(find.textContaining('天气：阴'), findsOneWidget);
+    await tester.tap(find.textContaining('心情：未填'));
+    await tester.pump();
+    expect(find.textContaining('心情：平静'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '今天天气不错');
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await app.db.select(app.db.entries).get();
+    final meta = DiaryMeta.fromJson(jsonDecode(rows.single.meta!));
+    expect(meta.weather, '阴');
+    expect(meta.mood, '平静');
+  });
+
+  testWidgets('编辑已有天气的日记可清除天气且保留心情',
+      (WidgetTester tester) async {
+    final created = await app.gateway.writeEntry(EntryWrite.create(
+      id: 'diary-weather',
+      kind: EntryKind.diary,
+      title: '旧日记',
+      body: '旧正文',
+      meta: const DiaryMeta(
+        date: '2026-11-08',
+        weather: '晴',
+        mood: '好',
+      ).toJsonString(),
+    ));
+    await pumpEditor(tester, entryId: created.snapshot.id);
+    expect(find.textContaining('天气：晴'), findsOneWidget);
+    // 晴 → 阴 → 雨 → 雪 → 多云 → 未填（清除），共 5 次。
+    for (var i = 0; i < 5; i++) {
+      await tester.tap(find.textContaining('天气：'));
+      await tester.pump();
+    }
+    expect(find.textContaining('天气：未填'), findsOneWidget);
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final row = await app.repo.getRow('diary-weather');
+    final meta = DiaryMeta.fromJson(jsonDecode(row!.meta!));
+    expect(meta.weather, isNull);
+    expect(meta.mood, '好');
+  });
 }
