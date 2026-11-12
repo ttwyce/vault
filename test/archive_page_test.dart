@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/archive/archive_meta.dart';
 import 'package:vault/data/archive/http_link_checker.dart';
+import 'package:vault/data/archive/http_wayback_client.dart';
+import 'package:vault/data/archive/wayback_client.dart';
 import 'package:vault/data/db/vault_database.dart' show BlobRefsCompanion;
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/write/write_gateway.dart';
@@ -24,6 +26,7 @@ void main() {
   Future<void> pumpArchive(
     WidgetTester tester, {
     HttpLinkChecker Function()? checkerFactory,
+    HttpWaybackClient Function()? waybackClientFactory,
   }) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1.0;
@@ -32,7 +35,10 @@ void main() {
       container: app.container,
       child: MaterialApp(
         home: Scaffold(
-          body: ArchivePage(checkerFactory: checkerFactory),
+          body: ArchivePage(
+            checkerFactory: checkerFactory,
+            waybackClientFactory: waybackClientFactory,
+          ),
         ),
       ),
     ));
@@ -503,6 +509,34 @@ void main() {
     expect(rows.single.httpStatus, 404);
     expect(find.textContaining('已检查'), findsWidgets);
   });
+
+  testWidgets('死链点「试 Wayback」真实查询后写回 wayback_url 并显示年份',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/dead-page',
+      site: 'example.com',
+      status: ArchiveStatus.dead,
+      lastCheckedAt: 1731052800000,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-wayback',
+      kind: EntryKind.bookmark,
+      title: '死链查存档',
+      meta: meta.toJsonString(),
+    ));
+    await pumpArchive(
+      tester,
+      waybackClientFactory: () => _FakeWaybackFound(),
+    );
+    await tester.tap(find.text('试 Wayback'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final row = await app.repo.getRow('arch-wayback');
+    final written = ArchiveMeta.fromJson(jsonDecode(row!.meta!));
+    expect(written.waybackUrl, contains('web.archive.org'));
+    expect(find.textContaining('2019'), findsWidgets);
+  });
 }
 
 class _FakeDeadChecker extends HttpLinkChecker {
@@ -515,6 +549,22 @@ class _FakeDeadChecker extends HttpLinkChecker {
         retries: 0,
         finalUrl: null,
         reason: 'fake HEAD 404',
+      );
+
+  @override
+  void close({bool force = true}) {}
+}
+
+class _FakeWaybackFound extends HttpWaybackClient {
+  _FakeWaybackFound() : super(baseUrl: 'http://127.0.0.1:1');
+
+  @override
+  Future<WaybackResult> findSnapshot(String targetUrl) async => WaybackResult(
+        available: true,
+        archiveUrl:
+            'https://web.archive.org/web/20190312093015/$targetUrl',
+        hint: '已找到 2019-03-12 的存档版本',
+        timestamp: '20190312093015',
       );
 
   @override

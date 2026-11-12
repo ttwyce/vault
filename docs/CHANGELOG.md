@@ -4,6 +4,34 @@
 
 ---
 
+## v1.92 · 2026-11-12
+
+### M4：Wayback availability 真实 GET 与死链回退（已验证）
+
+- 新增 `http_wayback_client.dart`：`dart:io` 真实 GET
+  `archive.org/wayback/available?url=`，响应交给
+  `parseWaybackAvailability`；HTTP 500 / 超时 / 断连 / 坏 JSON /
+  响应过大都明确返回「无快照」，绝不假装可用；`baseUrl` 可注入
+  供本地 HttpServer 测试。零新依赖 / 零真机
+- `ArchivePage` 死链 tile「试 Wayback」从静态文字升级为真实查询：
+  命中则经 `WriteGateway` 把 `wayback_url` 写回 kind=5 meta
+  （保留 title/body/其它字段）、刷新并显示年份徽章；
+  未命中给手动提交提示。可注入 client 工厂供 widget 测试
+- 测试：`http_wayback_client_test.dart` 4 条（有快照 / 无快照 /
+  500+坏 JSON / 断连）、`archive_page_test.dart` +1 条（UI 写回）
+  → 全量 **997 → 1002**
+
+**边界**：Save Page Now 真实提交 / 第三方 URL 发送的用户勾选仍待接；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1002/1002 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 187）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.91 · 2026-11-12
 
 ### M4：真实 HTTP 死链检查链路落地（已验证）

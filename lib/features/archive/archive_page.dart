@@ -17,6 +17,7 @@ import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
 import '../../data/archive/archive_settings.dart';
 import '../../data/archive/http_link_checker.dart';
+import '../../data/archive/http_wayback_client.dart';
 import '../../data/archive/link_check_service.dart';
 import '../../data/archive/archive_repository.dart';
 import '../../app/session/vault_session.dart';
@@ -31,11 +32,16 @@ import '../../data/write/write_gateway.dart';
 /// 筛选 / 站点聚合 / 存储汇总全走 [archive_policy.dart] 的纯函数。
 /// 这里只展示事实：状态、站点、摘要、快照大小、下次检查时间。
 class ArchivePage extends ConsumerStatefulWidget {
-  const ArchivePage({super.key, this.checkerFactory});
+  const ArchivePage({
+    super.key,
+    this.checkerFactory,
+    this.waybackClientFactory,
+  });
 
   /// 真实执行批量检查时可注入（widget 测试里 HttpClient 被绑定拦截，
   /// 用假 checker 覆盖），生产环境为 null → 真实 dart:io HEAD。
   final HttpLinkChecker Function()? checkerFactory;
+  final HttpWaybackClient Function()? waybackClientFactory;
 
   @override
   ConsumerState<ArchivePage> createState() => _ArchivePageState();
@@ -316,6 +322,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                             child: _ArchiveTile(
                               entry: visible[i],
                               variant: sketchCardVariants(visible.length)[i],
+                              onWayback: () => _tryWayback(visible[i]),
                             ),
                           ),
                         ),
@@ -396,6 +403,40 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
       '点「执行 HEAD 检查」会真的发请求并落 link_check 证据。',
       onExecute: ids.isEmpty ? null : () => _executeBatchRecheck(data, ids),
     );
+  }
+
+  /// 死链 → 真实查询 Wayback availability，命中则把存档 URL 写回 meta
+  /// （docs/05 §6.1）。走唯一写入口，保留 title/body/其它 meta 字段。
+  Future<void> _tryWayback(ArchiveEntry entry) async {
+    final client = widget.waybackClientFactory?.call() ?? HttpWaybackClient();
+    final result = await client.findSnapshot(entry.meta.url);
+    client.close();
+    if (!mounted) return;
+    if (result.available && result.archiveUrl != null) {
+      final db = ref.read(vaultDatabaseProvider);
+      final gateway = ref.read(writeGatewayProvider);
+      final row = await (db.select(db.entries)
+            ..where((t) => t.id.equals(entry.id)))
+          .getSingleOrNull();
+      if (row == null) return;
+      final next = entry.meta.copyWith(waybackUrl: result.archiveUrl);
+      await gateway.writeEntry(EntryWrite.update(
+        id: entry.id,
+        title: row.title,
+        body: row.body,
+        meta: next.toJsonString(),
+      ));
+      if (mounted) {
+        setState(() {
+          _future = _load(ref.read(archiveRepositoryProvider));
+        });
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(result.hint)),
+      );
+    }
   }
 
   /// 真实执行：dart:io HEAD + 唯一写入口落证据。
@@ -631,10 +672,15 @@ String _formatBytes(int bytes) {
 }
 
 class _ArchiveTile extends StatelessWidget {
-  const _ArchiveTile({required this.entry, this.variant = 0});
+  const _ArchiveTile({
+    required this.entry,
+    this.variant = 0,
+    this.onWayback,
+  });
 
   final ArchiveEntry entry;
   final int variant;
+  final VoidCallback? onWayback;
 
   @override
   Widget build(BuildContext context) {
@@ -718,8 +764,17 @@ class _ArchiveTile extends StatelessWidget {
                   children: <Widget>[
                     for (final (label, tone) in badges)
                       SketchTag(label, tone: tone, dense: true),
-                    Text(trailing,
-                        style: TextStyle(fontSize: 10.5, color: p.muted)),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: trailing == '试 Wayback' ? onWayback : null,
+                      child: Text(
+                        trailing,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: trailing == '试 Wayback' ? p.blue : p.muted,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
