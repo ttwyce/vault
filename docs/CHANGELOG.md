@@ -14,14 +14,16 @@
   归属日期早于创建当天即补写
 - `EditorPage` 新建日记改为写完整 meta，编辑时保留天气/心情/日期
   只刷新字数与补写标记；坏 meta 不猜测不覆盖
-- 测试：`diary_meta_test.dart` 4 条、`editor_page_test.dart` +1 条
-  → 全量 **802 → 807**
+- `DiaryPage` 的「补写」按钮把月历选中日作为 `initialDate` 传给编辑器，
+  `meta.date` 显式归属该日，`backfilled` 自动为真（docs/11 §1.2）
+- 测试：`diary_meta_test.dart` 4 条、`editor_page_test.dart` +2 条
+  → 全量 **802 → 808**
 
-**边界**：天气/心情选择 UI、location 录入、补写指定日期入口仍缺；
+**边界**：天气/心情选择 UI、location 录入仍缺；
 M3 硬门槛未过，M4~M9 未完成。
 
 **验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
-**807/807 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+**808/808 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
 
 **影响文档**：README（数字）、09（§2）、14（Day 116）、20（当前状态）、
 CHANGELOG（本条）

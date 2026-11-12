@@ -12,6 +12,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/entry/entry_models.dart';
+import '../../data/diary/diary_meta.dart';
 import '../../data/diary/diary_streak.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
@@ -108,9 +109,13 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
   }
 
   void _openEditor({String? entryId}) {
+    // docs/11 §1.2：补写对过去任意一天，date 显式取月历选中日；
+    // 没选日期时取今天所在月份里的今天（跨月补写按当前查看月份）。
+    final day = _selectedDay ?? DateTime.now().day;
+    final date = diaryKey(DateTime(_month.year, _month.month, day));
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => entryId == null
-          ? const EditorPage(initialKind: EntryKind.diary)
+          ? EditorPage(initialKind: EntryKind.diary, initialDate: date)
           : EditorPage(entryId: entryId),
     ));
   }

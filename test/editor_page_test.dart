@@ -164,4 +164,46 @@ void main() {
     expect(meta.wordCount, 6);
     expect(meta.backfilled, isFalse);
   });
+
+  testWidgets('补写过去日期：initialDate 显式落到日记 meta.date',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: app.container,
+      child: MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const EditorPage(
+                      initialKind: EntryKind.diary,
+                      initialDate: '2020-01-02',
+                    ),
+                  ));
+                },
+                child: const Text('打开补写'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('打开补写'));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.enterText(find.byType(TextField).first, '补写标题');
+    await tester.enterText(find.byType(TextField).last, '旧事重记');
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await app.db.select(app.db.entries).get();
+    final meta = DiaryMeta.fromJson(rows.single.meta);
+    expect(meta.date, '2020-01-02');
+    expect(meta.backfilled, isTrue);
+  });
 }

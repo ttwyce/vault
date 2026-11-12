@@ -33,6 +33,7 @@ class EditorPage extends ConsumerStatefulWidget {
     super.key,
     this.entryId,
     this.initialKind = EntryKind.note,
+    this.initialDate,
   });
 
   /// 为 null 表示新建；非空表示编辑已有条目。
@@ -40,6 +41,9 @@ class EditorPage extends ConsumerStatefulWidget {
 
   /// 新建时的类型。编辑态以数据库里的 `kind` 为准。
   final EntryKind initialKind;
+
+  /// 新建日记的归属日期（YYYY-MM-DD）；补写过去某一天时由日记页传入。
+  final String? initialDate;
 
   @override
   ConsumerState<EditorPage> createState() => _EditorPageState();
@@ -148,8 +152,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         String? meta;
         if (_kind == EntryKind.diary) {
           final now = DateTime.now();
+          final date = widget.initialDate ?? diaryKey(now);
           meta = buildDiaryMeta(
-            date: diaryKey(now),
+            date: date,
             body: body,
             createdAtMs: now.millisecondsSinceEpoch,
           ).toJsonString();
