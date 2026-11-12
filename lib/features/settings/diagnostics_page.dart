@@ -43,6 +43,7 @@ import '../../data/platform/platform_capabilities.dart';
 import '../../data/vault/attachment_validator.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
+import '../../data/search/related_entries.dart';
 import '../../data/search/model_downloader.dart';
 import '../../data/search/vector_sync_policy.dart';
 
@@ -261,6 +262,12 @@ class DiagnosticsPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: SketchSpace.sm),
+                Text(
+                  '相关推荐：标签 Jaccard + 标题 bigram 打分 top3，'
+                  'kind ${kNeverRecommendKinds.join('/')} 永不推荐、无重合不凑数',
+                  style: TextStyle(fontSize: 11, color: p.blue),
+                ),
+                const SizedBox(height: SketchSpace.xs),
                 Text(
                   '分类/标签建议：关键词抽取 -> 1 个分类 + 2~4 个标签，'
                   '上限 $kMaxTagsPerEntry、不自动写入',

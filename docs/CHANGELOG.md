@@ -4,6 +4,27 @@
 
 ---
 
+## v1.28 · 2026-11-12
+
+### M7：条目详情相关推荐判定层（已验证）
+
+- 新增 `related_entries.dart`（docs/07 §10.2）：标签 Jaccard
+  + 标题中文 bigram Dice 打分，输出 top3；分数为 0 不凑数、
+  排除自身、密码（kind=6）与 AI 日记（kind=4）永不推荐
+- `DiagnosticsPage` 展示规则
+- 测试：`related_entries_test.dart` 3 条 → 全量 **819 → 822**
+
+**边界**：真实候选读取 / 详情页推荐卡片 / 语义向量召回仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**822/822 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 123）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.27 · 2026-11-12
 
 ### M7：搜索空结果「问 AI」入口接线（已验证）
