@@ -4,6 +4,33 @@
 
 ---
 
+## v1.96 · 2026-11-12
+
+### M4：网页 L1 真实抓取与写回（已验证）
+
+- 新增 `http_archive_fetcher.dart`：`dart:io` 真实 GET HTML，
+  纯 Dart 抽 `<title>` / `<article>|<main>|<body>` 可见文本，
+  去 script/style/注释、保留标题与段落换行、解码常见实体，
+  输出简化 L1 Markdown；404 / 超时 / 断连 / 超过 1MB / 空正文
+  一律不写空条目
+- `ArchivePage` 新增网址时真实抓取：成功写 `entry.body` +
+  `status=text` + `title/http_status/excerpt/reading_time_min`；
+  失败只落 `metadata` 并给提示；可注入 fetcher 工厂供 widget 测试
+- 测试：`http_archive_fetcher_test.dart` 3 条（本地 HttpServer：
+  正文抽取 / 退化与空页 / 失败路径）、`archive_page_test.dart` +1 条
+  → 全量 **1017 → 1021**
+
+**边界**：readability.js 级正文识别 / JS 渲染页面 / L2 PDF 快照
+仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1021/1021 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 191）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.95 · 2026-11-12
 
 ### M4：真实 blob 按需下载与 LRU 清理执行（已验证）

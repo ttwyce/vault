@@ -15,7 +15,9 @@ import '../../data/archive/archive_cache_policy.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
+import '../../data/archive/archive_body_meta.dart';
 import '../../data/archive/archive_settings.dart';
+import '../../data/archive/http_archive_fetcher.dart';
 import '../../data/archive/http_link_checker.dart';
 import '../../data/archive/http_wayback_client.dart';
 import '../../data/archive/link_check_service.dart';
@@ -37,6 +39,7 @@ class ArchivePage extends ConsumerStatefulWidget {
     this.checkerFactory,
     this.waybackClientFactory,
     this.blobBaseUrl,
+    this.fetcherFactory,
   });
 
   /// 真实执行批量检查时可注入（widget 测试里 HttpClient 被绑定拦截，
@@ -46,6 +49,7 @@ class ArchivePage extends ConsumerStatefulWidget {
 
   /// blob 云端根地址（由装配层注入）；为空时阅读器只展示下载计划。
   final String? blobBaseUrl;
+  final HttpArchiveFetcher Function()? fetcherFactory;
 
   @override
   ConsumerState<ArchivePage> createState() => _ArchivePageState();
@@ -148,13 +152,24 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
       _newUrl.clear();
       return;
     }
+    // docs/05 §5：真实 GET 抽 L1 正文；失败只落 metadata，不写空正文。
+    final fetcher = widget.fetcherFactory?.call() ?? HttpArchiveFetcher();
+    final fetched = await fetcher.fetch(Uri.parse(plan.normalizedUrl));
+    fetcher.close();
     final ArchiveMeta meta;
     try {
+      final derived = fetched.ok && fetched.body != null
+          ? planArchiveBodyMeta(fetched.body!)
+          : null;
       meta = ArchiveMeta(
         url: plan.normalizedUrl,
         site: ArchiveMeta.siteOf(plan.normalizedUrl),
-        status: ArchiveStatus.metadata,
+        status: fetched.ok ? ArchiveStatus.text : ArchiveStatus.metadata,
+        title: fetched.title,
         policy: RecheckPolicy.monthly,
+        excerpt: derived?.excerpt ?? '',
+        readingTimeMin: derived?.readingTimeMin ?? 0,
+        httpStatus: fetched.statusCode,
       );
     } on FormatException catch (e) {
       // 上面已用 mounted 守住异步间隙。
@@ -165,9 +180,15 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     }
     await ref.read(writeGatewayProvider).writeEntry(EntryWrite.create(
           kind: EntryKind.bookmark,
-          title: plan.normalizedUrl,
+          title: fetched.title ?? plan.normalizedUrl,
+          body: fetched.ok ? fetched.body : null,
           meta: meta.toJsonString(),
         ));
+    if (mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(fetched.hint)),
+      );
+    }
     _newUrl.clear();
     setState(() {
       _future = _load(ref.read(archiveRepositoryProvider));

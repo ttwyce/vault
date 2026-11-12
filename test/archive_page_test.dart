@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/archive/archive_meta.dart';
+import 'package:vault/data/archive/http_archive_fetcher.dart';
 import 'package:vault/data/archive/http_link_checker.dart';
 import 'package:vault/data/archive/http_wayback_client.dart';
 import 'package:vault/data/archive/wayback_client.dart';
@@ -27,6 +28,7 @@ void main() {
     WidgetTester tester, {
     HttpLinkChecker Function()? checkerFactory,
     HttpWaybackClient Function()? waybackClientFactory,
+    HttpArchiveFetcher Function()? fetcherFactory,
   }) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1.0;
@@ -38,6 +40,14 @@ void main() {
           body: ArchivePage(
             checkerFactory: checkerFactory,
             waybackClientFactory: waybackClientFactory,
+            fetcherFactory: fetcherFactory ??
+                () => _FakeFetcher(const ArchiveFetchResult(
+                      ok: false,
+                      title: null,
+                      body: null,
+                      hint: '测试桩：未抓取',
+                      statusCode: null,
+                    )),
           ),
         ),
       ),
@@ -537,6 +547,37 @@ void main() {
     expect(written.waybackUrl, contains('web.archive.org'));
     expect(find.textContaining('2019'), findsWidgets);
   });
+
+  testWidgets('新增网址时真实抓取 L1 正文并写入 body / excerpt / status',
+      (WidgetTester tester) async {
+    await pumpArchive(
+      tester,
+      fetcherFactory: () => _FakeFetcher(ArchiveFetchResult(
+        ok: true,
+        title: '抓到的标题',
+        body: '这是抓取到的正文内容，${'长' * 250}',
+        hint: '已抓取 L1 正文',
+        statusCode: 200,
+      )),
+    );
+    await tester.tap(find.text('归档网址'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(
+      find.byType(TextField).last,
+      'https://example.com/new-page',
+    );
+    await tester.tap(find.text('确定'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final row = (await app.db.select(app.db.entries).get()).single;
+    expect(row.body, contains('这是抓取到的正文内容'));
+    final meta = ArchiveMeta.fromJson(jsonDecode(row.meta!));
+    expect(meta.status, ArchiveStatus.text);
+    expect(meta.excerpt, isNotEmpty);
+    expect(meta.readingTimeMin, greaterThan(0));
+    expect(meta.title, '抓到的标题');
+  });
 }
 
 class _FakeDeadChecker extends HttpLinkChecker {
@@ -566,6 +607,20 @@ class _FakeWaybackFound extends HttpWaybackClient {
         hint: '已找到 2019-03-12 的存档版本',
         timestamp: '20190312093015',
       );
+
+  @override
+  void close({bool force = true}) {}
+
+
+}
+
+class _FakeFetcher extends HttpArchiveFetcher {
+  _FakeFetcher(this._result);
+
+  final ArchiveFetchResult _result;
+
+  @override
+  Future<ArchiveFetchResult> fetch(Uri url) async => _result;
 
   @override
   void close({bool force = true}) {}
