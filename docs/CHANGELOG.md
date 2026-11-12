@@ -4,6 +4,30 @@
 
 ---
 
+## v1.99 · 2026-11-12
+
+### M4：Save Page Now 真实提交与用户勾选（已验证）
+
+- `HttpWaybackClient.submitSave`：`dart:io` 真实 POST `/save/<url>`，
+  必须 `userOptedIn` 才发请求（docs/05 §6.3 第三方 URL 发送逐次确认）；
+  超时 / 断连 / 非 2xx 明确反馈「未确认送达」
+- `ArchivePage` 死链查 Wayback 无存档时弹二次确认，确认后才提交，
+  取消不发请求；「有存档」仍直接写回 `wayback_url`
+- 测试：`http_wayback_client_test.dart` +1 条（未勾选不发 POST、
+  勾选后真实提交）、`archive_page_test.dart` +1 条（UI 确认流程）
+  → 全量 **1030 → 1032**
+
+**边界**：真实 archive.org 外网验收仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1032/1032 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 194）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.98 · 2026-11-12
 
 ### M9：加密备份真实打包与 WebDAV 上传（已验证）

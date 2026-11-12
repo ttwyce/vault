@@ -12,11 +12,18 @@ class _WaybackServer {
   String? body;
   int status = 200;
   final List<String> queryUrls = <String>[];
+  final List<String> savePaths = <String>[];
 
   static Future<_WaybackServer> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final site = _WaybackServer(server);
     server.listen((HttpRequest request) async {
+      if (request.method == 'POST') {
+        site.savePaths.add(request.uri.path);
+        request.response.statusCode = 200;
+        await request.response.close();
+        return;
+      }
       site.queryUrls.add(request.uri.queryParameters['url'] ?? '');
       request.response.statusCode = site.status;
       request.response.headers.contentType = ContentType.json;
@@ -94,5 +101,22 @@ void main() {
     final result = await client.findSnapshot('https://example.com/p');
     expect(result.available, isFalse);
     expect(result.hint, contains('网络不可达'));
+  });
+
+  test('Save Page Now 需用户显式勾选才真实 POST URL', () async {
+    final withoutOptIn = await client.submitSave(
+      targetUrl: 'https://example.com/p',
+      userOptedIn: false,
+    );
+    expect(withoutOptIn, contains('未勾选'));
+    expect(site.savePaths, isEmpty);
+
+    final submitted = await client.submitSave(
+      targetUrl: 'https://example.com/p',
+      userOptedIn: true,
+    );
+    expect(submitted, contains('已提交'));
+    expect(site.savePaths, hasLength(1));
+    expect(site.savePaths.single, contains('example.com/p'));
   });
 }

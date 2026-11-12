@@ -10,7 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'wayback_client.dart';
+import 'wayback_client.dart' show WaybackResult, parseWaybackAvailability, shouldSubmitToWayback;
 
 class HttpWaybackClient {
   HttpWaybackClient({
@@ -33,6 +33,36 @@ class HttpWaybackClient {
       path: '/wayback/available',
       queryParameters: <String, String>{'url': targetUrl},
     );
+  }
+
+  /// docs/05 §6.3：Save Page Now 真实提交。
+  /// 默认关闭 —— 调用方必须显式 [userOptedIn]，否则不发请求。
+  Future<String> submitSave({
+    required String targetUrl,
+    required bool userOptedIn,
+  }) async {
+    if (!shouldSubmitToWayback(userOptedIn: userOptedIn)) {
+      return '未勾选提交到 Internet Archive，未发送 URL';
+    }
+    final uri = Uri.parse(baseUrl).replace(
+      path: '/save/$targetUrl',
+    );
+    try {
+      final request = await _client.postUrl(uri).timeout(connectTimeout);
+      request.headers.set(HttpHeaders.userAgentHeader, 'vault/0.1');
+      final response = await request.close().timeout(connectTimeout);
+      await response.drain<void>();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return '已提交到 Internet Archive（HTTP ${response.statusCode}）';
+      }
+      return '提交失败：HTTP ${response.statusCode}';
+    } on TimeoutException {
+      return '提交超时，稍后可手动重试';
+    } on SocketException {
+      return '网络不可达，提交未完成';
+    } on Object {
+      return '提交失败，URL 未确认送达';
+    }
   }
 
   Future<WaybackResult> findSnapshot(String targetUrl) async {

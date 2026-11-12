@@ -457,11 +457,45 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
         });
       }
     }
-    if (mounted) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text(result.hint)),
+    if (!mounted) return;
+    if (!result.available) {
+      // docs/05 §6.3：把 URL 发给第三方必须用户逐次勾选。
+      final optedIn = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) => AlertDialog(
+          title: const Text('提交到 Internet Archive？'),
+          content: Text('${result.hint}\n\n勾选后会把该 URL 发送给 archive.org。'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('确认提交'),
+            ),
+          ],
+        ),
       );
+      if (optedIn == true && mounted) {
+        final submitClient =
+            widget.waybackClientFactory?.call() ?? HttpWaybackClient();
+        final saved = await submitClient.submitSave(
+          targetUrl: entry.meta.url,
+          userOptedIn: true,
+        );
+        submitClient.close();
+        if (mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(content: Text(saved)),
+          );
+        }
+      }
+      return;
     }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(result.hint)),
+    );
   }
 
   /// 真实执行：dart:io HEAD + 唯一写入口落证据。

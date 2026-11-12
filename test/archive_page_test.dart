@@ -578,6 +578,35 @@ void main() {
     expect(meta.readingTimeMin, greaterThan(0));
     expect(meta.title, '抓到的标题');
   });
+
+  testWidgets('死链无存档时确认后才提交到 Internet Archive',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/no-snapshot',
+      site: 'example.com',
+      status: ArchiveStatus.dead,
+      lastCheckedAt: 1731052800000,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-submit',
+      kind: EntryKind.bookmark,
+      title: '无存档死链',
+      meta: meta.toJsonString(),
+    ));
+    final fake = _FakeWaybackNoSnapshot();
+    await pumpArchive(tester, waybackClientFactory: () => fake);
+    await tester.tap(find.text('试 Wayback'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(find.text('提交到 Internet Archive？'), findsOneWidget);
+    expect(fake.submitted, isFalse);
+    await tester.tap(find.text('确认提交'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(fake.submitted, isTrue);
+  });
 }
 
 class _FakeDeadChecker extends HttpLinkChecker {
@@ -621,6 +650,34 @@ class _FakeFetcher extends HttpArchiveFetcher {
 
   @override
   Future<ArchiveFetchResult> fetch(Uri url) async => _result;
+
+  @override
+  void close({bool force = true}) {}
+
+
+}
+
+class _FakeWaybackNoSnapshot extends HttpWaybackClient {
+  _FakeWaybackNoSnapshot() : super(baseUrl: 'http://127.0.0.1:1');
+
+  bool submitted = false;
+
+  @override
+  Future<WaybackResult> findSnapshot(String targetUrl) async =>
+      const WaybackResult(
+        available: false,
+        archiveUrl: null,
+        hint: '没有找到存档，建议手动提交到 archive.org',
+      );
+
+  @override
+  Future<String> submitSave({
+    required String targetUrl,
+    required bool userOptedIn,
+  }) async {
+    submitted = userOptedIn;
+    return '已提交到 Internet Archive';
+  }
 
   @override
   void close({bool force = true}) {}
