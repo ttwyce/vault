@@ -48,6 +48,7 @@ import '../../data/entry/entry_repository.dart';
 import '../../data/taxonomy/taxonomy_suggestions.dart';
 import '../../data/platform/platform_capabilities.dart';
 import '../../data/vault/attachment_validator.dart';
+import '../../data/vault/autofill_policy.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/related_entries.dart';
@@ -357,6 +358,8 @@ class DiagnosticsPage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
+                  'Autofill 字段识别 ${AutofillFieldType.values.length} 类 / '
+                  '域名与包名匹配，候选数据不含密码明文\n'
                   '同步状态 → UI 映射（docs/04 §11）',
                   style: TextStyle(
                     fontSize: 13,

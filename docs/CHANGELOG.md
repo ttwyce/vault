@@ -4,6 +4,27 @@
 
 ---
 
+## v1.40 · 2026-11-12
+
+### M6/M8：Autofill 字段识别与条目匹配判定层（已验证）
+
+- 新增 `autofill_policy.dart`（docs/08 §3.1 / §3.2）：按 hint/id/inputType
+  识别 username / password / otp / unknown；域名规整与 Android 包名匹配；
+  候选 JSON 明确只含域名/用户名/标题，**绝不带密码或 TOTP 明文**
+- `DiagnosticsPage` 展示规则
+- 测试：`autofill_policy_test.dart` 4 条 → 全量 **856 → 860**
+
+**边界**：真实 Android AutofillService / iOS Credential Provider Extension /
+共享 Keychain 一次性 token 仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**860/860 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8 / §10）、14（Day 135）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.39 · 2026-11-12
 
 ### 决策表收口：D79~D92（已验证）
