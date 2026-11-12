@@ -4,6 +4,29 @@
 
 ---
 
+## v1.78 · 2026-11-12
+
+### M4：死链重检查的平台默认排期（已验证）
+
+- 新增 `link_check_schedule.dart`（docs/05 §6.1）：Windows 默认
+  weekly（7 天）/ Android 与 iOS 默认 monthly（30 天）；
+  用户在 `meta.recheck_policy` 显式指定时优先，`never` 永不到期；
+  批量规模 Windows 25 / 移动端 10（后台任务受限），从未检查过立即到期
+- 与 v1.59 的「按 policy 定间隔」互补：那层管单条判定，
+  这层管平台默认与调度规模；`DiagnosticsPage` 展示规则
+- 测试：`link_check_schedule_test.dart` 5 条 → 全量 **952 → 957**
+
+**边界**：真实批量 HEAD / 平台定时器 / WorkManager / BGTask
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**957/957 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 173）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.77 · 2026-11-12
 
 ### 工程：提交身份重写 / 仓库公开 / Android CI / 描述文档

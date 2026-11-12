@@ -52,6 +52,7 @@ import '../../data/archive/pdf_pagination.dart';
 import '../../data/archive/wayback_client.dart';
 import '../../data/archive/archive_job_queue.dart';
 import '../../data/archive/share_intent_parser.dart';
+import '../../data/archive/link_check_schedule.dart';
 import '../../data/archive/link_check_service.dart';
 import '../../data/archive/archive_maintenance.dart';
 import '../../data/backup/backup_models.dart';
@@ -374,6 +375,9 @@ class DiagnosticsPage extends ConsumerWidget {
               '自动提交默认关闭（${shouldSubmitToWayback(userOptedIn: false)}）\n'
               '完整快照排期：每日 02:00 / 每周日 02:00 / '
               '当天已跑不重复（$kSnapshotHour:00 窗口）\n'
+              '死链排期：${defaultRecheckPolicy(PlatformKind.windows).wire}（Windows）/ '
+              '${defaultRecheckPolicy(PlatformKind.android).wire}（移动端），'
+              '批量 ${recheckBatchSize(PlatformKind.windows)}:${recheckBatchSize(PlatformKind.android)}\n'
               '归档配置：L1 常开、完整快照 ${SnapshotSchedule.values.length} 种排期、'
               '配额 ${const ArchiveSettings().quotaRatio * 100}% '
               '超限只存 L1、不承诺后台自动\n'
