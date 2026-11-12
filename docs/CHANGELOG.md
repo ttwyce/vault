@@ -4,6 +4,31 @@
 
 ---
 
+## v2.4 · 2026-11-12
+
+### M5：WebDAV 模型镜像真实传输（已验证）
+
+- `CloudLayout.modelPath`：`/vault/models/<id>.gguf`，与 items 分离，
+  模型 id 白名单 `^[A-Za-z0-9_-]+$` 拒绝路径穿越
+- 新增 `model_mirror_service.dart`（docs/06 §5.4）：默认关闭
+  （`userOptedIn` 才读写）、上传前提示体积并计入配额、
+  本地 sha256 校验后才条件 PUT；下载 GET 后校验 sha256 才写本地，
+  坏校验 / 404 / 412 都明确失败且不覆盖或不落盘
+- 本地 HttpServer + 临时目录 + 真实 `HttpClientWebDavBackend` 验证；
+  诊断页展示规则
+- 测试：`model_mirror_service_test.dart` 6 条 → 全量 **1055 → 1061**
+
+**边界**：模型镜像开关 UI / 配额真实来源 / App 启动装配仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1061/1061 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 199）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v2.3 · 2026-11-12
 
 ### M9：Markdown 文件夹真实导入（无冲突合并，已验证）

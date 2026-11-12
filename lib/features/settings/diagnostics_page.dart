@@ -66,6 +66,7 @@ import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/related_entries.dart';
 import '../../data/search/vector_knn.dart' show bruteForceKnn;
+import '../../data/search/model_mirror_service.dart';
 import '../../data/search/vector_sync_settings.dart';
 import '../../data/search/model_downloader.dart';
 import '../../data/search/vector_sync_policy.dart';
@@ -300,6 +301,8 @@ class DiagnosticsPage extends ConsumerWidget {
                 Text(
                   'A2 退路：Dart 内 int8 暴力余弦 KNN，'
                   '维度不匹配跳过、同分稳定（topK ${bruteForceKnn(query: const <int>[1], vectors: const <String, List<int>>{}, topK: 1).length} 示例）\n'
+                  '模型镜像：${ModelMirrorService.pathFor('model')} 已接真实 '
+                  '条件 PUT / GET + sha256，默认关闭、超配额拒传\n'
                   '向量同步：/vault/vec/ 已接真实 WebDAV GET / 条件 PUT，'
                   'model_id/dim/dtype 不匹配丢弃重算（412 不覆盖云端）\n'
                   '向量同步开关默认关（${const VectorSyncSetting().mode.name}），'

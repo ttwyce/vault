@@ -77,6 +77,15 @@ class CloudLayout {
           segment.isEmpty ? segment : Uri.encodeComponent(segment))
       .join('/');
 
+  /// docs/06 §5.4：用户自己的网盘作为模型镜像，与 /vault/items 分离。
+  /// 模型 id 只允许 ASCII 字母数字下划线连字符，避免路径穿越 / 编码差异。
+  static String modelPath(String modelId) {
+    if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(modelId)) {
+      throw ArgumentError.value(modelId, 'modelId', '模型 id 不合法');
+    }
+    return '$root/models/$modelId.gguf';
+  }
+
   static String _requireItemName(String name) {
     if (!isValidItemName(name)) {
       throw ArgumentError.value(name, 'hashedName', '云端文件名不合法');
