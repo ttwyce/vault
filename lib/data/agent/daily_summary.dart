@@ -6,6 +6,8 @@
 /// 由这里的 citations 校验兜底。
 library;
 
+import 'dart:convert';
+
 /// 聚合后的单条活动（docs/07 §5.2 输入）。
 class ActivityDigest {
   const ActivityDigest({
@@ -167,4 +169,70 @@ abstract final class AiDiaryRules {
   /// 长度 150~300 字，超出或不足都不合格。
   static bool isValidLength(String text) =>
       text.trim().length >= minChars && text.trim().length <= maxChars;
+}
+
+
+/// 解析端侧模型输出的日总结 JSON（docs/07 §5.2）。
+///
+/// 坏 JSON / 缺字段 / 非法 granularity 一律拒绝，绝不把解析失败
+/// 当成「今天什么都没做」写进 kind=4；引用与时间线都过已有校验。
+DailySummary parseDailySummary(
+  Object? raw, {
+  required Set<String> existingEntryIds,
+}) {
+  Object? decoded = raw;
+  if (raw is String) {
+    try {
+      decoded = jsonDecode(raw);
+    } on Object {
+      throw const FormatException('日总结不是合法 JSON');
+    }
+  }
+  if (decoded is! Map) {
+    throw const FormatException('日总结必须是 JSON 对象');
+  }
+  final map = Map<String, Object?>.from(decoded);
+  final headline = map['headline'];
+  final date = map['date'];
+  if (headline is! String || headline.trim().isEmpty) {
+    throw const FormatException('日总结缺少 headline');
+  }
+  if (date is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date)) {
+    throw const FormatException('日总结 date 必须是 YYYY-MM-DD');
+  }
+  final granularity = SummaryGranularity.values
+      .where((SummaryGranularity g) => g.name == map['granularity'])
+      .firstOrNull;
+  if (map['granularity'] != null && granularity == null) {
+    throw const FormatException('日总结 granularity 非法');
+  }
+  final rawTimeline = map['timeline'];
+  final timeline = <TimelineItem>[];
+  if (rawTimeline is List) {
+    for (final item in rawTimeline) {
+      if (item is! Map) continue;
+      final atMs = item['at_ms'];
+      final what = item['what'];
+      if (atMs is! num || what is! String) continue;
+      timeline.add(TimelineItem(
+        atMs: atMs.toInt(),
+        what: what,
+        entryId: item['entry_id'] as String?,
+      ));
+    }
+  }
+  List<String> strings(Object? value) => value is List
+      ? <String>[for (final v in value) if (v is String) v]
+      : const <String>[];
+  return DailySummary(
+    headline: headline.trim(),
+    timeline: normalizeTimeline(timeline),
+    openThreads: strings(map['open_threads']),
+    citations: validateCitations(
+      strings(map['citations']),
+      existingEntryIds,
+    ),
+    date: date,
+    granularity: granularity ?? SummaryGranularity.day,
+  );
 }

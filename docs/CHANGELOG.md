@@ -4,6 +4,28 @@
 
 ---
 
+## v1.45 · 2026-11-12
+
+### M7：日总结模型输出解析（已验证）
+
+- `parseDailySummary()`（docs/07 §5.2）：解析端侧模型输出的
+  headline/timeline/open_threads/citations/date/granularity；
+  坏 JSON / 缺 headline / 坏日期 / 非法层级一律拒绝，
+  时间线归一化、假引用剔除与去重复用既有判定；默认 day
+- `DiagnosticsPage` 展示规则
+- 测试：`daily_summary_parse_test.dart` 3 条 → 全量 **874 → 877**
+
+**边界**：真实模型调用 / kind=4 落库仍属平台层；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**877/877 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 140）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.44 · 2026-11-12
 
 ### M3 预备：写入后 8 秒 debounce 同步触发（已验证）

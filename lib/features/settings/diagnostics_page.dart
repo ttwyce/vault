@@ -21,12 +21,12 @@ import '../../data/activity/activity_logger.dart';
 import '../../data/agent/agent_policy.dart'
     show AgentLoopLimits, PolicyAction, PolicyDecision;
 import '../../data/agent/agent_loop.dart' show LoopStop;
+import '../../data/agent/daily_summary.dart';
 import '../../data/agent/ai_entry_points.dart';
 import '../../data/agent/openai_compat.dart';
 import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
-import '../../data/agent/daily_summary.dart' show SummaryGranularity;
 import '../../core/crypto/passphrase_change_policy.dart';
 import '../../core/sync/first_bind_policy.dart';
 import '../../core/sync/rate_limit_budget.dart';
@@ -305,6 +305,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   '（${VectorDecision.discard.name}）\n'
                   '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
                   '云端任务未授权降级端侧\n'
+                  '日总结 JSON 解析：${SummaryGranularity.values.length} 种层级 / '
+                  '坏响应拒绝、假引用剔除、时间线归一化\n'
                   'System Prompt 五段结构 + 输出四道关卡'
                   '（假引用整句移除 / 密码整段隐藏 / 300 字 / token 预算，'
                   '${kSystemPrompt.split('\n').length} 行提示词）\n'
