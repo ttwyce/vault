@@ -21,6 +21,7 @@ import '../../data/activity/activity_logger.dart';
 import '../../data/agent/agent_policy.dart'
     show AgentLoopLimits, PolicyAction, PolicyDecision;
 import '../../data/agent/agent_loop.dart' show LoopStop;
+import '../../data/agent/ai_data_clearance.dart';
 import '../../data/agent/daily_summary.dart';
 import '../../data/agent/ai_entry_points.dart';
 import '../../data/agent/openai_compat.dart';
@@ -305,6 +306,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   '（${VectorDecision.discard.name}）\n'
                   '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
                   '云端任务未授权降级端侧\n'
+                  '清除所有 AI 数据：${AiDataDomain.values.length} 个数据域 / '
+                  '二次确认 / 用户手写内容永不删除\n'
                   '日总结 JSON 解析：${SummaryGranularity.values.length} 种层级 / '
                   '坏响应拒绝、假引用剔除、时间线归一化\n'
                   'System Prompt 五段结构 + 输出四道关卡'

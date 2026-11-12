@@ -4,6 +4,28 @@
 
 ---
 
+## v1.47 · 2026-11-12
+
+### M7：清除所有 AI 数据计划（已验证）
+
+- 新增 `ai_data_clearance.dart`（docs/07 §7.3）：列出 5 个数据域
+  （对话 / AI 日记 / 检索缓存 / 搜索词 / API Key）与有序执行步骤；
+  必须逐次二次确认，未确认只给清单；
+  `keepUserNotes=false` 一律拒绝，用户手写笔记和日记永不删除
+- `DiagnosticsPage` 展示规则
+- 测试：`ai_data_clearance_test.dart` 3 条 → 全量 **878 → 881**
+
+**边界**：真实删除 / `flutter_secure_storage` Key 清除 / 偏好重置
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**881/881 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 142）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.46 · 2026-11-12
 
 ### M7：补齐 `add_tags` 工具（已验证）
