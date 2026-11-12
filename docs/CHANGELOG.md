@@ -4,6 +4,27 @@
 
 ---
 
+## v1.51 · 2026-11-12
+
+### M7：AI 日记 23:50 排期判定（已验证）
+
+- 新增 `ai_diary_schedule.dart`（docs/11 §1.4 / docs/07 §5.2）：
+  23:50 定时窗口、当天已生成不重复、Windows 托盘 / Android / iOS
+  三端文案明确前台补偿不承诺后台自动、支持次日补算前一天
+- `DiagnosticsPage` 展示规则
+- 测试：`ai_diary_schedule_test.dart` 3 条 → 全量 **888 → 891**
+
+**边界**：真实定时器 / 托盘常驻 / kind=4 落库仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**891/891 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 146）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.50 · 2026-11-12
 
 ### M3 预备：meta.schema 双向判定（已验证）
