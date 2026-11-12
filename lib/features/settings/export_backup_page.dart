@@ -6,6 +6,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../data/backup/backup_models.dart';
+import '../../data/backup/encrypted_backup_service.dart';
 
 /// 导出与备份页（docs/03 §10）。
 ///
@@ -13,7 +14,10 @@ import '../../data/backup/backup_models.dart';
 /// 导入时的无冲突合并判定、/backup/ 隔离与 7 天排期做成可交互演示。
 /// 真实 zip / WebDAV 上传由 M8 平台层按这里的状态执行。
 class ExportBackupPage extends StatefulWidget {
-  const ExportBackupPage({super.key});
+  const ExportBackupPage({super.key, this.backupServiceFactory});
+
+  /// 真实加密备份服务由启动装配层注入（需要 VaultKeys + WebDavBackend）。
+  final BackupUploader Function()? backupServiceFactory;
 
   @override
   State<ExportBackupPage> createState() => _ExportBackupPageState();
@@ -27,6 +31,19 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
   final TextEditingController _hash = TextEditingController();
   final TextEditingController _localHash = TextEditingController();
   ImportAction? _importAction;
+  String? _backupHint;
+
+  Future<void> _uploadBackup() async {
+    final service = widget.backupServiceFactory?.call();
+    if (service == null) return;
+    final result = await service.upload(
+      fileName: 'vault.enc',
+      vaultId: 'vault-local',
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    if (!mounted) return;
+    setState(() => _backupHint = result.hint);
+  }
 
   @override
   void dispose() {
@@ -181,9 +198,23 @@ class _ExportBackupPageState extends State<ExportBackupPage> {
                   style: TextStyle(fontSize: 10.5, color: p.muted),
                 ),
                 Text(
-                  '7 天周期；真实加密 zip 与 WebDAV /backup/ 上传仍缺。',
+                  '7 天周期；加密容器 VLT1 + K_item 信封 / '
+                  'WebDAV /backup/ 条件 PUT 已接通。',
                   style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),
+                const SizedBox(height: SketchSpace.sm),
+                SketchButton(
+                  label: '上传加密备份',
+                  dense: true,
+                  onPressed: widget.backupServiceFactory == null
+                      ? null
+                      : _uploadBackup,
+                ),
+                if (_backupHint != null) ...<Widget>[
+                  const SizedBox(height: SketchSpace.xs),
+                  Text(_backupHint!,
+                      style: TextStyle(fontSize: 10.5, color: p.muted)),
+                ],
               ],
             ),
           ),

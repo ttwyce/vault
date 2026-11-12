@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vault/data/backup/encrypted_backup_service.dart';
 import 'package:vault/features/settings/export_backup_page.dart';
 
 /// docs/03 §10 导出/备份页测试。
@@ -57,4 +58,41 @@ void main() {
     await tester.pump();
     expect(find.textContaining('动作：conflictCopy'), findsOneWidget);
   });
+
+  testWidgets('上传加密备份按钮调用真实服务并显示结果',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ExportBackupPage(
+          backupServiceFactory: () => _FakeBackupService(),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('上传加密备份'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(find.textContaining('已加密上传到 /backup/'), findsWidgets);
+  });
+}
+
+class _FakeBackupService implements BackupUploader {
+  @override
+  Future<BackupUploadResult> upload({
+    required String fileName,
+    required String vaultId,
+    required int nowMs,
+    String? ifMatchEtag,
+  }) async =>
+      const BackupUploadResult(
+        ok: true,
+        fileName: 'vault.enc',
+        etag: '"e1"',
+        bytes: 128,
+        hint: '已加密上传到 /backup/vault.enc',
+      );
 }

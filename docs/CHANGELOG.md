@@ -4,6 +4,35 @@
 
 ---
 
+## v1.98 · 2026-11-12
+
+### M9：加密备份真实打包与 WebDAV 上传（已验证）
+
+- 新增 `encrypted_backup_service.dart`（docs/03 §10）：
+  不引 zip 第三方包，容器 = `VLT1` magic + uint32 长度 +
+  `ItemEnvelope.encode()`；明文 = 真实 `BackupManifest` + 未删除条目
+  正文，用 K_item 加密（AAD 绑定 entity/id/rev），经真实
+  `WebDavBackend` 条件 PUT 到 `/backup/`（与 `/vault/` 隔离）
+- `restore` 拉取后逐层校验 magic / 长度 / 信封实体 / 解密 /
+  manifest；篡改密文 / 错误密钥 / 坏容器 / 非法文件名都明确失败；
+  createOnly 重复上传 412 不覆盖云端
+- `ExportBackupPage` 新增「上传加密备份」按钮（注入 `BackupUploader`，
+  由启动装配层提供真实服务）
+- 测试：`encrypted_backup_service_test.dart` 4 条（本地 WebDAV 桩：
+  上传解密 / 路径隔离 / 篡改与错误密钥 / 412）、
+  `export_backup_page_test.dart` +1 条 → 全量 **1025 → 1030**
+
+**边界**：真实 zip 标准格式、Markdown 文件夹导出、App 启动装配
+（VaultKeys + backend 注入）仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1030/1030 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 193）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.97 · 2026-11-12
 
 ### M5：向量同步真实 WebDAV 传输（已验证）
