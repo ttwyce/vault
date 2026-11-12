@@ -95,4 +95,9 @@ void main() {
       isEmpty,
     );
   });
+
+  testWidgets('底部显示连续天数标签', (WidgetTester tester) async {
+    await pumpDiary(tester);
+    expect(find.textContaining('连续'), findsOneWidget);
+  });
 }

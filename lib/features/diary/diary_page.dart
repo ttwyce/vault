@@ -12,6 +12,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/entry/entry_models.dart';
+import '../../data/diary/diary_streak.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
 
@@ -152,6 +153,8 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
           const SizedBox(height: SketchSpace.md),
           _buildLegend(),
           const SizedBox(height: SketchSpace.md),
+          _buildStreak(),
+          const SizedBox(height: SketchSpace.md),
           ..._buildEntrySection(),
         ],
       ),
@@ -197,6 +200,49 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
   // ---------------------------------------------------------------------------
   // 图例与列表
   // ---------------------------------------------------------------------------
+
+  /// docs/11 §1.4：底部显示「连续 N 天」，断签变灰、不弹提醒。
+  Widget _buildStreak() {
+    final repo = ref.read(entryRepositoryProvider);
+    final future = () async {
+      final written = <String>{};
+      for (var delta = -2; delta <= 0; delta++) {
+        final month = DateTime(_month.year, _month.month + delta, 1);
+        final byDay = await repo.diaryForMonth(month.year, month.month);
+        for (final entry in byDay.entries) {
+          if (entry.value.any((EntrySummary e) =>
+              e.kind == EntryKind.diary)) {
+            written.add(diaryDateKey(
+              DateTime(month.year, month.month, entry.key),
+            ));
+          }
+        }
+      }
+      return computeDiaryStreak(
+        writtenDays: written,
+        today: DateTime.now(),
+      );
+    }();
+    return FutureBuilder<DiaryStreak>(
+      future: future,
+      builder: (BuildContext context, AsyncSnapshot<DiaryStreak> snap) {
+        final streak = snap.data ??
+            const DiaryStreak(
+              days: 0,
+              startedFromToday: false,
+              label: '连续 0 天',
+            );
+        final p = context.sketch;
+        return Text(
+          streak.label,
+          style: TextStyle(
+            fontSize: 11,
+            color: streak.broken ? p.muted : p.ink,
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildLegend() {
     final p = context.sketch;
