@@ -36,6 +36,7 @@ import '../../data/archive/archive_content_gate.dart';
 import '../../data/archive/content_change_policy.dart';
 import '../../data/archive/archive_image_filter.dart';
 import '../../data/archive/archive_settings.dart';
+import '../../data/archive/pdf_pagination.dart';
 import '../../data/archive/wayback_client.dart';
 import '../../data/archive/archive_job_queue.dart';
 import '../../data/archive/share_intent_parser.dart';
@@ -326,6 +327,8 @@ class DiagnosticsPage extends ConsumerWidget {
               '变更检测：只对手动标记或 '
               '${kRecentlyVisitedMs ~/ 86400000} 天内访问过的条目重抓，'
               'simhash 汉明距离 > 3 才提示并保留旧版\n'
+              'PDF 分页 A4 ${kA4WidthPt.toInt()}×${kA4HeightPt.toInt()}pt / '
+              '${PdfFallbackStage.values.length} 级降级到只保留 L1+L3\n'
               'Wayback：availability 响应解析 / 时间戳兜底 / '
               '自动提交默认关闭（${shouldSubmitToWayback(userOptedIn: false)}）\n'
               '归档配置：L1 常开、完整快照 ${SnapshotSchedule.values.length} 种排期、'

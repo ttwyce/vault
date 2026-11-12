@@ -4,6 +4,27 @@
 
 ---
 
+## v1.37 · 2026-11-12
+
+### M4：PDF 分页与三级降级（已验证）
+
+- 新增 `pdf_pagination.dart`（docs/05 §8）：A4 595×842pt 按内容高度
+  向上取整页数、每页 canvas 平移量、0/负高度返回 0 页、超 200 页截断；
+  「平台原生 → 简易 Markdown PDF → 只保留 L1+L3 标记 text」三级降级
+- `DiagnosticsPage` 展示规则
+- 测试：`pdf_pagination_test.dart` 3 条 → 全量 **850 → 853**
+
+**边界**：真实平台 PDF 渲染 / `pdf`+`printing` 包接线仍属平台层且需新依赖；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**853/853 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 132）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.36 · 2026-11-12
 
 ### M4：内容变更检测成本控制（已验证）
