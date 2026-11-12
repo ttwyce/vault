@@ -29,6 +29,7 @@ import '../../data/agent/system_prompt.dart';
 import '../../data/agent/agent_tools.dart';
 import '../../data/agent/daily_summary_service.dart';
 import '../../core/crypto/passphrase_change_policy.dart';
+import '../../core/crypto/schema_upgrade_policy.dart';
 import '../../core/sync/first_bind_policy.dart';
 import '../../core/sync/rate_limit_budget.dart';
 import '../../core/sync/sync_kick_policy.dart';
@@ -390,6 +391,8 @@ class DiagnosticsPage extends ConsumerWidget {
                   '未解锁/后台/同步中推迟到前台补偿\n'
                   'E_RATE 请求预算每次减半（基线 $kDefaultSyncBudget，下限 1）/'
                   ' 连续成功 2 轮恢复，致命错误预算归零\n'
+                  'meta.schema 双向判定：${SchemaSyncAction.values.length} 种动作 / '
+                  '云端更高拒绝、更低须所有设备升级后才写回\n'
                   '首次绑定已有 vault：${planFirstBind(cloudHasVault: true, localHasData: true).length} 选一'
                   '（合并推荐 / 云端为准先入 trash / 本地为准需二次确认入 quarantine）\n'
                   '预算 200 请求耗尽时保存分片游标（已完成不重复入列）；'

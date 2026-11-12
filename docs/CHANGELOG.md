@@ -4,6 +4,28 @@
 
 ---
 
+## v1.50 · 2026-11-12
+
+### M3 预备：meta.schema 双向判定（已验证）
+
+- 新增 `schema_upgrade_policy.dart`（docs/03 §9）：云端 schema
+  高于本地直接拒绝并提示升级；一致正常同步；云端更低时只有
+  **所有已知设备都已升级**才允许同步后写回新 schema，
+  缺版本信息视为未升级（保守不写回，避免把旧设备锁在门外）
+- `DiagnosticsPage` 展示规则
+- 测试：`schema_upgrade_policy_test.dart` 3 条 → 全量 **885 → 888**
+
+**边界**：真实 `meta.enc` 写回 / 设备版本上报仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**888/888 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§3）、14（Day 145）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.49 · 2026-11-12
 
 ### M5：向量同步开关判定层（已验证）
