@@ -4,6 +4,27 @@
 
 ---
 
+## v1.33 · 2026-11-12
+
+### M4：归档正文图片过滤（已验证）
+
+- 新增 `archive_image_filter.dart`（docs/05 §4.1）：按 `<img>` 的
+  width/height 判宽或高 ≥200 保留、双维都小丢弃、未声明尺寸保守保留、
+  下载失败保留原 URL 并标注；支持从一段 HTML 批量抽取
+- `DiagnosticsPage` 展示规则
+- 测试：`archive_image_filter_test.dart` 3 条 → 全量 **834 → 837**
+
+**边界**：真实图片下载 / 本地引用改写 / 懒加载滚动仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**837/837 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 128）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.32 · 2026-11-12
 
 ### M4：归档内容闸门（反爬 / 付费墙，已验证）

@@ -33,6 +33,7 @@ import '../../core/sync/sync_state_machine.dart' show SyncPhase;
 import '../../core/sync/sync_status_ui.dart';
 import '../../data/agent/rollup_service.dart';
 import '../../data/archive/archive_content_gate.dart';
+import '../../data/archive/archive_image_filter.dart';
 import '../../data/archive/archive_job_queue.dart';
 import '../../data/archive/share_intent_parser.dart';
 import '../../data/archive/link_check_service.dart';
@@ -319,6 +320,8 @@ class DiagnosticsPage extends ConsumerWidget {
               '${AiEntryPoint.values.length} 类入口云端必弹逐次授权并显示发送字数\n'
               '剪藏分享：多 URL 去重、纯文本落想法、'
               'Extension 只接收不抓取（${ShareIntentKind.archiveUrls.name}）\n'
+              '图片过滤：宽或高 ≥ $kMinArchiveImageEdge px 保留，'
+              '下载失败保留原 URL 并标注\n'
               '内容闸门：反爬 / 付费墙 ${ContentGate.values.length} 态，'
               '正文过短按加载失败只存元数据\n'
               '归档维护计划器：重检查 / Wayback 回退 / 本地缓存清理 / '
