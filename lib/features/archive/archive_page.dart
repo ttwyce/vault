@@ -16,6 +16,8 @@ import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
 import '../../data/archive/archive_body_meta.dart';
+import '../../data/archive/content_change_policy.dart';
+import '../../data/archive/content_change_service.dart';
 import '../../data/archive/archive_settings.dart';
 import '../../data/archive/http_archive_fetcher.dart';
 import '../../data/archive/http_link_checker.dart';
@@ -397,6 +399,12 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                                   summary,
                                 ),
                               ),
+                              SketchButton(
+                                label: '检查内容变更',
+                                tone: SketchTone.ghost,
+                                dense: true,
+                                onPressed: () => _checkContentChanges(data),
+                              ),
                             ],
                           ),
                         ],
@@ -406,6 +414,42 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                 ),
         );
       },
+    );
+  }
+
+  /// docs/05 §6.2：只对「关注变更」或 30 天内访问过的条目重抓 L1，
+  /// 真实计算 simhash 比对，变更时经 WriteGateway 保留旧版 history。
+  Future<void> _checkContentChanges(_ArchiveData data) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final candidates = <ChangeCheckCandidate>[
+      for (final entry in data.entries)
+        ChangeCheckCandidate(
+          entryId: entry.id,
+          watchChanges: entry.meta.watchChanges,
+          lastVisitedAtMs: entry.updatedAt,
+        ),
+    ];
+    final ids = planChangeCheckBatch(candidates, nowMs: nowMs);
+    final fetcher = widget.fetcherFactory?.call() ?? HttpArchiveFetcher();
+    final service = ContentChangeService(
+      db: ref.read(vaultDatabaseProvider),
+      gateway: ref.read(writeGatewayProvider),
+      fetcher: fetcher,
+    );
+    var changed = 0;
+    for (final id in ids.take(20)) {
+      final result = await service.checkAndApply(entryId: id, nowMs: nowMs);
+      if (result.plan?.action == ContentChangeAction.promptChange) {
+        changed++;
+      }
+    }
+    fetcher.close();
+    if (!mounted) return;
+    setState(() {
+      _future = _load(ref.read(archiveRepositoryProvider));
+    });
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text('已检查 ${ids.length} 条，$changed 条内容有变化')),
     );
   }
 

@@ -4,6 +4,36 @@
 
 ---
 
+## v2.0 · 2026-11-12
+
+### M4：内容变更真实重抓与 simhash 修正（已验证）
+
+- 新增 `simhash.dart`：64 位 FNV-1a 加权投票，中文 2-gram + 英文词，
+  输出 16 位大写十六进制（BigInt 无符号，避免带 `-` 的 17 位串）
+- **修真实 bug**：`hasContentChanged` 过去用 `int.tryParse(hex,16)`
+  解析 64 位指纹，最高位为 1 时返回 null → 变更永远判不出；
+  改用 `BigInt.tryParse` + BigInt popcount
+- 新增 `content_change_service.dart`：真实重抓 L1 → `computeSimhash`
+  → 比对上次 `link_check.simhash` → 有实质变化时经唯一写入口
+  `writeEntry(update)` 更新正文/meta（网关自动写 `entry_history`
+  保留旧版）并落 `changed` 证据；未变化只落 `ok` 不制造新版本
+- `ArchivePage` 新增「检查内容变更」按钮，按 `planChangeCheckBatch`
+  成本控制（关注变更 / 30 天内访问）逐条执行
+- 测试：`simhash_test.dart` 4 条、`content_change_service_test.dart` 2 条
+  （本地 HttpServer 端到端：history/证据/幂等）、`archive_page_test.dart`
+  +1 条 → 全量 **1032 → 1039**
+
+**边界**：月度定时任务 / 真机后台执行仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1039/1039 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 195）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.99 · 2026-11-12
 
 ### M4：Save Page Now 真实提交与用户勾选（已验证）

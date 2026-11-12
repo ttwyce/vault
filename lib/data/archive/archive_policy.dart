@@ -183,18 +183,19 @@ bool shouldTryWayback(LinkCheckResult result) =>
 bool hasContentChanged(String? previousSimhash, String? currentSimhash,
     {int threshold = 3}) {
   if (previousSimhash == null || currentSimhash == null) return false;
-  final previous = int.tryParse(previousSimhash, radix: 16);
-  final current = int.tryParse(currentSimhash, radix: 16);
+  // 64 位 simhash 的最高位常为 1，Dart int 是有符号 64 位，
+  // int.tryParse 会返回 null；必须用 BigInt 解析才能正确算汉明距离。
+  final previous = BigInt.tryParse(previousSimhash, radix: 16);
+  final current = BigInt.tryParse(currentSimhash, radix: 16);
   if (previous == null || current == null) return false;
-  final bits = previous ^ current;
-  return _popCount(bits) > threshold;
+  return _popCountBig(previous ^ current) > threshold;
 }
 
-int _popCount(int value) {
+int _popCountBig(BigInt value) {
   var v = value;
   var count = 0;
-  while (v != 0) {
-    v &= v - 1;
+  while (v != BigInt.zero) {
+    v &= v - BigInt.one;
     count++;
   }
   return count;

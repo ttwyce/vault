@@ -607,6 +607,43 @@ void main() {
     }
     expect(fake.submitted, isTrue);
   });
+
+
+  testWidgets('检查内容变更按钮真实重抓并落 link_check 证据',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/watch',
+      site: 'example.com',
+      status: ArchiveStatus.text,
+      watchChanges: true,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-watch',
+      kind: EntryKind.bookmark,
+      title: '关注变更',
+      body: '旧正文',
+      meta: meta.toJsonString(),
+    ));
+    await pumpArchive(
+      tester,
+      fetcherFactory: () => _FakeFetcher(ArchiveFetchResult(
+        ok: true,
+        title: '关注变更',
+        body: '重抓到的全新正文，内容明显不同，ALPHA BETA GAMMA DELTA',
+        hint: '已抓取 L1 正文',
+        statusCode: 200,
+      )),
+    );
+    await tester.tap(find.text('检查内容变更'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final checks = await app.db.select(app.db.linkChecks).get();
+    expect(checks, hasLength(1));
+    expect(checks.single.simhash, isNotNull);
+    expect(find.textContaining('已检查'), findsWidgets);
+  });
+
 }
 
 class _FakeDeadChecker extends HttpLinkChecker {
