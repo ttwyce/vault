@@ -257,6 +257,10 @@ vault/                            Flutter 工程根（package: vault）
 
 **当前进度**：**M2 已完成；M3 编排已补齐；M4~M9 预备层（含 M5 真实 FTS 接线）已落地（952/952 已验证）；M3 硬门槛未过，M4~M9 未完成**。
 
+**仓库状态（2026-11-12）**：`ttwyce/vault` 已公开；`.github/workflows/android-apk.yml`
+自动构建 debug APK；172 个提交署名统一为 `ttwyce <323808844478@qq.com>`。
+历史 SHA 因身份重写全部变更，详见 CHANGELOG v1.77 的映射表。
+
 M1 已全部落地：主题层与组件库、五分区外壳、**字体子系统**、
 **UUIDv7 / HLC / Canonical JSON**、**M0 假设 A1（SQLCipher + FTS5）实测通过**、
 **数据库层（22 张表 + 加密打开器 + FTS5 索引 + 中文切分）**、

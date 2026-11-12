@@ -4,6 +4,40 @@
 
 ---
 
+## v1.77 · 2026-11-12
+
+### 工程：提交身份重写 / 仓库公开 / Android CI / 描述文档
+
+- **提交身份**：172 个提交的 author + committer 统一重写为
+  `ttwyce <323808844478@qq.com>`（原 163 个为临时身份 `Vault Dev`）；
+  本地 `git config user.*` 同步设置，后续提交自动归属
+- **历史重写**：`git filter-branch --env-filter -- --all`，线性 172 提交
+  无 merge / 无 tag；**所有 commit SHA 变更**，远端需 `--force-with-lease` 强推。
+  文档中 5 个历史短 SHA 已按新旧顺序映射更新
+  （`a066191→627c0fe` / `3c23e99→48e8585` / `26e59c7→b07b75d` /
+  `064210e→4fcce40` / `75b6c8b→7195abf`）；历史日志数值保持不变
+- **仓库公开**：`ttwyce/vault` 由 private 改 public；公开前扫描已跟踪文件
+  （无 keystore / token / 私钥 / `.env`，`android/local.properties` 已忽略）
+- **Android CI**：`.github/workflows/android-apk.yml`，
+  push `master` / `v*` tag / 手动触发 → Flutter 3.47.9 + Java 17 →
+  `pub get --enforce-lockfile`（CI 临时把 lock 的镜像 host 换成 pub.dev，
+  **不提交**）→ `analyze` + `test` → `flutter build apk --debug` →
+  上传 `app-debug.apk` artifact（14 天）
+- **描述文件**：根 README 从 Flutter 模板改为真实项目说明
+  （特性 / 开发环境 / CI / 文档地图 / 已知边界）；docs/README、交接文档
+  补公开与 CI 状态
+
+**边界**：CI 构建的是 debug APK，发布签名 / 商店分发未配置；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**952/952 passed**；未在本地执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（根 + docs）、CHANGELOG（本条）、14（Day 172）、
+20（当前状态）、09（§10）
+
+---
+
 ## v1.76 · 2026-11-12
 
 ### M3：T24 secret 字段跨设备同步专属测试（已验证）
@@ -3801,7 +3835,7 @@ CHANGELOG（本条）
 ### M3 统一调度：正文 → taxonomy → 本地清理 → 云端墓碑 TTL（已验证）
 
 远端仓库由 `ttwyce/bbbjjj` 改名为 `ttwyce/vault`（私有），本地目录、
-package 名、远端名三者一致；`75b6c8b` 已推送。本轮把前一批三个互不感知的
+package 名、远端名三者一致；`7195abf` 已推送。本轮把前一批三个互不感知的
 入口串成一次顶层同步，并补齐 90 天墓碑文件的云端 DELETE 编排。
 仍不新增依赖、不改 `pubspec.yaml`、不接真实 HTTP、不执行构建。
 
@@ -4152,7 +4186,7 @@ Day 9 的四个页面是「未验证提交」。这轮开局跑基线：`flutter
   `vaultBootstrapProvider` 没有 override；`pumpAndSettle` 又因进度圈超时。
   改用 `TestApp` + `UncontrolledProviderScope(container:)` 与固定 pump。
 
-修完 6 条并提交 `064210e`，基线 252 条全绿，才开始叠新代码。
+修完 6 条并提交 `4fcce40`，基线 252 条全绿，才开始叠新代码。
 
 **改了什么**
 - `SyncEntity.entryTaxonomy` 成为独立同步实体；`WriteGateway` 新增

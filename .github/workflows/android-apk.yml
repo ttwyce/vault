@@ -1,0 +1,67 @@
+name: Android APK
+
+# 每次推 master / 打 v* tag / 手动触发时，用 GitHub Actions 构建 debug APK。
+# 不签名、不上传商店：发布级签名需要本地 keystore，先留 CI 产物。
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      # pubspec.lock 里的 source url 指向国内镜像；CI 在境外网络下
+      # 直接 --enforce-lockfile 会拉不到，这里只把 lock 的 host 换成
+      # 官方源（不落盘提交），保留所有版本与 sha256 不变。
+      - name: Normalize lockfile host for CI
+        run: sed -i 's#https://pub.flutter-io.cn#https://pub.dev#g' pubspec.lock
+
+      - name: Pub get
+        run: flutter pub get --enforce-lockfile
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test --reporter compact --concurrency=1
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vault-debug-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
