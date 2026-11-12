@@ -37,6 +37,7 @@ import '../../data/archive/link_check_service.dart';
 import '../../data/archive/archive_maintenance.dart';
 import '../../data/backup/backup_models.dart';
 import '../../data/entry/entry_repository.dart';
+import '../../data/taxonomy/taxonomy_suggestions.dart';
 import '../../data/platform/platform_capabilities.dart';
 import '../../data/vault/attachment_validator.dart';
 import '../../data/vault/credential_repository.dart';
@@ -259,6 +260,12 @@ class DiagnosticsPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: SketchSpace.sm),
+                Text(
+                  '分类/标签建议：关键词抽取 -> 1 个分类 + 2~4 个标签，'
+                  '上限 $kMaxTagsPerEntry、不自动写入',
+                  style: TextStyle(fontSize: 11, color: p.blue),
+                ),
+                const SizedBox(height: SketchSpace.xs),
                 Text(
                   '源优先级：${kDefaultSourceOrder.map((ModelSource s) => s.name).join(' → ')}\n'
                   '每源 $kMaxAttemptsPerSource 次重试 · 校验失败换源 · 全源失败标记损坏\n'

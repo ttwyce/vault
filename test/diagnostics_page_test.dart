@@ -15,7 +15,7 @@ void main() {
   tearDown(() async => app.dispose());
 
   Future<void> pumpPage(WidgetTester tester, Widget page) async {
-    tester.view.physicalSize = const Size(900, 3200);
+    tester.view.physicalSize = const Size(900, 4200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(UncontrolledProviderScope(
