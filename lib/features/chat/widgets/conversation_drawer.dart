@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/sketch_metrics.dart';
 import '../../../app/theme/sketch_theme.dart';
 import '../../../core/widgets/sketch_controls.dart';
 import '../../../core/widgets/sketch_frame.dart';
+import '../../../data/chat/conversation_keyboard_nav.dart';
 import '../../../data/chat/conversation_models.dart';
 import '../../../data/chat/conversation_repository.dart';
 import '../../../data/chat/conversation_repository_provider.dart';
@@ -37,6 +39,48 @@ class _ConversationDrawerState
   String _query = '';
   late Future<List<ConversationGroup>> _groups;
   Future<ConversationSearchResult>? _search;
+  ConversationNavState _nav = ConversationNavState.initial;
+  final TextEditingController _searchController = TextEditingController();
+  List<String> _lastVisibleIds = const <String>[];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  ConversationNavKey _navKey(LogicalKeyboardKey key) {
+    if (key == LogicalKeyboardKey.arrowDown) return ConversationNavKey.down;
+    if (key == LogicalKeyboardKey.arrowUp) return ConversationNavKey.up;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      return ConversationNavKey.enter;
+    }
+    if (key == LogicalKeyboardKey.escape) return ConversationNavKey.escape;
+    return ConversationNavKey.other;
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final result = applyConversationNavKey(
+      _nav,
+      _navKey(event.logicalKey),
+      candidateIds: _lastVisibleIds,
+      query: _query,
+    );
+    if (!result.handled) return KeyEventResult.ignored;
+    setState(() {
+      _nav = result.state;
+      if (_navKey(event.logicalKey) == ConversationNavKey.escape) {
+        _query = '';
+        _search = null;
+        _searchController.clear();
+      }
+    });
+    final openId = result.openId;
+    if (openId != null) widget.onSelect(openId);
+    return KeyEventResult.handled;
+  }
 
   @override
   void didChangeDependencies() {
@@ -80,20 +124,25 @@ class _ConversationDrawerState
               ],
             ),
             const SizedBox(height: SketchSpace.sm),
-            TextField(
-              decoration: const InputDecoration(
-                hintText: '搜索对话…',
-                isDense: true,
-                border: OutlineInputBorder(),
+            Focus(
+              onKeyEvent: _onKey,
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  hintText: '搜索对话…（↑↓ 选择 · ↵ 打开 · Esc 清空）',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (String value) => setState(() {
+                      _query = value.trim();
+                      _nav = ConversationNavState.initial;
+                      _search = _query.isEmpty
+                          ? null
+                          : ref
+                              .read(conversationRepositoryProvider)
+                              .search(_query);
+                    }),
               ),
-              onChanged: (String value) => setState(() {
-                    _query = value.trim();
-                    _search = _query.isEmpty
-                        ? null
-                        : ref
-                            .read(conversationRepositoryProvider)
-                            .search(_query);
-                  }),
             ),
             const SizedBox(height: SketchSpace.md),
             Expanded(
@@ -118,6 +167,11 @@ class _ConversationDrawerState
                       ),
                   ].where((ConversationGroup g) =>
                       g.conversations.isNotEmpty).toList();
+                  // 缓存当前可见顺序供键盘导航（不在 builder 里 setState）。
+                  _lastVisibleIds = <String>[
+                    for (final group in visible)
+                      for (final c in group.conversations) c.id,
+                  ];
                   if (visible.isEmpty && _search == null) {
                     return Text(
                       snapshot.connectionState == ConnectionState.waiting
@@ -196,6 +250,9 @@ class _ConversationDrawerState
                             conversation: conversation,
                             isCurrent:
                                 conversation.id == widget.currentId,
+                            isKeyboardSelected:
+                                _lastVisibleIds.indexOf(conversation.id) ==
+                                    _nav.selectedIndex,
                             onTap: () => widget.onSelect(conversation.id),
                           ),
                       ],
@@ -225,10 +282,12 @@ class _ConversationTile extends StatelessWidget {
     required this.conversation,
     required this.isCurrent,
     required this.onTap,
+    this.isKeyboardSelected = false,
   });
 
   final ConversationSummary conversation;
   final bool isCurrent;
+  final bool isKeyboardSelected;
   final VoidCallback onTap;
 
   @override
@@ -243,10 +302,13 @@ class _ConversationTile extends StatelessWidget {
           angle: isCurrent ? SketchTilt.leftStrong : SketchTilt.none,
           child: Container(
             decoration: BoxDecoration(
-              color: isCurrent ? p.note : null,
+              color: isCurrent || isKeyboardSelected ? p.note : null,
               border: isCurrent
                   ? Border(left: BorderSide(color: p.red, width: 3))
-                  : null,
+                  : isKeyboardSelected
+                      ? Border(
+                          left: BorderSide(color: p.blue, width: 2))
+                      : null,
             ),
             padding: const EdgeInsets.symmetric(
               horizontal: SketchSpace.sm,

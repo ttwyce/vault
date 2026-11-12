@@ -4,6 +4,31 @@
 
 ---
 
+## v1.68 · 2026-11-12
+
+### M7：对话抽屉键盘导航（已验证）
+
+- 新增 `conversation_keyboard_nav.dart`（docs/12 §3.3）：
+  ↑↓ 循环选择、Enter 打开当前项、Esc 清空搜索与选择、
+  空列表不越界、未选中 Enter 不处理
+- `ConversationDrawer` 接 `Focus.onKeyEvent`：搜索框提示
+  「↑↓ 选择 · ↵ 打开 · Esc 清空」，可见列表顺序缓存供导航，
+  键盘选中项用蓝条高亮（与当前会话黄底红条区分）
+- 测试：`conversation_keyboard_nav_test.dart` 3 条、
+  `chat_drawer_test.dart` +1 条（Esc 清空、↓+Enter 打开并收起）
+  → 全量 **928 → 932**
+
+**边界**：搜索结果消息分区的键盘选中、列表自动滚动到选中项仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**932/932 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 163）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.67 · 2026-11-12
 
 ### M7：当前对话条时间 + 引用数（已验证）

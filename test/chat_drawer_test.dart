@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -182,5 +183,52 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     expect(controller.offset, 0.0);
+  });
+
+  testWidgets('抽屉键盘导航：Esc 清空搜索、↓ 选中后 Enter 打开会话',
+      (WidgetTester tester) async {
+    final conv = await app.db.into(app.db.conversations).insertReturning(
+          ConversationsCompanion.insert(
+            id: 'kb-conv',
+            hlc: '0000000000000001:0000:devA',
+            title: const Value<String?>('键盘会话'),
+            createdAt: const Value<int?>(1731052800000),
+            updatedAt: const Value<int?>(1731052800000),
+          ),
+        );
+    await app.db.into(app.db.messages).insert(
+          MessagesCompanion.insert(
+            id: 'kb-msg',
+            conversationId: conv.id,
+            role: 1,
+            content: const Value<String?>('键盘正文'),
+            createdAt: const Value<int?>(1731052800001),
+            hlc: '0000000000000001:0000:devA',
+          ),
+        );
+    await pumpChat(tester);
+    await tester.tap(find.byTooltip('对话列表'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final search = find.byType(TextField).last;
+    await tester.enterText(search, '键盘');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      tester.widget<TextField>(search).controller?.text,
+      isEmpty,
+    );
+
+    // ↓ 选中第一条可见会话，Enter 打开并收起抽屉。
+    await tester.tap(search);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ConversationDrawer), findsNothing);
   });
 }
