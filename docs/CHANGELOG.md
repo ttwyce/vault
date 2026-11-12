@@ -4,6 +4,29 @@
 
 ---
 
+## v1.60 · 2026-11-12
+
+### M2：笔记 / 想法 meta 模型与编辑器接线（已验证）
+
+- 新增 `note_meta.dart`（docs/13 §3）：`pinned` / `word_count`
+  的 JSON 往返与坏值回默认、中文按字/英文按词统计、
+  保存时保留 pinned 只刷新字数；标签仍走关联表，不双写进 meta
+- `EditorPage` 新建笔记 / 想法时落该 meta；已有 meta 原样不动，
+  避免丢未知扩展字段；编辑器 10 条回归全绿
+- 测试：`note_meta_test.dart` 4 条、`editor_page_test.dart` +1 条
+  → 全量 **909 → 914**
+
+**边界**：置顶开关 UI / 重排加权接 `rerankScore(pinned:)`
+仍属后续接线；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**914/914 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 155）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.59 · 2026-11-12
 
 ### M4：死链重检查按 recheck_policy 定间隔（已验证）

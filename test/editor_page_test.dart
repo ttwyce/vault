@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
+import 'dart:convert';
+
 import 'package:vault/data/diary/diary_meta.dart';
+import 'package:vault/data/entry/note_meta.dart';
 import 'package:vault/data/taxonomy/taxonomy_models.dart' show TagWrite;
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/features/editor/editor_page.dart';
@@ -233,5 +236,20 @@ void main() {
     await tester.tap(find.textContaining('建议（点采纳'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.textContaining('#同步'), findsWidgets);
+  });
+
+  testWidgets('新建笔记保存 pinned/word_count meta',
+      (WidgetTester tester) async {
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).first, '同步笔记');
+    await tester.enterText(find.byType(TextField).last, '今天同步成功');
+    await tester.tap(find.text('保存'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final rows = await app.db.select(app.db.entries).get();
+    final meta = NoteMeta.fromJson(jsonDecode(rows.single.meta!));
+    expect(meta.pinned, isFalse);
+    expect(meta.wordCount, 6);
   });
 }

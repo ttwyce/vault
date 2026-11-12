@@ -17,6 +17,7 @@ import '../../data/db/vault_database.dart' show CategoryRow;
 import '../../data/entry/entry_models.dart';
 import '../../data/diary/diary_meta.dart';
 import '../../data/entry/entry_repository_provider.dart';
+import '../../data/entry/note_meta.dart';
 import '../../data/taxonomy/inline_tag_parser.dart';
 import '../../data/taxonomy/taxonomy_models.dart';
 import '../../data/taxonomy/taxonomy_suggestions.dart';
@@ -163,6 +164,11 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             body: body,
             createdAtMs: now.millisecondsSinceEpoch,
           ).toJsonString();
+        } else if (_kind == EntryKind.note ||
+            _kind == EntryKind.thought) {
+          // docs/13 §3：笔记/想法 meta 只放 pinned + word_count；
+          // 标签一律走关联表，不双写。
+          meta = noteMetaForSave(null, body).toJsonString();
         }
         final created = await gateway.writeEntry(
           EntryWrite.create(kind: _kind, title: title, body: body, meta: meta),
