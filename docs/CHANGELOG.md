@@ -4,6 +4,36 @@
 
 ---
 
+## v1.91 · 2026-11-12
+
+### M4：真实 HTTP 死链检查链路落地（已验证）
+
+- 新增 `http_link_checker.dart`：Dart SDK `dart:io` 发真实 HEAD
+  （200/301/302 存活并记录最终 URL、404/410 dead、403/451 restricted、
+  超时/DNS 失败重试 2 次后 unreachable、最多 3 次重定向、非法 URL
+  不发请求）。**不新增依赖、不需要真机 / 外网**
+- `LinkCheckService.runHttpCheck` 把真实观察接进原有判定 + 唯一写入口
+  `recordLinkCheck`
+- `ArchivePage` 批量计划弹窗新增「执行 HEAD 检查」：对到期条目
+  真实逐条请求并落证据、刷新列表、给「已检查 N 条」反馈；
+  生产用真实 checker，widget 测试可注入假 checker（绑定会拦截 HttpClient）
+- 测试：`http_link_checker_test.dart` 5 条（本地 `HttpServer`：
+  HEAD/404/403/302/断连/非法 URL）、`link_check_service_test.dart` +1 条
+  （端到端落 dead 证据）、`archive_page_test.dart` +1 条（UI 执行落库）
+  → 全量 **990 → 997**
+
+**边界**：真机后台定时器 / WorkManager / BGTask / 坚果云真实环境仍缺；
+Wayback 与 HIBP 的真实 HTTPS 请求、SSE 流式客户端待后续同法接入；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**997/997 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 186）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.90 · 2026-11-12
 
 ### M9：修复 U5 正文倾斜（已验证）

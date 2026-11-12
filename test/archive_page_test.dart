@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/archive/archive_meta.dart';
+import 'package:vault/data/archive/http_link_checker.dart';
 import 'package:vault/data/db/vault_database.dart' show BlobRefsCompanion;
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/write/write_gateway.dart';
@@ -20,14 +21,19 @@ void main() {
   setUp(() async => app = await TestApp.create());
   tearDown(() async => app.dispose());
 
-  Future<void> pumpArchive(WidgetTester tester) async {
+  Future<void> pumpArchive(
+    WidgetTester tester, {
+    HttpLinkChecker Function()? checkerFactory,
+  }) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: app.container,
-      child: const MaterialApp(
-        home: Scaffold(body: ArchivePage()),
+      child: MaterialApp(
+        home: Scaffold(
+          body: ArchivePage(checkerFactory: checkerFactory),
+        ),
       ),
     ));
     // FutureBuilder 两帧足够；不用 pumpAndSettle（页面里有进度圈）。
@@ -463,4 +469,54 @@ void main() {
     expect(find.text('清理旧快照 · 计划'), findsOneWidget);
     expect(find.textContaining('降级为 text'), findsOneWidget);
   });
+
+  testWidgets('批量执行经 LinkCheckService 把 dead 落进 link_check',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/gone',
+      site: 'example.com',
+      status: ArchiveStatus.full,
+      lastCheckedAt: 1731052800000,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-real-head',
+      kind: EntryKind.bookmark,
+      title: '真实 HEAD 归档',
+      meta: meta.toJsonString(),
+    ));
+    // widget 绑定会拦截真实 HttpClient；注入假 checker 覆盖 check()，
+    // 真实 HTTP 路径由 http_link_checker_test / link_check_service_test
+    // 的本地 HttpServer 用例验证。
+    await pumpArchive(
+      tester,
+      checkerFactory: () => _FakeDeadChecker(),
+    );
+    await tester.tap(find.text('批量检查计划'));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('执行 HEAD 检查'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final rows = await app.db.select(app.db.linkChecks).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.result, 'dead');
+    expect(rows.single.httpStatus, 404);
+    expect(find.textContaining('已检查'), findsWidgets);
+  });
+}
+
+class _FakeDeadChecker extends HttpLinkChecker {
+  _FakeDeadChecker() : super(connectTimeout: const Duration(milliseconds: 10));
+
+  @override
+  Future<LinkCheckObservation> check(String url) async =>
+      const LinkCheckObservation(
+        httpStatus: 404,
+        retries: 0,
+        finalUrl: null,
+        reason: 'fake HEAD 404',
+      );
+
+  @override
+  void close({bool force = true}) {}
 }

@@ -16,6 +16,8 @@ import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
 import '../../data/archive/archive_settings.dart';
+import '../../data/archive/http_link_checker.dart';
+import '../../data/archive/link_check_service.dart';
 import '../../data/archive/archive_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/archive/archive_repository_provider.dart';
@@ -29,7 +31,11 @@ import '../../data/write/write_gateway.dart';
 /// 筛选 / 站点聚合 / 存储汇总全走 [archive_policy.dart] 的纯函数。
 /// 这里只展示事实：状态、站点、摘要、快照大小、下次检查时间。
 class ArchivePage extends ConsumerStatefulWidget {
-  const ArchivePage({super.key});
+  const ArchivePage({super.key, this.checkerFactory});
+
+  /// 真实执行批量检查时可注入（widget 测试里 HttpClient 被绑定拦截，
+  /// 用假 checker 覆盖），生产环境为 null → 真实 dart:io HEAD。
+  final HttpLinkChecker Function()? checkerFactory;
 
   @override
   ConsumerState<ArchivePage> createState() => _ArchivePageState();
@@ -387,8 +393,48 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
       '批量重检查计划',
       ids,
       '共 ${batches.length} 批 / ${ids.length} 条到期条目。'
-      '前台补偿执行，不承诺后台；真实 HEAD 请求待平台层接入。',
+      '点「执行 HEAD 检查」会真的发请求并落 link_check 证据。',
+      onExecute: ids.isEmpty ? null : () => _executeBatchRecheck(data, ids),
     );
+  }
+
+  /// 真实执行：dart:io HEAD + 唯一写入口落证据。
+  /// 网络不可达按 unreachable 记录，不抛给 UI；失败不阻断其余条目。
+  Future<int> _executeBatchRecheck(
+    _ArchiveData data,
+    List<String> ids,
+  ) async {
+    final checker = widget.checkerFactory?.call() ?? HttpLinkChecker();
+    final service = LinkCheckService(
+      db: ref.read(vaultDatabaseProvider),
+      gateway: ref.read(writeGatewayProvider),
+    );
+    var done = 0;
+    for (final id in ids.take(20)) {
+      final entry = data.entries
+          .where((ArchiveEntry e) => e.id == id)
+          .firstOrNull;
+      if (entry == null) continue;
+      try {
+        await service.runHttpCheck(
+          entryId: id,
+          url: entry.meta.url,
+          checker: checker,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+          policy: entry.meta.policy,
+        );
+        done++;
+      } on Object {
+        // 单条失败继续下一条。
+      }
+    }
+    checker.close();
+    if (mounted) {
+      setState(() {
+        _future = _load(ref.read(archiveRepositoryProvider));
+      });
+    }
+    return done;
   }
 
   /// docs/11 §3.4「清理」：按 LRU 列出将被降级为 text 的条目。
@@ -419,8 +465,9 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     BuildContext context,
     String title,
     List<String> ids,
-    String hint,
-  ) {
+    String hint, {
+    Future<int> Function()? onExecute,
+  }) {
     showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
@@ -444,6 +491,19 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
           ),
         ),
         actions: <Widget>[
+          if (onExecute != null)
+            TextButton(
+              onPressed: () async {
+                final done = await onExecute();
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    SnackBar(content: Text('已检查 $done 条归档')),
+                  );
+                }
+              },
+              child: const Text('执行 HEAD 检查'),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('关闭'),

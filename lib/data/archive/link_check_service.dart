@@ -10,6 +10,7 @@ import 'package:drift/drift.dart';
 import '../db/vault_database.dart';
 import '../write/write_gateway.dart';
 import 'archive_meta.dart';
+import 'http_link_checker.dart';
 import 'archive_policy.dart';
 
 /// 30 天 = 30 × 24 × 3600 × 1000，写成字面量保留 const 默认值。
@@ -145,5 +146,27 @@ class LinkCheckService {
       );
     }
     return outcome;
+  }
+
+  /// 真实 HEAD 链路：HttpLinkChecker 观察 → 同一套判定 → 落证据。
+  /// 不依赖真机 / 外网验收；本地 HttpServer 即可测试。
+  Future<LinkCheckOutcome> runHttpCheck({
+    required String entryId,
+    required String url,
+    required HttpLinkChecker checker,
+    required int nowMs,
+    RecheckPolicy policy = RecheckPolicy.monthly,
+  }) async {
+    final observation = await checker.check(url);
+    return run(
+      entryId: entryId,
+      httpStatus: observation.httpStatus,
+      retries: observation.retries,
+      previousSimhash: null,
+      currentSimhash: null,
+      finalUrl: observation.finalUrl,
+      nowMs: nowMs,
+      policy: policy,
+    );
   }
 }

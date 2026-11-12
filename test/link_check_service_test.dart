@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/archive/archive_meta.dart';
+import 'package:vault/data/archive/http_link_checker.dart';
 import 'package:vault/data/archive/link_check_service.dart';
 
 import 'support/test_harness.dart';
@@ -144,5 +147,28 @@ void main() {
     );
     expect(never.shouldRecord, isFalse);
     expect(never.reasons.join(), contains('never'));
+  });
+
+  test('真实 HEAD 端到端：本地 404 服务器 → link_check 落 dead 证据',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((HttpRequest request) async {
+      request.response.statusCode = 404;
+      await request.response.close();
+    });
+    final checker = HttpLinkChecker(connectTimeout: const Duration(seconds: 2));
+    final outcome = await service.runHttpCheck(
+      entryId: 'arch-http',
+      url: 'http://127.0.0.1:${server.port}/gone',
+      checker: checker,
+      nowMs: 1731052800000,
+    );
+    expect(outcome.result, LinkCheckResult.dead);
+    final rows = await app.db.select(app.db.linkChecks).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.httpStatus, 404);
+    expect(rows.single.result, 'dead');
+    checker.close();
+    await server.close(force: true);
   });
 }
