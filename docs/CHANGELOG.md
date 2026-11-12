@@ -4,6 +4,27 @@
 
 ---
 
+## v1.49 · 2026-11-12
+
+### M5：向量同步开关判定层（已验证）
+
+- 新增 `vector_sync_settings.dart`（docs/06 §7）：默认关闭、JSON 往返与
+  坏值回默认；关闭需二次确认且**不删云端封包 / 不清本地 entry_vec**，
+  明确「换设备需全量重算」；开启强调 model_id / dim 校验与加密上传
+- `DiagnosticsPage` 展示规则
+- 测试：`vector_sync_settings_test.dart` 3 条 → 全量 **882 → 885**
+
+**边界**：真实设置页开关 / `/vault/vec/` 上传下载仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**885/885 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 144）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.48 · 2026-11-12
 
 ### M5：分块命中聚合到 entry 粒度（已验证）

@@ -56,6 +56,7 @@ import '../../data/vault/autofill_policy.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/search/embedding_manifest.dart';
 import '../../data/search/related_entries.dart';
+import '../../data/search/vector_sync_settings.dart';
 import '../../data/search/model_downloader.dart';
 import '../../data/search/vector_sync_policy.dart';
 
@@ -275,6 +276,8 @@ class DiagnosticsPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: SketchSpace.sm),
                 Text(
+                  '向量同步开关默认关（${const VectorSyncSetting().mode.name}），'
+                  '关闭不删云端/本地向量，换设备需全量重算\n'
                   '相关推荐：标签 Jaccard + 标题 bigram 打分 top3，'
                   'kind ${kNeverRecommendKinds.join('/')} 永不推荐、无重合不凑数',
                   style: TextStyle(fontSize: 11, color: p.blue),
