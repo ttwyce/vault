@@ -644,6 +644,37 @@ void main() {
     expect(find.textContaining('已检查'), findsWidgets);
   });
 
+
+
+  testWidgets('生成 L2 PDF 快照按钮真实登记 blob_ref 并标 full',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/pdf',
+      site: 'example.com',
+      status: ArchiveStatus.text,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-pdf',
+      kind: EntryKind.bookmark,
+      title: '待生成快照',
+      body: '需要生成 PDF 的正文 A B C D E F G',
+      meta: meta.toJsonString(),
+    ));
+    await pumpArchive(tester);
+    await tester.tap(find.text('生成 L2 PDF 快照'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final blobs = await app.db.select(app.db.blobRefs).get();
+    expect(blobs, hasLength(1));
+    expect(blobs.single.kind, 2);
+    expect(blobs.single.local, 1);
+    final row = await app.repo.getRow('arch-pdf');
+    final written = ArchiveMeta.fromJson(jsonDecode(row!.meta!));
+    expect(written.status, ArchiveStatus.full);
+    expect(written.snapshotBytes, greaterThan(0));
+  });
+
 }
 
 class _FakeDeadChecker extends HttpLinkChecker {

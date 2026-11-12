@@ -4,6 +4,36 @@
 
 ---
 
+## v2.5 · 2026-11-12
+
+### M4：纯 Dart L2 PDF 快照真实生成与登记（已验证）
+
+- 新增 `simple_pdf.dart`（docs/05 §8 二级降级）：不引 `pdf` 包，
+  手写最小 PDF 1.4（Catalog/Pages/Page/Contents/Helvetica/xref），
+  按 `planPdfPagination` A4 分页把 L1 正文逐行排进内容流，
+  中文与特殊字符保守转义，空正文不生成
+- 新增 `pdf_snapshot_service.dart`：生成 PDF → sha256 内容寻址 →
+  经 `WriteGateway.recordArchiveBlob(kind=2, local=1)` 登记 →
+  `writeEntry(update)` 把 `status=full` / `snapshotBytes` 写回 meta；
+  空正文走 `textOnly` 降级，不写 blob 不标 full；`nativeOk`
+  时明确交回平台层不假装 Dart 生成
+- `ArchivePage` 新增「生成 L2 PDF 快照」按钮批量处理有正文无快照条目；
+  诊断页展示降级路径
+- 测试：`simple_pdf_test.dart` 4 条（结构/分页/空/转义）、
+  `pdf_snapshot_service_test.dart` 3 条（真实 blob_ref 与 meta 回写 /
+  textOnly / native）、`archive_page_test.dart` +1 条 → 全量 **1061 → 1069**
+
+**边界**：WebView 原生保真 PDF、中文嵌入字体 / 图片渲染仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1069/1069 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 200）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v2.4 · 2026-11-12
 
 ### M5：WebDAV 模型镜像真实传输（已验证）

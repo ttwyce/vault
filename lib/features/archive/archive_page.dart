@@ -20,6 +20,7 @@ import '../../data/archive/content_change_policy.dart';
 import '../../data/archive/content_change_service.dart';
 import '../../data/archive/archive_settings.dart';
 import '../../data/archive/http_archive_fetcher.dart';
+import '../../data/archive/pdf_snapshot_service.dart';
 import '../../data/archive/http_link_checker.dart';
 import '../../data/archive/http_wayback_client.dart';
 import '../../data/archive/link_check_service.dart';
@@ -405,6 +406,12 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                                 dense: true,
                                 onPressed: () => _checkContentChanges(data),
                               ),
+                              SketchButton(
+                                label: '生成 L2 PDF 快照',
+                                tone: SketchTone.ghost,
+                                dense: true,
+                                onPressed: () => _generatePdfSnapshots(data),
+                              ),
                             ],
                           ),
                         ],
@@ -414,6 +421,32 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                 ),
         );
       },
+    );
+  }
+
+  /// docs/05 §8：对有正文但还没有快照的归档生成简易 L2 PDF。
+  Future<void> _generatePdfSnapshots(_ArchiveData data) async {
+    final service = PdfSnapshotService(
+      db: ref.read(vaultDatabaseProvider),
+      gateway: ref.read(writeGatewayProvider),
+    );
+    var done = 0;
+    for (final entry in data.entries) {
+      if (entry.meta.hasSnapshot || !entry.meta.hasText) continue;
+      final row = await (ref.read(vaultDatabaseProvider)
+              .select(ref.read(vaultDatabaseProvider).entries)
+            ..where((t) => t.id.equals(entry.id)))
+          .getSingleOrNull();
+      if (row?.body == null || row!.body!.trim().isEmpty) continue;
+      final result = await service.generate(entryId: entry.id);
+      if (result.ok) done++;
+    }
+    if (!mounted) return;
+    setState(() {
+      _future = _load(ref.read(archiveRepositoryProvider));
+    });
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text('已生成 $done 个 L2 PDF 快照（简易不保真）')),
     );
   }
 

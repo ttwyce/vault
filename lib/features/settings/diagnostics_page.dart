@@ -301,6 +301,8 @@ class DiagnosticsPage extends ConsumerWidget {
                 Text(
                   'A2 退路：Dart 内 int8 暴力余弦 KNN，'
                   '维度不匹配跳过、同分稳定（topK ${bruteForceKnn(query: const <int>[1], vectors: const <String, List<int>>{}, topK: 1).length} 示例）\n'
+                  'L2 PDF：纯 Dart 简易 PDF（A4 分页 + xref）降级路径已落地，'
+                  'blob_ref(kind=2) 与 status=full 真实登记\n'
                   '模型镜像：${ModelMirrorService.pathFor('model')} 已接真实 '
                   '条件 PUT / GET + sha256，默认关闭、超配额拒传\n'
                   '向量同步：/vault/vec/ 已接真实 WebDAV GET / 条件 PUT，'
