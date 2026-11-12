@@ -134,6 +134,27 @@ class CredentialRepository {
     return _passwordOf(row);
   }
 
+  /// 账号资料（用户名 / 网址）走同一套字段级加密，避免明文落库。
+  Future<({String username, String url})> profile(String credentialId) async {
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (row == null) return (username: '', url: '');
+    return (
+      username: await _openField(row, 'username', row.username),
+      url: await _openField(row, 'url', row.url),
+    );
+  }
+
+  Future<void> setProfile(
+    String credentialId, {
+    required String username,
+    required String url,
+  }) async {
+    await _writeField(credentialId, 'username', username);
+    await _writeField(credentialId, 'url', url);
+  }
+
   /// 解出密码明文（只在内存里用于强度估算，绝不写日志 / 报告）。
   Future<String> _passwordOf(CredentialRow row) async {
     final raw = row.password;
@@ -181,6 +202,8 @@ class CredentialRepository {
       totpSecret: field == 'totp_secret' ? Value<String?>(sealed) : const Value<String?>.absent(),
       customFields: field == 'custom_fields' ? Value<String?>(sealed) : const Value<String?>.absent(),
       notes: field == 'notes' ? Value<String?>(sealed) : const Value<String?>.absent(),
+      username: field == 'username' ? Value<String?>(sealed) : const Value<String?>.absent(),
+      url: field == 'url' ? Value<String?>(sealed) : const Value<String?>.absent(),
       passwordChangedAt: updateChangedAt
           ? Value<int?>(DateTime.now().millisecondsSinceEpoch)
           : const Value<int?>.absent(),
@@ -340,8 +363,8 @@ class CredentialRepository {
     return CredentialDetail(
       id: credentialId,
       title: displayTitle(entry.title, entry.body),
-      username: row.username,
-      url: row.url,
+      username: await _openField(row, 'username', row.username),
+      url: await _openField(row, 'url', row.url),
       notesAllowedInCloud: false,
       totpCode: summary?.totpCode,
       breached: row.breached == 2,

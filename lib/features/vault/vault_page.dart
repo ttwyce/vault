@@ -210,7 +210,10 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     if (detail == null || !mounted) return;
     final notes = await repo.notes(id);
     final notesController = TextEditingController(text: notes);
+    final usernameController = TextEditingController(text: detail.username ?? '');
+    final urlController = TextEditingController(text: detail.url ?? '');
     var previewNotes = false;
+    var editProfile = false;
     await showModalBottomSheet<void>(
       // 上面已用 mounted 守住异步间隙。
       // ignore: use_build_context_synchronously
@@ -233,7 +236,69 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 ),
               ),
               const SizedBox(height: SketchSpace.sm),
-              Text('用户名：${detail.username ?? '未填写'}'),
+              if (editProfile) ...<Widget>[
+                TextField(
+                  controller: usernameController,
+                  decoration: const InputDecoration(
+                    labelText: '用户名',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: SketchSpace.xs),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: '网址',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: SketchSpace.xs),
+                Row(
+                  children: <Widget>[
+                    SketchButton(
+                      label: '保存资料',
+                      dense: true,
+                      onPressed: () async {
+                        await repo.setProfile(
+                          id,
+                          username: usernameController.text.trim(),
+                          url: urlController.text.trim(),
+                        );
+                        setSheetState(() => editProfile = false);
+                        if (sheetContext.mounted) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            const SnackBar(content: Text('资料已加密保存')),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(width: SketchSpace.sm),
+                    SketchButton(
+                      label: '取消',
+                      tone: SketchTone.ghost,
+                      dense: true,
+                      onPressed: () =>
+                          setSheetState(() => editProfile = false),
+                    ),
+                  ],
+                ),
+              ] else ...<Widget>[
+                Text('用户名：${detail.username ?? '未填写'}'),
+                if (detail.url != null && detail.url!.isNotEmpty)
+                  Text('网址：${detail.url}'),
+                GestureDetector(
+                  onTap: () => setSheetState(() => editProfile = true),
+                  child: Text(
+                    '编辑资料',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: sheetContext.sketch.blue,
+                    ),
+                  ),
+                ),
+              ],
               if (detail.totpCode != null)
                 Text('当前 TOTP：${detail.totpCode}'),
               Text(detail.breached ? '状态：已泄露' : '状态：未发现泄露'),

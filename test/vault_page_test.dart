@@ -359,4 +359,41 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('MySecret!234'), findsNothing);
   });
+
+  testWidgets('详情可编辑账号资料且以密文落库', (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-profile-ui',
+      kind: EntryKind.credential,
+      title: '资料账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-profile-ui'),
+        );
+    await pumpVault(tester);
+    await tester.tap(find.text('资料账号'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('编辑资料'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(
+      find.widgetWithText(TextField, '用户名'),
+      'alice@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, '网址'),
+      'https://example.com',
+    );
+    await tester.tap(find.text('保存资料'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-profile-ui')))
+        .getSingle();
+    expect(row.username, isNot(contains('alice@example.com')));
+    final profile = await repo.profile('cred-profile-ui');
+    expect(profile.username, 'alice@example.com');
+    expect(profile.url, 'https://example.com');
+  });
 }

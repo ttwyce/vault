@@ -4,6 +4,29 @@
 
 ---
 
+## v1.73 · 2026-11-12
+
+### M6：账号资料 username / url 加密读写（已验证）
+
+- `CredentialRepository` 新增 `profile()` / `setProfile()`，
+  `_writeField` 扩展 `username` / `url` 两个 AAD 字段；
+  `detail()` 用 `_openField` 解密，避免密文直接显示到 UI
+- `VaultPage` 详情弹窗显示网址与「编辑资料」入口，
+  两个 TextField 保存后走同一套 K_item 字段级加密
+- 测试：`credential_repository_test.dart` +1 条（密文落库/读回）、
+  `vault_page_test.dart` +1 条（UI 编辑加密落库）→ 全量 **944 → 946**
+
+**边界**：分类归属 / 图标选择 / 附件上传仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**946/946 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 168）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.72 · 2026-11-12
 
 ### M8：Windows 全局热键判定层（已验证）

@@ -292,4 +292,24 @@ void main() {
       '这个账号用于公司 VPN',
     );
   });
+
+  test('账号资料 username/url 以密文落库且可解密读回', () async {
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-profile'),
+        );
+    await repo.setProfile(
+      'cred-profile',
+      username: 'user@example.com',
+      url: 'https://example.com/login',
+    );
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-profile')))
+        .getSingle();
+    expect(row.username, isNot(contains('user@example.com')));
+    expect(row.url, isNot(contains('example.com/login')));
+    final profile = await repo.profile('cred-profile');
+    expect(profile.username, 'user@example.com');
+    expect(profile.url, 'https://example.com/login');
+    expect((await repo.profile('missing')).username, isEmpty);
+  });
 }
