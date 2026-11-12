@@ -4,6 +4,26 @@
 
 ---
 
+## v1.24 · 2026-11-12
+
+### M6：密码备注 Markdown 预览（已验证）
+
+- `VaultPage` 详情弹窗备注区加「预览备注 / 返回编辑」切换，
+  复用 `MarkdownPreview` 渲染加粗/列表；预览用固定高度避免
+  bottomSheet 无限高导致的嵌套滚动异常；备注仍以 K_item 密文落库
+- 测试：`vault_page_test.dart` +1 条（切换可见、返回编辑后可保存）
+  → 全量 **813 → 814**
+
+**边界**：备注图片 / 富文本工具栏仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**814/814 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 119）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.23 · 2026-11-12
 
 ### M5：命中来源如实标注（已验证）

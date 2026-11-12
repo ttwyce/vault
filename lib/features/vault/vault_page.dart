@@ -18,6 +18,7 @@ import '../../data/vault/credential_groups.dart';
 
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/credential_template.dart';
+import '../editor/widgets/markdown_preview_view.dart';
 import '../../data/vault/password_generator.dart';
 import '../../data/vault/sensitive_clipboard.dart';
 import '../../data/write/write_gateway.dart';
@@ -209,6 +210,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     if (detail == null || !mounted) return;
     final notes = await repo.notes(id);
     final notesController = TextEditingController(text: notes);
+    var previewNotes = false;
     await showModalBottomSheet<void>(
       // 上面已用 mounted 守住异步间隙。
       // ignore: use_build_context_synchronously
@@ -249,19 +251,39 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                   hintText: '加粗 / 列表用 Markdown 写',
                 ),
               ),
+              if (previewNotes)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: SketchSpace.xs),
+                  child: SizedBox(
+                    height: 90,
+                    child: MarkdownPreview(source: notesController.text),
+                  ),
+                ),
               const SizedBox(height: SketchSpace.xs),
-              SketchButton(
-                label: '保存备注',
-                dense: true,
-                onPressed: () async {
-                  await repo.setNotes(id, notesController.text);
-                  setSheetState(() {});
-                  if (sheetContext.mounted) {
-                    ScaffoldMessenger.of(sheetContext).showSnackBar(
-                      const SnackBar(content: Text('备注已加密保存')),
-                    );
-                  }
-                },
+              Row(
+                children: <Widget>[
+                  SketchButton(
+                    label: '保存备注',
+                    dense: true,
+                    onPressed: () async {
+                      await repo.setNotes(id, notesController.text);
+                      setSheetState(() {});
+                      if (sheetContext.mounted) {
+                        ScaffoldMessenger.of(sheetContext).showSnackBar(
+                          const SnackBar(content: Text('备注已加密保存')),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(width: SketchSpace.sm),
+                  SketchButton(
+                    label: previewNotes ? '返回编辑' : '预览备注',
+                    tone: SketchTone.ghost,
+                    dense: true,
+                    onPressed: () =>
+                        setSheetState(() => previewNotes = !previewNotes),
+                  ),
+                ],
               ),
               const SizedBox(height: SketchSpace.md),
               Text(

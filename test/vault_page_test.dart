@@ -302,4 +302,35 @@ void main() {
     // SensitiveClipboard 的 30 秒定时器在测试环境不推进；这里只保证点击不抛异常。
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('备注可切换 Markdown 预览，返回编辑仍可保存',
+      (WidgetTester tester) async {
+    final repo = CredentialRepository(app.db, app.gateway);
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-notes-preview',
+      kind: EntryKind.credential,
+      title: '备注账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-notes-preview'),
+        );
+    await pumpVault(tester);
+    await tester.tap(find.text('备注账号'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '加粗 / 列表用 Markdown 写'),
+      '**重点**',
+    );
+    await tester.tap(find.text('预览备注'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('返回编辑'), findsOneWidget);
+    await tester.tap(find.text('返回编辑'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('预览备注'), findsOneWidget);
+    await tester.tap(find.text('保存备注'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await repo.notes('cred-notes-preview'), '**重点**');
+  });
 }
