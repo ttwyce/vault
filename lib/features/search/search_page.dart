@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/settings/local_settings_provider.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/agent/ai_entry_points.dart';
+import '../../data/archive/archive_meta.dart';
+import '../../data/archive/archive_status_badge.dart';
 import '../../data/agent/model_availability_provider.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
@@ -44,6 +47,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   String _query = '';
   Future<List<EntrySummary>> _results =
       Future<List<EntrySummary>>.value(const <EntrySummary>[]);
+  Future<Map<String, ArchiveStatusBadge>> _archiveBadges =
+      Future<Map<String, ArchiveStatusBadge>>.value(
+    const <String, ArchiveStatusBadge>{},
+  );
   final SearchResultCache<List<EntrySummary>> _cache =
       SearchResultCache<List<EntrySummary>>();
 
@@ -91,6 +98,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               );
     setState(() {
       _results = next;
+      _archiveBadges = next.then(_loadArchiveBadges);
     });
 
     if (trimmed.isNotEmpty && !cacheHit) {
@@ -98,6 +106,33 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       // 只记一次（docs/07 §7.2），避免打字机式刷屏。
       unawaited(_logSearchAndCache(trimmed, next, nowMs));
     }
+  }
+
+  /// 批量读 kind=5 条目的 meta，供结果卡显示真实归档状态徽章
+  /// （docs/06 §8.1）。坏 meta 跳过，不影响其它结果。
+  Future<Map<String, ArchiveStatusBadge>> _loadArchiveBadges(
+    List<EntrySummary> rows,
+  ) async {
+    final ids = <String>{
+      for (final row in rows)
+        if (row.kind == EntryKind.bookmark) row.id,
+    };
+    if (ids.isEmpty) return const <String, ArchiveStatusBadge>{};
+    final db = ref.read(vaultDatabaseProvider);
+    final out = <String, ArchiveStatusBadge>{};
+    for (final id in ids) {
+      final row = await (db.select(db.entries)
+            ..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+      if (row?.meta == null) continue;
+      try {
+        final meta = ArchiveMeta.fromJson(jsonDecode(row!.meta!));
+        out[id] = planArchiveStatusBadge(meta);
+      } on Object {
+        // 坏 meta 不显示徽章，也不让检索结果崩。
+      }
+    }
+    return out;
   }
 
   Future<void> _logSearchAndCache(
@@ -296,24 +331,35 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           );
         }
 
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(
-            SketchSpace.lg,
-            SketchSpace.sm,
-            SketchSpace.lg,
-            SketchSpace.xxl,
-          ),
-          itemCount: rows.length,
-          separatorBuilder: (_, _) => const SketchDivider(),
-          itemBuilder: (BuildContext context, int index) => _SearchTile(
-            entry: rows[index],
-            query: trimmed,
-            onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => EditorPage(entryId: rows[index].id),
+        return FutureBuilder<Map<String, ArchiveStatusBadge>>(
+          future: _archiveBadges,
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<Map<String, ArchiveStatusBadge>> badgeSnap,
+          ) {
+            final badges = badgeSnap.data ??
+                const <String, ArchiveStatusBadge>{};
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                SketchSpace.lg,
+                SketchSpace.sm,
+                SketchSpace.lg,
+                SketchSpace.xxl,
               ),
-            ),
-          ),
+              itemCount: rows.length,
+              separatorBuilder: (_, _) => const SketchDivider(),
+              itemBuilder: (BuildContext context, int index) => _SearchTile(
+                entry: rows[index],
+                query: trimmed,
+                archiveBadge: badges[rows[index].id],
+                onTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => EditorPage(entryId: rows[index].id),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -325,11 +371,13 @@ class _SearchTile extends StatelessWidget {
     required this.entry,
     required this.query,
     required this.onTap,
+    this.archiveBadge,
   });
 
   final EntrySummary entry;
   final String query;
   final VoidCallback onTap;
+  final ArchiveStatusBadge? archiveBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -398,7 +446,11 @@ class _SearchTile extends StatelessWidget {
                   style: TextStyle(fontSize: 10.5, color: p.blue),
                 ),
                 if (entry.kind == EntryKind.bookmark)
-                  const SketchTag('归档', tone: SketchTone.plain, dense: true),
+                  SketchTag(
+                    archiveBadge?.label ?? '归档',
+                    tone: archiveBadge?.tone ?? SketchTone.plain,
+                    dense: true,
+                  ),
               ],
             ),
           ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vault/data/archive/archive_meta.dart';
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/features/search/search_page.dart';
@@ -77,5 +78,26 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
     expect(find.byType(TextField).first, findsOneWidget);
+  });
+
+  testWidgets('归档结果显示真实死链状态徽章', (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/dead',
+      site: 'example.com',
+      status: ArchiveStatus.dead,
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'bookmark-dead',
+      kind: EntryKind.bookmark,
+      title: '失效归档',
+      body: '增量同步失效页',
+      meta: meta.toJsonString(),
+    ));
+    await pumpSearch(tester);
+    await tester.enterText(find.byType(TextField).first, '同步');
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    expect(find.text('原站已失效'), findsWidgets);
   });
 }

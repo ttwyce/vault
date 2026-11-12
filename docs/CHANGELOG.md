@@ -4,6 +4,30 @@
 
 ---
 
+## v1.86 · 2026-11-12
+
+### M5：搜索结果卡显示真实归档状态（已验证）
+
+- 新增 `archive_status_badge.dart`（docs/06 §8.1）：把
+  `ArchiveStatus` 映射成「原站已失效（红）/ 有快照 / 原站存活 /
+  仅元数据 / 反爬 / 付费墙（蓝）」徽章，dead 优先于快照
+- `SearchPage` 在检索后批量读 kind=5 条目的 `entry.meta`
+  预载徽章（坏 meta 跳过不影响其它结果），结果卡替换通用「归档」标签
+- 测试：`archive_status_badge_test.dart` 3 条、
+  `search_page_test.dart` +1 条（死链结果显示「原站已失效」）
+  → 全量 **978 → 982**
+
+**边界**：向量命中来源仍写死关键词（真实向量通道缺）；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**982/982 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 181）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.85 · 2026-11-12
 
 ### M6：密码库分类树过滤（已验证）
