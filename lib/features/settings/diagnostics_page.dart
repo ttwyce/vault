@@ -40,6 +40,7 @@ import '../../core/sync/sync_status_ui.dart';
 import '../../data/agent/rollup_service.dart';
 import '../../data/archive/archive_cache_policy.dart';
 import '../../data/archive/archive_content_gate.dart';
+import '../../data/archive/clipboard_archive_hint.dart';
 import '../../data/archive/content_change_policy.dart';
 import '../../data/archive/archive_image_filter.dart';
 import '../../data/archive/archive_settings.dart';
@@ -339,6 +340,8 @@ class DiagnosticsPage extends ConsumerWidget {
             child: Text(
               'AI 入口：L0 数据禁入 prompt，'
               '${AiEntryPoint.values.length} 类入口云端必弹逐次授权并显示发送字数\n'
+              '剪贴板 URL：${ClipboardHintAction.values.length} 态提示 / '
+              '前台单链才问、已提示过不重复打扰、不自动抓取\n'
               '剪藏分享：多 URL 去重、纯文本落想法、'
               'Extension 只接收不抓取（${ShareIntentKind.archiveUrls.name}）\n'
               '变更检测：只对手动标记或 '

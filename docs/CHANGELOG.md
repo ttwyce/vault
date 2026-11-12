@@ -4,6 +4,28 @@
 
 ---
 
+## v1.53 · 2026-11-12
+
+### M4：剪贴板 URL 自动识别提示（已验证）
+
+- 新增 `clipboard_archive_hint.dart`（docs/05 §3）：前台且用户授权时
+  单个 URL 才弹「是否归档」、多个走批量入口、非 URL 不提示；
+  后台 / 未授权 / 空内容 / 与上次已提示文本相同一律不打扰，
+  且提示只接收不自动抓取
+- `DiagnosticsPage` 展示规则
+- 测试：`clipboard_archive_hint_test.dart` 3 条 → 全量 **894 → 897**
+
+**边界**：真实系统剪贴板监听 / 托盘气泡 / 快捷磁贴仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**897/897 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 148）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.52 · 2026-11-12
 
 ### M2/UI：相邻卡片圆角配方轮换（U1，已验证）
