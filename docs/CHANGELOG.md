@@ -4,6 +4,30 @@
 
 ---
 
+## v1.89 · 2026-11-12
+
+### M4：归档总览批量计划面板（已验证）
+
+- 存储面板新增「批量检查计划」「清理旧快照计划」按钮
+  （docs/11 §3.4）：前者用 `planBatchRecheck` 按 recheck_policy
+  分批列出去期条目，后者用 `planQuotaCleanup` 按 LRU 列出
+  将降级为 text 的条目；弹窗明确说明真实 HEAD / 落库 / 删 blob
+  由平台层执行，不在 UI 里假装已完成
+- `planBatchRecheck` / `planQuotaCleanup` 判定层从仅测试引用
+  升级为真实页面接线
+- 测试：`archive_page_test.dart` +2 条 → 全量 **987 → 989**
+
+**边界**：真实批量任务执行 / 配额守卫落库仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**989/989 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 184）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.88 · 2026-11-12
 
 ### M9：U4 红色使用审计判定层（已验证）

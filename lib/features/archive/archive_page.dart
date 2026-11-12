@@ -15,6 +15,7 @@ import '../../data/archive/archive_cache_policy.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
+import '../../data/archive/archive_settings.dart';
 import '../../data/archive/archive_repository.dart';
 import '../../app/session/vault_session.dart';
 import '../../data/archive/archive_repository_provider.dart';
@@ -336,6 +337,30 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                             '新归档只存正文层，最老的快照会被降级。',
                             style: TextStyle(fontSize: 11, color: p.muted),
                           ),
+                          const SizedBox(height: SketchSpace.sm),
+                          Wrap(
+                            spacing: SketchSpace.sm,
+                            children: <Widget>[
+                              SketchButton(
+                                label: '批量检查计划',
+                                dense: true,
+                                onPressed: () => _showBatchRecheckPlan(
+                                  context,
+                                  data,
+                                ),
+                              ),
+                              SketchButton(
+                                label: '清理旧快照计划',
+                                tone: SketchTone.ghost,
+                                dense: true,
+                                onPressed: () => _showQuotaCleanupPlan(
+                                  context,
+                                  data,
+                                  summary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -343,6 +368,88 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                 ),
         );
       },
+    );
+  }
+
+  /// docs/11 §3.4：按 recheck_policy 分批列出待检查条目。
+  /// 只展示计划，真实 HEAD 请求由平台层执行。
+  void _showBatchRecheckPlan(BuildContext context, _ArchiveData data) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final batches = planBatchRecheck(
+      metasById: <String, ArchiveMeta>{
+        for (final entry in data.entries) entry.id: entry.meta,
+      },
+      nowMs: nowMs,
+    );
+    final ids = <String>[for (final batch in batches) ...batch];
+    _showBatchDialog(
+      context,
+      '批量重检查计划',
+      ids,
+      '共 ${batches.length} 批 / ${ids.length} 条到期条目。'
+      '前台补偿执行，不承诺后台；真实 HEAD 请求待平台层接入。',
+    );
+  }
+
+  /// docs/11 §3.4「清理」：按 LRU 列出将被降级为 text 的条目。
+  void _showQuotaCleanupPlan(
+    BuildContext context,
+    _ArchiveData data,
+    ArchiveStorageSummary summary,
+  ) {
+    const settings = ArchiveSettings();
+    final quotaLimit = (summary.totalBytes / settings.quotaRatio).floor();
+    final ids = planQuotaCleanup(
+      metasById: <String, ArchiveMeta>{
+        for (final entry in data.entries) entry.id: entry.meta,
+      },
+      quotaLimitBytes: quotaLimit == 0 ? 1 : quotaLimit,
+      currentBytes: summary.totalBytes,
+    );
+    _showBatchDialog(
+      context,
+      '清理旧快照 · 计划',
+      ids,
+      '最老带快照的条目优先降级为 text（只留正文，不删条目 / 不删云端）。'
+      '真实落库与删 blob 待平台层接入。',
+    );
+  }
+
+  void _showBatchDialog(
+    BuildContext context,
+    String title,
+    List<String> ids,
+    String hint,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(hint, style: const TextStyle(fontSize: 11.5, height: 1.6)),
+              const SizedBox(height: SketchSpace.sm),
+              if (ids.isEmpty)
+                const Text('当前没有需要处理的条目。')
+              else
+                for (final id in ids.take(20))
+                  Text('· $id', style: const TextStyle(fontSize: 11)),
+              if (ids.length > 20)
+                Text('还有 ${ids.length - 20} 条…',
+                    style: const TextStyle(fontSize: 11)),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
     );
   }
 

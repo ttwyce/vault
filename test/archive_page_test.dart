@@ -431,4 +431,36 @@ void main() {
     await pumpArchive(tester);
     expect(find.textContaining('不自动重检查'), findsOneWidget);
   });
+
+  testWidgets('批量检查计划按 recheck_policy 列出去期条目',
+      (WidgetTester tester) async {
+    await addArchive(
+      id: 'a-due',
+      url: 'https://example.com/due',
+      status: ArchiveStatus.full,
+      title: '到期归档',
+    );
+    await pumpArchive(tester);
+    await tester.tap(find.text('批量检查计划'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('批量重检查计划'), findsOneWidget);
+    expect(find.textContaining('批 /'), findsOneWidget);
+    expect(find.textContaining('a-due'), findsOneWidget);
+  });
+
+  testWidgets('清理旧快照计划按 LRU 列出降级候选',
+      (WidgetTester tester) async {
+    await addArchive(
+      id: 'a-old-snapshot',
+      url: 'https://example.com/old',
+      status: ArchiveStatus.full,
+      title: '带快照的旧归档',
+      snapshotBytes: 4 * 1024 * 1024,
+    );
+    await pumpArchive(tester);
+    await tester.tap(find.text('清理旧快照计划'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('清理旧快照 · 计划'), findsOneWidget);
+    expect(find.textContaining('降级为 text'), findsOneWidget);
+  });
 }
