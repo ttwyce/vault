@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -339,5 +341,31 @@ void main() {
 
     expect(find.textContaining('新旧正文差异'), findsOneWidget);
     expect(find.textContaining('+'), findsWidgets);
+  });
+
+  testWidgets('点开归档时懒补齐 excerpt 与 reading_time_min',
+      (WidgetTester tester) async {
+    final meta = ArchiveMeta(
+      url: 'https://example.com/derived',
+      site: 'example.com',
+      status: ArchiveStatus.full,
+      title: '派生摘要归档',
+    );
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'arch-derived-ui',
+      kind: EntryKind.bookmark,
+      title: '派生摘要归档',
+      body: '这是一段归档正文内容，${'长' * 350}',
+      meta: meta.toJsonString(),
+    ));
+    await pumpArchive(tester);
+    await tester.tap(find.text('派生摘要归档'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final row = await app.repo.getRow('arch-derived-ui');
+    final written = ArchiveMeta.fromJson(jsonDecode(row!.meta!));
+    expect(written.excerpt.length, 200);
+    expect(written.readingTimeMin, greaterThan(0));
   });
 }

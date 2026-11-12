@@ -10,6 +10,7 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import 'archive_reader_page.dart';
 import '../../data/archive/archive_duplicate.dart';
+import '../../data/archive/archive_body_meta_writer.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
@@ -348,6 +349,11 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     // 真实接线：L1 正文来自 entry.body；L2 PDF 是否本地可读来自 blob_ref；
     // 上一版正文来自 entry_history 里最近的加密信封（解密失败只跳过，不崩页）。
     final db = ref.read(vaultDatabaseProvider);
+    final gateway = ref.read(writeGatewayProvider);
+    // docs/05 §10：列表页摘要不能读 blob，打开时按 L1 正文懒补
+    // excerpt / reading_time_min（幂等，已存在不制造新版本）。
+    await ArchiveBodyMetaWriter(db: db, gateway: gateway)
+        .ensureDerivedMeta(entry.id);
     final row = await (db.select(db.entries)
           ..where((t) => t.id.equals(entry.id)))
         .getSingleOrNull();
@@ -369,7 +375,6 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
       ..sort((EntryHistoryRow a, EntryHistoryRow b) =>
           b.rev.compareTo(a.rev));
     if (candidates.isNotEmpty) {
-      final gateway = ref.read(writeGatewayProvider);
       for (final history in candidates.take(5)) {
         try {
           final snapshot = await gateway.readEntryPayload(

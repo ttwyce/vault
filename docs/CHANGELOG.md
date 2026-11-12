@@ -4,6 +4,32 @@
 
 ---
 
+## v1.81 · 2026-11-12
+
+### M4：归档正文派生 meta（已验证）
+
+- 新增 `archive_body_meta.dart`（docs/05 §10）：从 L1 Markdown 正文
+  算「前 200 字摘要」（去代码块 / 链接 / 标记）与阅读时长
+  （中文 300 字/分、英文 200 词/分，最低 1 分钟）
+- 新增 `ArchiveBodyMetaWriter`：缺 `excerpt` / `reading_time_min` 时
+  经唯一写入口 `WriteGateway.writeEntry` 懒补齐，坏 meta / 空正文 /
+  已补齐均幂等不制造新版本与 oplog
+- `ArchivePage._openReader` 打开前调用；列表页摘要不再需要读 blob
+- 测试：`archive_body_meta_test.dart` 3 条、
+  `archive_body_meta_writer_test.dart` 3 条、`archive_page_test.dart` +1 条
+  → 全量 **960 → 967**
+
+**边界**：真实剪藏时同步计算（而非打开时懒补齐）、L2 内容摘要
+仍属平台层；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**967/967 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 176）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.80 · 2026-11-12
 
 ### M4：对比模式接入加密历史版本（已验证）
