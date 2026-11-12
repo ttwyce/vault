@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../db/vault_database.dart';
 import '../entry/entry_models.dart';
 import 'credential_groups.dart';
+import 'credential_meta.dart';
 import 'credential_template.dart';
 import 'credential_models.dart';
 import 'hibp_client.dart';
@@ -44,6 +45,7 @@ class CredentialDetail {
     required this.title,
     required this.username,
     required this.url,
+    this.categoryHint,
     required this.notesAllowedInCloud,
     required this.totpCode,
     required this.breached,
@@ -57,6 +59,7 @@ class CredentialDetail {
   final String title;
   final String? username;
   final String? url;
+  final String? categoryHint;
   final bool notesAllowedInCloud;
   final String? totpCode;
   final bool breached;
@@ -70,6 +73,7 @@ class CredentialDetail {
         'id': id,
         'title': title,
         'username': username,
+        'category_hint': categoryHint,
         'has_totp': totpCode != null,
         'breached': breached,
         'secret_fields': secretFieldLabels,
@@ -365,6 +369,7 @@ class CredentialRepository {
       title: displayTitle(entry.title, entry.body),
       username: await _openField(row, 'username', row.username),
       url: await _openField(row, 'url', row.url),
+      categoryHint: CredentialMeta.fromJson(entry.meta).categoryHint,
       notesAllowedInCloud: false,
       totpCode: summary?.totpCode,
       breached: row.breached == 2,

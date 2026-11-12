@@ -10,6 +10,7 @@ import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/taxonomy/taxonomy_models.dart';
 import 'package:vault/data/vault/credential_group_repository.dart';
+import 'package:vault/data/vault/credential_meta.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/core/widgets/secure_card.dart';
 import 'package:vault/features/vault/vault_page.dart';
@@ -273,6 +274,11 @@ void main() {
     expect(fields.fields.single.label, '恢复码');
     expect(fields.fields.single.secret, isTrue);
     expect(fields.fields.single.value, isEmpty);
+    final entry = await app.repo.getRow(rows.single.id);
+    expect(
+      CredentialMeta.fromJson(entry!.meta).categoryHint,
+      '工作开发',
+    );
   });
 
   testWidgets('带 TOTP 的账号详情提供复制且注明 30 秒清除',

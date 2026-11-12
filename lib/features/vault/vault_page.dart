@@ -7,6 +7,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../core/widgets/secure_card.dart';
+import '../../data/vault/credential_meta.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../app/session/flutter_clipboard_port.dart';
@@ -171,9 +172,19 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     final trimmed = title?.trim() ?? '';
     if (trimmed.isEmpty || !mounted) return;
     final gateway = ref.read(writeGatewayProvider);
+    // docs/13 §3：kind=6 meta 只放轻量标记（分类提示 / 是否有 TOTP），
+    // 用户名与网址等敏感业务字段仍在 credential 表加密。
+    final groups = await groupsFuture;
+    final categoryHint = groupId == null
+        ? null
+        : groups
+            .where((CategoryRow g) => g.id == groupId)
+            .firstOrNull
+            ?.name;
     final created = await gateway.writeEntry(EntryWrite.create(
       kind: EntryKind.credential,
       title: trimmed,
+      meta: CredentialMeta(categoryHint: categoryHint).toJsonString(),
     ));
     final db = ref.read(vaultDatabaseProvider);
     await db.into(db.credentials).insert(

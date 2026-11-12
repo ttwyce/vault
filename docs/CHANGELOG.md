@@ -4,6 +4,31 @@
 
 ---
 
+## v1.74 · 2026-11-12
+
+### M6：密码条目轻量 meta（已验证）
+
+- 新增 `credential_meta.dart`（docs/13 §3 kind=6）：只放
+  `category_hint` / `has_totp` 轻量标记，坏 JSON 回默认、
+  空分类拒绝、`copyWith(clearCategoryHint:)` 支持清空
+- `VaultPage` 新建账号时把分组名写入 `entry.meta.category_hint`；
+  `CredentialDetail.toJson` 带 `category_hint`，与
+  `has_totp` 一起供列表快速筛选，不复制任何敏感值
+- 测试：`credential_meta_test.dart` 3 条；
+  `vault_page_test.dart` 分组用例补 meta 断言
+  → 全量 **946 → 949**
+
+**边界**：`setTotpSecret` 后同步更新 `has_totp` 标记仍待接线；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**949/949 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 169）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.73 · 2026-11-12
 
 ### M6：账号资料 username / url 加密读写（已验证）
