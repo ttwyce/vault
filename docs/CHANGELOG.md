@@ -4,6 +4,29 @@
 
 ---
 
+## v1.63 · 2026-11-12
+
+### M2：日记月历头汇总（已验证）
+
+- 新增 `diary_month_summary.dart`（docs/11 §1.2）：本月篇数 /
+  活跃天数 / 用户日记平均字数；AI 日记计入总篇数但不混入平均字数，
+  空月全 0 不出现 NaN
+- `DiaryPage` 从真实 `entry.meta.date` + `word_count` 汇总（补写按显式
+  日期归属，不从 createdAt 推），显示在连续天数下方
+- 测试：`diary_month_summary_test.dart` 3 条、
+  `diary_page_test.dart` +1 条 → 全量 **917 → 921**
+
+**边界**：年度回顾 / 天气心情选择 UI 仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**921/921 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 158）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.62 · 2026-11-12
 
 ### M2：编辑器置顶开关（已验证）

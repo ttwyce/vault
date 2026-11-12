@@ -13,6 +13,7 @@ import '../../data/agent/daily_summary_service.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/entry/entry_models.dart';
 import '../../data/diary/diary_meta.dart';
+import '../../data/diary/diary_month_summary.dart';
 import '../../data/diary/diary_streak.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
@@ -41,6 +42,9 @@ class DiaryPage extends ConsumerStatefulWidget {
 class _DiaryPageState extends ConsumerState<DiaryPage> {
   late DateTime _month;
   Map<int, List<EntrySummary>> _byDay = const <int, List<EntrySummary>>{};
+  DiaryMonthSummary _monthSummary = planDiaryMonthSummary(
+    const <DiaryDayEntry>[],
+  );
   int? _selectedDay;
   bool _loading = true;
 
@@ -56,9 +60,36 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     final repo = ref.read(entryRepositoryProvider);
     final Map<int, List<EntrySummary>> data =
         await repo.diaryForMonth(_month.year, _month.month);
+    // 月历头汇总直接从真实 entry.meta 读 word_count（docs/11 §1.2），
+    // 不用 snippet 长度猜，也不会把 AI 日记算进平均字数。
+    final db = ref.read(vaultDatabaseProvider);
+    final rows = await db.select(db.entries).get();
+    final monthEntries = <DiaryDayEntry>[];
+    for (final row in rows) {
+      if (row.deleted != 0 ||
+          (row.kind != EntryKind.diary.code &&
+              row.kind != EntryKind.aiDiary.code)) {
+        continue;
+      }
+      final meta = DiaryMeta.fromJson(row.meta);
+      // 归属日期以 meta.date 为准（补写/跨时区），不从 createdAt 推。
+      final date = DateTime.tryParse(meta.date);
+      if (date == null ||
+          date.year != _month.year ||
+          date.month != _month.month) {
+        continue;
+      }
+      monthEntries.add(DiaryDayEntry(
+        day: date.day,
+        kind: row.kind,
+        wordCount: meta.wordCount,
+      ));
+    }
+    final summary = planDiaryMonthSummary(monthEntries);
     if (!mounted) return;
     setState(() {
       _byDay = data;
+      _monthSummary = summary;
       _loading = false;
     });
   }
@@ -159,6 +190,11 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
           _buildLegend(),
           const SizedBox(height: SketchSpace.md),
           _buildStreak(),
+          const SizedBox(height: SketchSpace.xs),
+          Text(
+            _monthSummary.label,
+            style: TextStyle(fontSize: 10.5, color: context.sketch.muted),
+          ),
           const SizedBox(height: SketchSpace.md),
           ..._buildEntrySection(),
         ],

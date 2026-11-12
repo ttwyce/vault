@@ -100,4 +100,21 @@ void main() {
     await pumpDiary(tester);
     expect(find.textContaining('连续'), findsOneWidget);
   });
+
+  testWidgets('月历头显示本月篇数/活跃天数/平均字数',
+      (WidgetTester tester) async {
+    // 用 meta 里真实 word_count 的两篇用户日记造数据。
+    for (final id in <String>['d1', 'd2']) {
+      await app.gateway.writeEntry(EntryWrite.create(
+        id: id,
+        kind: EntryKind.diary,
+        title: '日记',
+        body: '正文',
+        meta: '{"date":"2026-11-08","word_count":320}',
+      ));
+    }
+    await pumpDiary(tester);
+    expect(find.textContaining('本月 2 篇'), findsOneWidget);
+    expect(find.textContaining('平均 320 字'), findsOneWidget);
+  });
 }
