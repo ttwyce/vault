@@ -4,6 +4,27 @@
 
 ---
 
+## v1.08 · 2026-11-12
+
+### M7：会话切换滚动目标判定（已验证）
+
+- 新增 `conversation_scroll.dart`（docs/12 §5 ③）：草稿/空会话回顶部，
+  已有会话且有消息定位到最新消息（append-only 正序渲染的最新在底部）；
+  切换瞬间先归零，消息加载完成后按 maxExtent 到底，避免沿用旧 offset
+- `ChatPage` 用 `_pendingScrollToLatest` + postFrameCallback 接计划
+- 测试：`conversation_scroll_test.dart` 3 条、
+  `chat_drawer_test.dart` 5 条回归全绿 → 全量 **758 → 761**
+
+**边界**：分页「加载更早」按钮仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**761/761 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 103）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.07 · 2026-11-12
 
 ### M6：密码详情 TOTP 复制清除（已验证）

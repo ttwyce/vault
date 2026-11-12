@@ -19,6 +19,7 @@ import '../../data/chat/conversation_repository_provider.dart';
 import '../../data/agent/model_availability_provider.dart';
 import '../../data/agent/model_status.dart';
 import '../../data/chat/conversation_retention.dart';
+import '../../data/chat/conversation_scroll.dart';
 import '../../data/chat/conversation_writer.dart';
 import '../editor/editor_page.dart';
 import 'widgets/conversation_drawer.dart';
@@ -47,6 +48,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   /// 抽屉用 OverlayEntry 挂在根 Overlay 上：不进 PageScaffold 的布局树，
   /// 因此不会改变主区尺寸，也不会与 Expanded / ListView 的高度约束打架。
   bool _drawerOpen = false;
+  bool _pendingScrollToLatest = false;
 
   void _openDrawer() {
     if (_drawerOpen) return;
@@ -94,6 +96,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           : ref
               .read(conversationRepositoryProvider)
               .messages(next.currentId!, plan: MessagePagePlan.latest());
+      _pendingScrollToLatest = next.currentId != null;
       if (_scroll.hasClients) _scroll.jumpTo(0);
     });
   }
@@ -201,6 +204,22 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ) {
                     final messages = snap.data ??
                         const <ConversationMessageView>[];
+                    if (_pendingScrollToLatest && messages.isNotEmpty) {
+                      _pendingScrollToLatest = false;
+                      final plan = planConversationScroll(
+                        conversationId: _draft.currentId,
+                        messageCount: messages.length,
+                        isDraft: _draft.hasDraft,
+                      );
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted || !_scroll.hasClients) return;
+                        _scroll.jumpTo(scrollOffsetFor(
+                          plan,
+                          maxExtent: _scroll.position.maxScrollExtent,
+                          hasMessages: messages.isNotEmpty,
+                        ));
+                      });
+                    }
                     if (messages.isEmpty) {
                       // docs/07 §10.3：首次进入显示 3 个示例问题，点击即填入
                       // 输入框（不自动发送，端侧模型未接入前不假装有回复）。
