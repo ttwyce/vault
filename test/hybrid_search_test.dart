@@ -179,4 +179,29 @@ void main() {
       '命中：语义',
     );
   });
+
+  test('docs/06 §2.1 分块命中先聚合到 entry 粒度，不重复累加', () {
+    final aggregated = aggregateChunkHits(<RankedHit>[
+      const RankedHit('a', 3),
+      const RankedHit('a', 1), // 同 entry 的第二个 chunk
+      const RankedHit('b', 2),
+    ]);
+    expect(aggregated.map((RankedHit h) => h.entryId).toList(),
+        <String>['a', 'b']);
+    expect(aggregated.first.rank, 1);
+
+    // 未聚合时 a 的两个 chunk 会重复加分；聚合后每个 entry 只算一次。
+    final fused = reciprocalRankFusion(
+      ftsHits: const <RankedHit>[RankedHit('b', 1)],
+      vectorHits: const <RankedHit>[
+        RankedHit('a', 2),
+        RankedHit('a', 3),
+        RankedHit('a', 4),
+      ],
+    );
+    expect(fused, hasLength(2));
+    final a = fused.firstWhere((FusedHit h) => h.entryId == 'a');
+    expect(a.score, closeTo(1.0 / (60 + 2), 0.0001),
+        reason: '三个 chunk 只保留最佳名次');
+  });
 }

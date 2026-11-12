@@ -4,6 +4,27 @@
 
 ---
 
+## v1.48 · 2026-11-12
+
+### M5：分块命中聚合到 entry 粒度（已验证）
+
+- `aggregateChunkHits()`（docs/06 §2.1）：同一 entry 的多个 chunk
+  只保留最佳名次，fts / vector 两路在 RRF 前先聚合；
+  避免长文因分块多被重复累加、把短笔记挤出 top3
+- 原有 `reciprocalRankFusion` 全部用例回归通过
+- 测试：`hybrid_search_test.dart` +1 条 → 全量 **881 → 882**
+
+**边界**：真实 `entry_vec_chunk` 表 / 向量召回仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**882/882 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§7）、14（Day 143）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.47 · 2026-11-12
 
 ### M7：清除所有 AI 数据计划（已验证）

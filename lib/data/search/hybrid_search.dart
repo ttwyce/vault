@@ -125,6 +125,29 @@ class FusedHit {
 ///
 /// 结构化过滤由调用方在传入前完成；这里只做两路（FTS / 向量）融合。
 /// 被过滤掉的 id 即使出现在召回里也不会进入结果。
+/// 分块命中先聚合到 entry 粒度（docs/06 §2.1）。
+///
+/// 同一 entry 的多个 chunk 只保留**最佳名次**，避免多篇长文因分块多
+/// 在 RRF 里被重复累加、把短笔记挤出 top3。fts / vector 两路都要先过这道。
+List<RankedHit> aggregateChunkHits(Iterable<RankedHit> hits) {
+  final best = <String, int>{};
+  for (final hit in hits) {
+    if (hit.rank < 1) continue;
+    final current = best[hit.entryId];
+    if (current == null || hit.rank < current) {
+      best[hit.entryId] = hit.rank;
+    }
+  }
+  // 按名次升序输出，保持与下游 rank 语义一致。
+  final out = <RankedHit>[
+    for (final entry in best.entries) RankedHit(entry.key, entry.value),
+  ]..sort((RankedHit a, RankedHit b) {
+      final byRank = a.rank.compareTo(b.rank);
+      return byRank != 0 ? byRank : a.entryId.compareTo(b.entryId);
+    });
+  return List<RankedHit>.unmodifiable(out);
+}
+
 List<FusedHit> reciprocalRankFusion({
   required Iterable<RankedHit> ftsHits,
   required Iterable<RankedHit> vectorHits,
@@ -147,8 +170,8 @@ List<FusedHit> reciprocalRankFusion({
     }
   }
 
-  accumulate(ftsHits, ftsWeight, 'fts');
-  accumulate(vectorHits, vectorWeight, 'vector');
+  accumulate(aggregateChunkHits(ftsHits), ftsWeight, 'fts');
+  accumulate(aggregateChunkHits(vectorHits), vectorWeight, 'vector');
 
   final fused = <FusedHit>[
     for (final entry in scores.entries)
