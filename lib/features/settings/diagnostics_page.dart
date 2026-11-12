@@ -8,6 +8,7 @@ import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/contrast_audit.dart';
 import '../../app/theme/sketch_palette.dart';
+import '../../app/theme/desktop_layout_plan.dart';
 import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
@@ -252,6 +253,12 @@ class DiagnosticsPage extends ConsumerWidget {
           ),
           const SizedBox(height: SketchSpace.lg),
           const SizedBox(height: SketchSpace.sm),
+          Text(
+            '桌面布局：${DesktopLayout.values.length} 档（紧凑 / rail / '
+            '≥${kThreeColumnMinWidth.toInt()} 三栏，窗口下限 '
+            '${kWindowsMinWidth.toInt()}×${kWindowsMinHeight.toInt()}）',
+            style: TextStyle(fontSize: 10.5, color: p.blue),
+          ),
           Text(
             'U3 对比度：亮/暗双主题 ink·muted 在 4 类底面上均 '
             '≥ $kMinBodyContrast:1（${_contrastSummary()}）',

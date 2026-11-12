@@ -4,6 +4,27 @@
 
 ---
 
+## v1.71 · 2026-11-12
+
+### M8：Windows 三栏布局判定层（已验证）
+
+- 新增 `desktop_layout_plan.dart`（docs/08 §7）：按可用宽度分
+  紧凑单栏 / 68px rail / ≥900 三栏（导航 68 + 列表 320 + 详情 ≥420），
+  899↔900 边界明确分档；同时声明窗口下限 900×600 常量
+- `DiagnosticsPage` 展示规则
+- 测试：`desktop_layout_plan_test.dart` 4 条 → 全量 **937 → 941**
+
+**边界**：真实三栏渲染 / 窗口尺寸平台限制仍需平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**941/941 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 166）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.70 · 2026-11-12
 
 ### M8：Ctrl+K 直达全库搜索页（已验证）
