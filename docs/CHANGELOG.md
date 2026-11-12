@@ -4,6 +4,31 @@
 
 ---
 
+## v1.46 · 2026-11-12
+
+### M7：补齐 `add_tags` 工具（已验证）
+
+- `AgentToolRegistry` 从 17 增至 18 个工具：新增 `add_tags`
+  （docs/07 §3.1，confirm / L1），批量给条目追加标签；
+  标签名先解析成 id（同名复用、缺失才新建），保留原分类、
+  自动去重、单条上限 8 由 `WriteGateway` 把关，单条失败不影响其它条目
+- 未确认时只给内容预览不落库；`agent_loop_test` / `agent_policy_test`
+  15 条回归全绿
+- 测试：`agent_tools_test.dart` 更新注册表断言 + 1 条专用用例；
+  `diagnostics_page_test.dart` 去掉写死的「17 个工具」断言
+  → 全量 **877 → 878**
+
+**边界**：`web_search` / `fetch_page`（dangerous + BYOK 外部 API）
+仍不实现；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**878/878 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§9）、14（Day 141）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.45 · 2026-11-12
 
 ### M7：日总结模型输出解析（已验证）

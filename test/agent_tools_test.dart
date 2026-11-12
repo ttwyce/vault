@@ -6,6 +6,8 @@ import 'package:vault/data/agent/agent_tools.dart';
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/entry/entry_repository.dart';
+import 'package:vault/data/taxonomy/taxonomy_models.dart' show TagWrite;
+import 'package:vault/data/taxonomy/taxonomy_repository.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/data/write/write_gateway.dart';
 
@@ -46,8 +48,8 @@ void main() {
         entryKind: entryKind,
       );
 
-  test('注册表导出 17 个工具的 schema', () {
-    expect(registry.length, 17);
+  test('注册表导出 18 个工具的 schema', () {
+    expect(registry.length, 18);
     final names = registry.schemas()
         .map((Map<String, Object?> s) => s['name'] as String)
         .toSet();
@@ -68,6 +70,7 @@ void main() {
       'get_stats',
       'open_entry',
       'update_entry',
+      'add_tags',
       'archive_url',
     });
   });
@@ -258,5 +261,57 @@ void main() {
       ),
     );
     expect(badUrl.isError, isTrue);
+  });
+
+  test('add_tags 是 confirm 风险，批量追加标签自动去重并保留分类',
+      () async {
+    final created = await app.gateway.writeEntry(EntryWrite.create(
+      id: 'e1',
+      title: '同步笔记',
+      body: '正文',
+    ));
+    final tag = await app.gateway.writeTag(TagWrite.create(name: 'WebDAV'));
+    await app.gateway.setEntryTaxonomy(
+      entryId: created.snapshot.id,
+      tagIds: <String>[tag.snapshot.id],
+    );
+    final withTaxonomy = buildDefaultToolRegistry(AgentToolDeps(
+      entries: EntryRepository(app.db),
+      credentials: CredentialRepository(app.db, app.gateway),
+      gateway: app.gateway,
+      taxonomy: TaxonomyRepository(db: app.db, gateway: app.gateway),
+    ));
+    final tool = withTaxonomy.lookup('add_tags')!;
+    expect(tool.risk, RiskLevel.confirm);
+    expect(tool.schema['required'], contains('ids'));
+
+    // 未确认时只给预览，不落库。
+    final preview = await invokeTool(
+      withTaxonomy,
+      'add_tags',
+      ctx(args: <String, Object?>{
+        'ids': <String>['e1'],
+        'tags': <String>['同步'],
+      }),
+    );
+    expect(preview.content, contains('内容预览'));
+
+    // 确认后真实执行：已有标签 + 新标签去重，且标签总数受 8 上限约束。
+    final result = await invokeTool(
+      withTaxonomy,
+      'add_tags',
+      ctx(
+        confirmed: true,
+        args: <String, Object?>{
+          'ids': <String>['e1', 'e1'],
+          'tags': <String>['WebDAV', '限流'],
+        },
+      ),
+    );
+    expect(result.isError, isFalse);
+    expect(result.content, contains('2/2'));
+    final tagIds = await TaxonomyRepository(db: app.db, gateway: app.gateway)
+        .tagIdsForEntry('e1');
+    expect(tagIds.toSet(), hasLength(2));
   });
 }

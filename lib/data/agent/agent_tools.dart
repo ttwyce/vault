@@ -8,7 +8,9 @@ library;
 import '../activity/activity_logger.dart';
 import '../archive/archive_meta.dart';
 import '../db/tables/entry_tables.dart';
+import '../entry/entry_models.dart' show TagWithCount;
 import '../entry/entry_repository.dart';
+import '../taxonomy/taxonomy_models.dart' show TagWrite;
 import '../taxonomy/taxonomy_repository.dart';
 import '../vault/credential_groups.dart';
 import '../vault/credential_repository.dart';
@@ -74,6 +76,7 @@ AgentToolRegistry buildDefaultToolRegistry(AgentToolDeps deps) =>
       ..register(_GetStatsTool(deps))
       ..register(_OpenEntryTool(deps))
       ..register(_UpdateEntryTool(deps))
+      ..register(_AddTagsTool(deps))
       ..register(_ArchiveUrlTool(deps));
 
 /// credential_health：只返回聚合统计（docs/07 §4.3）。
@@ -495,6 +498,105 @@ class _UpdateEntryTool extends _BaseTool {
       meta: row.meta,
     ));
     return ToolResult('已更新 $id 到 rev ${result.snapshot.rev}');
+  }
+}
+
+/// confirm：给已有条目追加标签（docs/07 §3.1 add_tags）。
+///
+/// `ids[]` 批量处理，单条失败不影响其它条目；标签上限 8 个由
+/// `WriteGateway.setEntryTaxonomy` 把关，绝不静默截断用户意图。
+class _AddTagsTool extends _BaseTool {
+  const _AddTagsTool(this.deps);
+
+  final AgentToolDeps deps;
+
+  @override
+  String get name => 'add_tags';
+
+  @override
+  String get description =>
+      '给一个或多个条目追加标签（自动去重、单条最多 8 个）。'
+      '当用户说「把这几篇标成 X」时使用。';
+
+  @override
+  Map<String, Object?> get schema => const <String, Object?>{
+        'type': 'object',
+        'properties': <String, Object?>{
+          'ids': <String, Object?>{
+            'type': 'array',
+            'items': <String, Object?>{'type': 'string'},
+          },
+          'tags': <String, Object?>{
+            'type': 'array',
+            'items': <String, Object?>{'type': 'string'},
+          },
+        },
+        'required': <String>['ids', 'tags'],
+      };
+
+  @override
+  RiskLevel get risk => RiskLevel.confirm;
+
+  @override
+  PrivacyLevel get maxPrivacy => PrivacyLevel.l1;
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final ids = (args['ids'] as List?)
+            ?.whereType<String>()
+            .toList() ??
+        const <String>[];
+    final tags = (args['tags'] as List?)
+            ?.whereType<String>()
+            .map((String t) => t.trim())
+            .where((String t) => t.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (ids.isEmpty || tags.isEmpty) {
+      return const ToolResult('缺少 ids 或 tags', isError: true);
+    }
+    final taxonomy = deps.taxonomy;
+    if (taxonomy == null) {
+      return const ToolResult('标签仓库不可用', isError: true);
+    }
+    // 参数里的 tags 是标签名；先按名字解析成 id（同名复用），
+    // 没有的才新建，绝不把名字直接塞进 entry_tag 关联表。
+    final existing = await deps.entries.tags();
+    final tagIds = <String>[];
+    for (final name in tags.toSet()) {
+      final found = existing
+          .where((TagWithCount t) => t.name == name)
+          .firstOrNull;
+      if (found != null) {
+        tagIds.add(found.id);
+      } else {
+        final created = await deps.gateway.writeTag(TagWrite.create(name: name));
+        tagIds.add(created.snapshot.id);
+      }
+    }
+
+    var succeeded = 0;
+    final errors = <String>[];
+    for (final id in ids) {
+      try {
+        final current = await taxonomy.tagIdsForEntry(id);
+        final merged = <String>{...current, ...tagIds}.toList();
+        final category = await taxonomy.categoryForEntry(id);
+        await deps.gateway.setEntryTaxonomy(
+          entryId: id,
+          categoryId: category,
+          tagIds: merged,
+        );
+        succeeded++;
+      } on Object catch (e) {
+        errors.add('$id: $e');
+      }
+    }
+    final summary = '成功给 $succeeded/${ids.length} 个条目追加标签';
+    return ToolResult(
+      errors.isEmpty ? summary : '$summary；失败：${errors.join("；")}',
+      isError: succeeded == 0,
+    );
   }
 }
 
