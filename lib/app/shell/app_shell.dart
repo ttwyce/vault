@@ -9,6 +9,7 @@ import '../../features/chat/chat_page.dart';
 import '../../features/diary/diary_page.dart';
 import '../../features/quick/quick_capture_page.dart';
 import '../../features/records/records_page.dart';
+import '../../features/search/search_page.dart';
 import '../../features/settings/settings_hub_page.dart';
 import '../../features/vault/vault_page.dart';
 import '../chrome/app_actions.dart';
@@ -187,8 +188,8 @@ class _AppShellState extends State<AppShell> {
         _openQuickCapture();
       case DesktopShortcutAction.search:
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('全库搜索在设置中心 · 搜索页')),
+          Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(builder: (_) => const SearchPage()),
           );
         }
       case DesktopShortcutAction.nextSection:

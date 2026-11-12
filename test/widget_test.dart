@@ -83,4 +83,18 @@ void main() {
     expect(find.text('还没有内容，点右上角新建'), findsWidgets,
         reason: 'Ctrl+Tab 后应切到记录页');
   });
+
+  testWidgets('桌面 Ctrl+K 直接打开全库搜索页', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await pumpShell(tester);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('搜索'), findsWidgets);
+  });
 }

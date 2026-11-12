@@ -4,6 +4,27 @@
 
 ---
 
+## v1.70 · 2026-11-12
+
+### M8：Ctrl+K 直达全库搜索页（已验证）
+
+- `AppShell` 的 `DesktopShortcutAction.search` 从「只弹引导提示」
+  改为直接 push `SearchPage()`（该页搜索框 `autofocus: true`），
+  与 Ctrl+N 走快速记录同级，桌面快捷键闭环
+- 测试：`widget_test.dart` +1 条（桌面 Ctrl+K 后搜索页可见）
+  → 全量 **936 → 937**
+
+**边界**：Ctrl+K 从搜索页再次按下会压入第二个搜索页（未做去重）；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**937/937 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 165）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.69 · 2026-11-12
 
 ### M8：桌面快捷键判定与接线（已验证）
