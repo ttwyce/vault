@@ -277,6 +277,26 @@ abstract final class CredentialGuard {
     );
   }
 
+  /// `custom_fields` 的细粒度脱敏：保留字段名/类型/是否私密，
+  /// `secret:true` 的 value 一律换成 `[已隐藏]`，非私密值原样保留。
+  ///
+  /// docs/11 §4.4：AI 侧永远看不到 secret 字段的明文；返回结构可直接
+  /// 嵌进工具返回值给模型，不必把整个 custom_fields 一刀切隐藏。
+  static List<Map<String, Object?>> redactCustomFields(
+    CustomFields fields,
+  ) =>
+      <Map<String, Object?>>[
+        for (final field in fields.fields)
+          <String, Object?>{
+            'id': field.id,
+            'label': field.label,
+            'type': field.type.name,
+            'secret': field.secret,
+            'value': field.secret ? '[已隐藏]' : field.value,
+            'sort': field.sort,
+          },
+      ];
+
   /// 扫描一段文本是否夹带了已知明文（用于 prompt / 日志的断言）。
   /// 只做包含检测，不修改文本；命中即拒绝发送。
   static bool containsSecret(String text, Iterable<String> secrets) {

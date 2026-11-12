@@ -4,6 +4,26 @@
 
 ---
 
+## v1.09 · 2026-11-12
+
+### M6：CredentialGuard 自定义字段细粒度脱敏（已验证）
+
+- `CredentialGuard.redactCustomFields()` 保留字段名 / 类型 / 是否私密，
+  `secret:true` 的 value 一律 `[已隐藏]`，非私密值原样保留；
+  与整体 `redact` 的一刀切隐藏形成两层可选用粒度（docs/11 §4.4）
+- 测试：`credential_models_test.dart` +1 条 → 全量 **761 → 762**
+
+**边界**：AI 工具返回值接入该细粒度结构仍待平台层；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**762/762 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 104）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.08 · 2026-11-12
 
 ### M7：会话切换滚动目标判定（已验证）

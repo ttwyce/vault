@@ -201,4 +201,39 @@ void main() {
           isTrue);
     });
   });
+
+  test('redactCustomFields 细粒度脱敏：secret 值隐藏，非私密值保留',
+      () {
+        final fields = CustomFields(const <CredentialField>[
+          CredentialField(
+            id: 'f1',
+            label: '恢复码',
+            value: 'xxxx-yyyy',
+            type: CustomFieldType.text,
+            secret: true,
+            sort: 0,
+          ),
+          CredentialField(
+            id: 'f2',
+            label: '服务器',
+            value: 'sftp.example.com',
+            type: CustomFieldType.url,
+            secret: false,
+            sort: 1,
+          ),
+        ]);
+        final redacted = CredentialGuard.redactCustomFields(fields);
+        expect(redacted, hasLength(2));
+        expect(redacted[0]['label'], '恢复码');
+        expect(redacted[0]['secret'], isTrue);
+        expect(redacted[0]['value'], '[已隐藏]');
+        expect(redacted[1]['value'], 'sftp.example.com');
+        expect(jsonEncode(redacted), isNot(contains('xxxx-yyyy')));
+        expect(
+          jsonEncode(CredentialGuard.redact(<String, Object?>{
+            'custom_fields': fields.toJsonString(),
+          })),
+          contains('[已隐藏]'),
+        );
+      });
 }
