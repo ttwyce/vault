@@ -4,6 +4,29 @@
 
 ---
 
+## v1.57 · 2026-11-12
+
+### 决策表收口：D93~D110（已验证）
+
+- README 决策表从 D92 补到 **D110**，把 v1.40~v1.56 的架构决策
+  逐条固化（Autofill 零明文、后台自动锁定、改密码二次确认、
+  E_RATE 半速、8s debounce、日总结强校验、add_tags、AI 数据清理、
+  分块聚合、向量同步开关、schema 双向、AI 日记排期、U1/U7、
+  剪贴板提示、A2 余弦退路、Agent 降级、M3 硬门槛持续生效）
+- 同步核对：当前全量 **907/907**；M3 硬门槛仍锁住 App 启动；
+  `pubspec.yaml` / `pubspec.lock` 未改动
+
+**边界**：剩余项全部需要真实 WebDAV / 真机 / 新依赖 / 平台 channel；
+不宣称 M4~M9 完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**907/907 passed**；未执行构建。
+
+**影响文档**：README（决策表）、14（Day 152）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.56 · 2026-11-12
 
 ### M7：Agent 超时 / 失败降级提示（C6，已验证）
