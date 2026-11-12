@@ -4,6 +4,28 @@
 
 ---
 
+## v1.36 · 2026-11-12
+
+### M4：内容变更检测成本控制（已验证）
+
+- 新增 `content_change_policy.dart`（docs/05 §6.2）：只对「用户手动标记」
+  或「30 天内访问过」的条目排每月重抓；首次快照不提示变更、
+  复用 `hasContentChanged` 汉明距离 > 3 才提示且保留旧正文为 history、
+  坏指纹不当变更、阈值可调
+- `DiagnosticsPage` 展示规则
+- 测试：`content_change_policy_test.dart` 4 条 → 全量 **846 → 850**
+
+**边界**：真实 simhash 计算 / 抓取 / history 落库仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**850/850 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 131）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.35 · 2026-11-12
 
 ### M4：Wayback availability 判定层（已验证）
