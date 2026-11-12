@@ -35,6 +35,7 @@ import '../../data/agent/rollup_service.dart';
 import '../../data/archive/archive_content_gate.dart';
 import '../../data/archive/archive_image_filter.dart';
 import '../../data/archive/archive_settings.dart';
+import '../../data/archive/wayback_client.dart';
 import '../../data/archive/archive_job_queue.dart';
 import '../../data/archive/share_intent_parser.dart';
 import '../../data/archive/link_check_service.dart';
@@ -321,6 +322,8 @@ class DiagnosticsPage extends ConsumerWidget {
               '${AiEntryPoint.values.length} 类入口云端必弹逐次授权并显示发送字数\n'
               '剪藏分享：多 URL 去重、纯文本落想法、'
               'Extension 只接收不抓取（${ShareIntentKind.archiveUrls.name}）\n'
+              'Wayback：availability 响应解析 / 时间戳兜底 / '
+              '自动提交默认关闭（${shouldSubmitToWayback(userOptedIn: false)}）\n'
               '归档配置：L1 常开、完整快照 ${SnapshotSchedule.values.length} 种排期、'
               '配额 ${const ArchiveSettings().quotaRatio * 100}% '
               '超限只存 L1、不承诺后台自动\n'

@@ -4,6 +4,28 @@
 
 ---
 
+## v1.35 · 2026-11-12
+
+### M4：Wayback availability 判定层（已验证）
+
+- 新增 `wayback_client.dart`（docs/05 §6.1 / §6.3）：availability API
+  地址构造、closest 快照解析、时间戳转日期、缺 url 时用时间戳兜底构造
+  存档链接；无快照 / 坏 JSON / 缺字段一律明确「建议手动提交」，
+  绝不把解析失败当成有存档；自动提交存档默认关闭、必须逐次勾选
+- `DiagnosticsPage` 展示规则
+- 测试：`wayback_client_test.dart` 5 条 → 全量 **841 → 846**
+
+**边界**：真实 GET 请求 / 打开外链 / Save Page Now 仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**846/846 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 130）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.34 · 2026-11-12
 
 ### M4：归档全局配置与配额守卫（已验证）
