@@ -19,6 +19,7 @@ import '../../data/diary/diary_meta.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../../data/taxonomy/inline_tag_parser.dart';
 import '../../data/taxonomy/taxonomy_models.dart';
+import '../../data/taxonomy/taxonomy_suggestions.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/write/write_gateway.dart';
 import 'markdown_insert.dart';
@@ -70,6 +71,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   List<TagWithCount> _tags = const <TagWithCount>[];
   String? _categoryId;
   List<String> _tagIds = const <String>[];
+  TaxonomySuggestion? _suggestion;
 
   @override
   void initState() {
@@ -132,6 +134,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
       _error = notFound;
       _loading = false;
     });
+    _refreshSuggestion();
   }
 
   Future<void> _save() async {
@@ -489,6 +492,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
               ),
             ),
           _buildTaxonomyRow(),
+          _buildSuggestionRow(),
           _buildMarkdownBar(),
           Expanded(
             child: _preview
@@ -505,9 +509,10 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                           ? '输入 #${trigger.query}：匹配已有标签，'
                               '回车可采纳（上限 ${TaxonomyRules.maxTagsPerEntry}）'
                           : null;
-                      if (hint != _inlineTagHint) {
-                        setState(() => _inlineTagHint = hint);
-                      }
+                      setState(() {
+                        _inlineTagHint = hint;
+                        _refreshSuggestion();
+                      });
                     },
                     expands: true,
                     maxLines: null,
@@ -529,6 +534,37 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         ],
       ),
     );
+  }
+
+  /// docs/11 §2.5：按标题/正文给 1 个分类 + 2~4 个标签建议，
+  /// **只展示不自动写入**，采纳必须由用户点 chip。
+  void _refreshSuggestion() {
+    final next = suggestTaxonomy(
+      title: _title.text,
+      body: _body.text,
+      categories: <({String id, String name})>[
+        for (final c in _categories) (id: c.id, name: c.name),
+      ],
+      tags: _tags,
+      existingTagIds: _tagIds.toSet(),
+    );
+    if (_suggestion?.toJson().toString() == next.toJson().toString()) return;
+    _suggestion = next;
+  }
+
+  void _adoptSuggestion() {
+    final suggestion = _suggestion;
+    if (suggestion == null || suggestion.isEmpty) return;
+    setState(() {
+      if (suggestion.categoryId != null && _categoryId == null) {
+        _categoryId = suggestion.categoryId;
+      }
+      final merged = <String>{..._tagIds, ...suggestion.tagIds}.toList();
+      _tagIds = merged.length > TaxonomyRules.maxTagsPerEntry
+          ? merged.sublist(0, TaxonomyRules.maxTagsPerEntry)
+          : merged;
+      _suggestion = null;
+    });
   }
 
   Widget _buildTaxonomyRow() {
@@ -561,6 +597,28 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             child: SketchTag('＋ 标签', tone: SketchTone.ghost, dense: true),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionRow() {
+    final suggestion = _suggestion;
+    if (suggestion == null || suggestion.isEmpty || _saving) {
+      return const SizedBox.shrink();
+    }
+    final labels = <String>[
+      if (suggestion.categoryName != null) '分类：${suggestion.categoryName}',
+      for (final name in suggestion.tagNames) '#$name',
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SketchSpace.sm),
+      child: GestureDetector(
+        onTap: _adoptSuggestion,
+        child: SketchTag(
+          '建议（点采纳，不自动写入）：${labels.join(' · ')}',
+          tone: SketchTone.plain,
+          dense: true,
+        ),
       ),
     );
   }

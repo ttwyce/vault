@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/diary/diary_meta.dart';
+import 'package:vault/data/taxonomy/taxonomy_models.dart' show TagWrite;
 import 'package:vault/data/write/write_gateway.dart';
 import 'package:vault/features/editor/editor_page.dart';
 
@@ -217,5 +218,20 @@ void main() {
     await tester.enterText(find.byType(TextField).last, '普通正文');
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.textContaining('输入 #'), findsNothing);
+  });
+
+  testWidgets('分类/标签建议只展示、点采纳才写入关联',
+      (WidgetTester tester) async {
+    await app.gateway.writeTag(TagWrite.create(name: '同步'));
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).first, '同步限流');
+    await tester.enterText(find.byType(TextField).last, '同步限流重试');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('建议（点采纳'), findsOneWidget);
+
+    // 未点采纳前不写任何关联；点后才写入。
+    await tester.tap(find.textContaining('建议（点采纳'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('#同步'), findsWidgets);
   });
 }

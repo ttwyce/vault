@@ -4,6 +4,29 @@
 
 ---
 
+## v1.58 · 2026-11-12
+
+### M2：编辑器分类/标签建议接线（已验证）
+
+- `EditorPage` 按 `suggestTaxonomy` 在分类行下方展示
+  「建议（点采纳，不自动写入）」chip；输入标题/正文时随 `setState`
+  刷新建议，采纳才合并到分类/标签选择（标签上限 8 生效）
+- 原有 `taxonomy_suggestions.dart` 判定层接上真实编辑器 UI，
+  编辑器 9 条回归全绿
+- 测试：`editor_page_test.dart` +1 条（建议可见、采纳后标签出现）
+  → 全量 **907 → 908**
+
+**边界**：真实 AI 建议 / 右侧面板 / 保存后触发仍缺；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**908/908 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 153）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.57 · 2026-11-12
 
 ### 决策表收口：D93~D110（已验证）
