@@ -4,6 +4,31 @@
 
 ---
 
+## v1.41 · 2026-11-12
+
+### M8：后台自动锁定（已验证）
+
+- 新增 `auto_lock_policy.dart`（docs/18 §9）：按进入后台 / 回到前台
+  时间戳判定，默认 5 分钟、未达阈值给剩余宽限、时间戳倒退保守不锁、
+  阈值可配置
+- 新增 `AutoLockWatcher` 并接在 `VaultGate` 外层：paused/hidden 记时刻，
+  resumed 达阈值才调 `VaultSession.lock()`，不改闸门状态机；
+  注入时钟与锁定动作便于测试
+- 测试：`auto_lock_policy_test.dart` 3 条、`auto_lock_watcher_test.dart` 1 条；
+  `about_page_test.dart` / `vault_gate_test.dart` 15 条回归全绿
+  → 全量 **860 → 864**
+
+**边界**：真实后台计时与系统生命周期在三端的行为需真机验证；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**864/864 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 136）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.40 · 2026-11-12
 
 ### M6/M8：Autofill 字段识别与条目匹配判定层（已验证）

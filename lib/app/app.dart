@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/fonts/font_providers.dart';
 import 'settings/local_settings.dart';
 import 'settings/local_settings_provider.dart';
+import 'session/auto_lock_watcher.dart';
 import 'session/vault_gate.dart';
 import 'theme/sketch_palette.dart';
 import 'theme/sketch_theme.dart';
@@ -48,7 +49,7 @@ class VaultApp extends ConsumerWidget {
           themeMode: ThemeMode.system,
           // 根路由闸门：由它决定显示解锁页、首次创建页还是主界面。
           // 所有页面自己都不判断「有没有解锁」（见 vault_gate.dart）。
-          home: const VaultGate(),
+          home: const AutoLockWatcher(child: VaultGate()),
         );
       },
     );
