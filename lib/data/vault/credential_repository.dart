@@ -7,6 +7,7 @@ import 'credential_meta.dart';
 import 'credential_template.dart';
 import 'credential_models.dart';
 import 'hibp_client.dart';
+import 'http_hibp_client.dart';
 import '../write/write_gateway.dart';
 import 'totp.dart';
 
@@ -308,6 +309,32 @@ class CredentialRepository {
       breached: Value<int>(breached ? 2 : 1),
     ));
     return breached;
+  }
+
+  /// docs/11 §4.4：真实 HIBP k-anonymity 检查。
+  /// 只把 SHA1 前 5 位发到 `/range/<prefix>`，完整哈希与明文不出设备；
+  /// 取回失败返回 null（结果未知），绝不误标成安全。
+  Future<bool?> checkBreachedOnline(
+    String credentialId, {
+    required HttpHibpClient client,
+    required int nowMs,
+  }) async {
+    final row = await (db.select(db.credentials)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    final password = await _openField(row, 'password', row.password);
+    if (password.isEmpty) return null;
+    final checker = HibpChecker();
+    final request = checker.requestFor(password);
+    final fetched = await client.fetchRange(request);
+    if (fetched.body == null) return null;
+    return applyHibpResponse(
+      credentialId,
+      responseBody: fetched.body!,
+      nowMs: nowMs,
+      checker: checker,
+    );
   }
 
   /// 读回自定义字段（只在需要展示详情时调用）。

@@ -4,6 +4,34 @@
 
 ---
 
+## v1.93 · 2026-11-12
+
+### M6：HIBP k-anonymity 真实 HTTPS GET（已验证）
+
+- 新增 `http_hibp_client.dart`：`dart:io` 真实 GET
+  `/range/<prefix>`，**只把 SHA1 前 5 位放进 URL**，完整哈希与
+  密码明文永不出设备；非法前缀直接拒绝发请求；500 / 超时 / 断连 /
+  坏响应一律返回「结果未知」，绝不误标安全；`baseUrl` 可注入
+- `CredentialRepository.checkBreachedOnline` 串起真实取回 →
+  `applyHibpResponse` 判定 → 更新 `credential.breached`
+- `VaultPage` 健康卡「检查泄露 →」对所有账号逐条真实检查并刷新；
+  生产用真实客户端，widget 测试可注入假客户端
+- 测试：`http_hibp_client_test.dart` 3 条（前缀隔离 / 未命中 /
+  失败路径）、`credential_hibp_online_test.dart` 1 条（本地
+  HttpServer 端到端落 breached=2）、`vault_page_test.dart` +1 条（UI）
+  → 全量 **1002 → 1007**
+
+**边界**：7 天缓存跨进程持久化、真实 api.pwnedpasswords.com 外网
+验收仍缺；M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**1007/1007 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 188）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.92 · 2026-11-12
 
 ### M4：Wayback availability 真实 GET 与死链回退（已验证）

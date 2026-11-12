@@ -9,6 +9,7 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../core/widgets/secure_card.dart';
 import '../../data/vault/credential_category_filter.dart';
 import '../../data/vault/credential_meta.dart';
+import '../../data/vault/http_hibp_client.dart';
 import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../app/session/flutter_clipboard_port.dart';
@@ -35,7 +36,10 @@ import '../../data/write/write_gateway.dart';
 /// 顶部健康提示与 subtitle 走 `CredentialRepository` 的真实聚合统计，
 /// 不再显示写死的假数据。
 class VaultPage extends ConsumerStatefulWidget {
-  const VaultPage({super.key});
+  const VaultPage({super.key, this.hibpClientFactory});
+
+  /// 真实 HIBP 检查可注入（widget 测试绑定会拦截 HttpClient）。
+  final HttpHibpClient Function()? hibpClientFactory;
 
   @override
   ConsumerState<VaultPage> createState() => _VaultPageState();
@@ -475,6 +479,31 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     notesController.dispose();
   }
 
+  /// docs/11 §4.4：对所有账号逐条真实 HIBP 检查（只发前 5 位）。
+  /// 取回失败保持未知，不误标安全；完成后刷新页面。
+  Future<void> _checkBreachesOnline() async {
+    final client =
+        widget.hibpClientFactory?.call() ?? HttpHibpClient();
+    final repo = ref.read(credentialRepositoryProvider);
+    final db = ref.read(vaultDatabaseProvider);
+    final rows = await db.select(db.credentials).get();
+    var checked = 0;
+    for (final row in rows) {
+      final result = await repo.checkBreachedOnline(
+        row.id,
+        client: client,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      if (result != null) checked++;
+    }
+    client.close();
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text('已完成 $checked 个账号的泄露检查')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
@@ -530,8 +559,13 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                     style: TextStyle(fontSize: 11.5, color: p.ink),
                   ),
                 ),
-                Text('去看看 →',
-                    style: TextStyle(fontSize: 10.5, color: p.blue)),
+                GestureDetector(
+                  onTap: _checkBreachesOnline,
+                  child: Text(
+                    '检查泄露 →',
+                    style: TextStyle(fontSize: 10.5, color: p.blue),
+                  ),
+                ),
               ],
             ),
           ),

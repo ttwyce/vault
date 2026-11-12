@@ -11,6 +11,8 @@ import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/taxonomy/taxonomy_models.dart';
 import 'package:vault/data/vault/credential_group_repository.dart';
 import 'package:vault/data/vault/credential_meta.dart';
+import 'package:vault/data/vault/hibp_client.dart';
+import 'package:vault/data/vault/http_hibp_client.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/core/widgets/secure_card.dart';
 import 'package:vault/features/vault/vault_page.dart';
@@ -24,13 +26,20 @@ void main() {
   setUp(() async => app = await TestApp.create());
   tearDown(() async => app.dispose());
 
-  Future<void> pumpVault(WidgetTester tester) async {
+  Future<void> pumpVault(
+    WidgetTester tester, {
+    HttpHibpClient Function()? hibpClientFactory,
+  }) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: app.container,
-      child: const MaterialApp(home: Scaffold(body: VaultPage())),
+      child: MaterialApp(
+        home: Scaffold(
+          body: VaultPage(hibpClientFactory: hibpClientFactory),
+        ),
+      ),
     ));
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pump(const Duration(milliseconds: 250));
@@ -439,4 +448,53 @@ void main() {
     expect(find.text('cred-cat-a'), findsOneWidget);
     expect(find.text('cred-cat-b'), findsNothing);
   });
+
+  testWidgets('健康卡「检查泄露」逐条真实 HIBP 检查并落库',
+      (WidgetTester tester) async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-ui-hibp',
+      kind: EntryKind.credential,
+      title: '在线检查账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-ui-hibp'),
+        );
+    final repo = CredentialRepository(app.db, app.gateway);
+    await repo.setPassword('cred-ui-hibp', 'Hunter2!long');
+    final checker = HibpChecker();
+    final request = checker.requestFor('Hunter2!long');
+
+    await pumpVault(
+      tester,
+      hibpClientFactory: () =>
+          _FakeHibpHit(checker.parseResponse('${request.suffix}:7')),
+    );
+    await tester.tap(find.text('检查泄露 →'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final row = await (app.db.select(app.db.credentials)
+          ..where((t) => t.id.equals('cred-ui-hibp')))
+        .getSingle();
+    expect(row.breached, 2);
+    expect(find.textContaining('已完成'), findsWidgets);
+  });
+}
+
+class _FakeHibpHit extends HttpHibpClient {
+  _FakeHibpHit(this._suffixes);
+
+  final Set<String> _suffixes;
+
+  @override
+  Future<HibpFetchResult> fetchRange(HibpRequest request) async =>
+      HibpFetchResult(
+        body: <String>[
+          for (final suffix in _suffixes) '$suffix:7',
+        ].join('\r\n'),
+        hint: 'fake HIBP',
+      );
+
+  @override
+  void close({bool force = true}) {}
 }
