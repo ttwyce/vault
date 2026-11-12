@@ -239,4 +239,32 @@ void main() {
     expect(find.text('查看 2019 存档'), findsOneWidget);
     expect(find.text('试 Wayback'), findsNothing);
   });
+
+  testWidgets('重复 URL 弹「已归档过」且不插入第二条',
+      (WidgetTester tester) async {
+    await addArchive(
+      id: 'dup',
+      url: 'https://example.com/post?utm_source=rss',
+      status: ArchiveStatus.metadata,
+      title: '已有条目',
+    );
+    await pumpArchive(tester);
+    await tester.tap(find.text('归档网址'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(
+      find.byType(TextField).last,
+      'https://example.com/post/#x',
+    );
+    await tester.tap(find.text('确定'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('已归档过'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final rows = await (app.db.select(app.db.entries)
+          ..where((t) => t.kind.equals(EntryKind.bookmark.code)))
+        .get();
+    expect(rows, hasLength(1));
+  });
 }

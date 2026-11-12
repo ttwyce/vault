@@ -8,6 +8,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import 'archive_reader_page.dart';
+import '../../data/archive/archive_duplicate.dart';
 import '../../data/archive/archive_meta.dart';
 import '../../data/archive/archive_policy.dart';
 import '../../data/archive/archive_recheck_actions.dart';
@@ -72,22 +73,78 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     );
     final trimmed = url?.trim() ?? '';
     if (trimmed.isEmpty || !mounted) return;
+    // docs/05 §4 第 1 步：同 URL 已有条目时先问「是否更新快照」，
+    // 不静默插入重复条目。
+    final repo = ref.read(archiveRepositoryProvider);
+    final data = await (_future ??= _load(repo));
+    final plan = planArchiveDuplicate(
+      rawUrl: trimmed,
+      existing: <({String entryId, String url, String? finalUrl})>[
+        for (final entry in data.entries)
+          (
+            entryId: entry.id,
+            url: entry.meta.url,
+            finalUrl: entry.meta.finalUrl,
+          ),
+      ],
+    );
+    if (plan.action == ArchiveDuplicateAction.invalid) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text(plan.reason)));
+      }
+      return;
+    }
+    if (plan.action == ArchiveDuplicateAction.askUpdate) {
+      if (!mounted) return;
+      final existing = data.entries
+          .where((ArchiveEntry e) => e.id == plan.existingEntryId)
+          .firstOrNull;
+      final open = await showDialog<bool>(
+            // 上面已用 mounted 守住异步间隙。
+            // ignore: use_build_context_synchronously
+            context: context,
+            builder: (BuildContext dialogContext) => AlertDialog(
+              title: const Text('已归档过'),
+              content: const Text('这条 URL 已经有归档条目；'
+                  '真实重抓/更新快照尚未接入，是否打开已有条目？'),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('打开'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (open && existing != null && mounted) {
+        await _openReader(existing);
+      }
+      _newUrl.clear();
+      return;
+    }
     final ArchiveMeta meta;
     try {
       meta = ArchiveMeta(
-        url: trimmed,
-        site: ArchiveMeta.siteOf(trimmed),
+        url: plan.normalizedUrl,
+        site: ArchiveMeta.siteOf(plan.normalizedUrl),
         status: ArchiveStatus.metadata,
         policy: RecheckPolicy.monthly,
       );
     } on FormatException catch (e) {
+      // 上面已用 mounted 守住异步间隙。
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.maybeOf(context)
           ?.showSnackBar(SnackBar(content: Text(e.message)));
       return;
     }
     await ref.read(writeGatewayProvider).writeEntry(EntryWrite.create(
           kind: EntryKind.bookmark,
-          title: trimmed,
+          title: plan.normalizedUrl,
           meta: meta.toJsonString(),
         ));
     _newUrl.clear();

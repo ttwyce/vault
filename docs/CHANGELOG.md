@@ -4,6 +4,29 @@
 
 ---
 
+## v1.31 · 2026-11-12
+
+### M4：归档 URL 去重（已验证）
+
+- 新增 `archive_duplicate.dart`（docs/05 §4 第 1 步）：URL 规范化
+  （host 小写、去跟踪参数/fragment/尾斜杠/默认端口）、与已有
+  url/finalUrl 比对，输出「新建 / 已归档问是否更新快照 / 非法」
+- `ArchivePage` 新增前先去重：重复弹「已归档过」并可选择打开已有条目，
+  **不静默插入第二条**；真实重抓/更新快照未接入前不假装能更新
+- 测试：`archive_duplicate_test.dart` 3 条、`archive_page_test.dart` +1 条
+  → 全量 **827 → 831**
+
+**边界**：真实 HEAD/GET 去重、快照历史版本落库仍属平台层；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**831/831 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§4）、14（Day 126）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.30 · 2026-11-12
 
 ### M5/M7：检索结果 5 分钟缓存（已验证）
