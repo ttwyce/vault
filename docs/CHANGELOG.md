@@ -4,6 +4,27 @@
 
 ---
 
+## v1.88 · 2026-11-12
+
+### M9：U4 红色使用审计判定层（已验证）
+
+- 新增 `red_usage_audit.dart`（docs/10 §12 U4）：一屏红色
+  ≤ 3 处且用途必须在「AI 动作 / 当前状态 / 主按钮 / 危险徽章」内；
+  超限给「次要按钮降级 ghost」建议、越权给「改用蓝或 ghost」建议
+- `DiagnosticsPage` 展示规则
+- 测试：`red_usage_audit_test.dart` 4 条 → 全量 **983 → 987**
+
+**边界**：真实逐屏计数需页面按 `RedUsage` 上报，尚未接入各页面；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**987/987 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 183）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.87 · 2026-11-12
 
 ### M7：AI 日记只读与删除（已验证）

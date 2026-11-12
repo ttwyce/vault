@@ -7,6 +7,7 @@ import '../../app/theme/sketch_metrics.dart';
 import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/contrast_audit.dart';
+import '../../app/theme/red_usage_audit.dart';
 import '../../app/theme/sketch_palette.dart';
 import '../../app/shell/global_hotkey_policy.dart';
 import '../../app/theme/desktop_layout_plan.dart';
@@ -266,6 +267,8 @@ class DiagnosticsPage extends ConsumerWidget {
             style: TextStyle(fontSize: 10.5, color: p.blue),
           ),
           Text(
+            'U4 红色：一屏 ≤ $kMaxRedPerScreen 处（${RedUsage.values.length} 类用途），'
+            '超限/越权给降级建议（示例 ${auditRedUsage(const <RedUsage>[]).passed}）\n'
             'U3 对比度：亮/暗双主题 ink·muted 在 4 类底面上均 '
             '≥ $kMinBodyContrast:1（${_contrastSummary()}）',
             style: TextStyle(fontSize: 10.5, color: p.blue),
