@@ -4,6 +4,27 @@
 
 ---
 
+## v1.75 · 2026-11-12
+
+### M6：TOTP 与轻量 meta 标记闭环（已验证）
+
+- `setTotpSecret` 改为 async：字段级加密写入 TOTP 密钥后，
+  经 `WriteGateway.writeEntry` 同步 `entry.meta.has_totp = true`；
+  只改 meta，不动标题/正文，保留 `category_hint`
+- 测试：`credential_repository_test.dart` +1 条
+  （写入后标记为真、标题不变）→ 全量 **949 → 950**
+
+**边界**：删除 TOTP 密钥 / 清空标记仍缺；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**950/950 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§8）、14（Day 170）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.74 · 2026-11-12
 
 ### M6：密码条目轻量 meta（已验证）

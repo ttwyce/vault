@@ -220,10 +220,26 @@ class CredentialRepository {
       _writeField(credentialId, 'password', plaintext, updateChangedAt: true);
 
   /// 写入 TOTP Base32 密钥（字段级加密）。
-  Future<void> setTotpSecret(String credentialId, String base32Secret) {
+  Future<void> setTotpSecret(String credentialId, String base32Secret) async {
     // 先校验格式，避免把垃圾密钥封进密文。
     decodeBase32(base32Secret);
-    return _writeField(credentialId, 'totp_secret', base32Secret);
+    await _writeField(credentialId, 'totp_secret', base32Secret);
+    await _setHasTotpFlag(credentialId, true);
+  }
+
+  /// 同步 kind=6 轻量 meta 的 has_totp 标记（docs/13 §3）。
+  Future<void> _setHasTotpFlag(String credentialId, bool value) async {
+    final entry = await (db.select(db.entries)
+          ..where((t) => t.id.equals(credentialId)))
+        .getSingleOrNull();
+    if (entry == null) return;
+    final next = CredentialMeta.fromJson(entry.meta).copyWith(hasTotp: value);
+    await gateway.writeEntry(EntryWrite.update(
+      id: credentialId,
+      title: entry.title,
+      body: entry.body,
+      meta: next.toJsonString(),
+    ));
   }
 
   /// 写入自定义字段（含 secret:true 的项，整体加密）。

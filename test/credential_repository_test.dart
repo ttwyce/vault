@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vault/data/vault/credential_meta.dart';
 import 'package:vault/data/vault/credential_models.dart';
 import 'package:vault/data/vault/hibp_client.dart';
 import 'package:vault/data/db/vault_database.dart';
@@ -311,5 +312,23 @@ void main() {
     expect(profile.username, 'user@example.com');
     expect(profile.url, 'https://example.com/login');
     expect((await repo.profile('missing')).username, isEmpty);
+  });
+
+  test('写入 TOTP 后同步 entry.meta.has_totp 轻量标记', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'cred-totp-meta',
+      kind: EntryKind.credential,
+      title: 'TOTP 账号',
+    ));
+    await app.db.into(app.db.credentials).insert(
+          CredentialsCompanion.insert(id: 'cred-totp-meta'),
+        );
+    await repo.setTotpSecret(
+      'cred-totp-meta',
+      'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+    );
+    final row = await app.repo.getRow('cred-totp-meta');
+    expect(CredentialMeta.fromJson(row!.meta).hasTotp, isTrue);
+    expect(row.title, 'TOTP 账号', reason: '只改 meta，不动标题正文');
   });
 }
