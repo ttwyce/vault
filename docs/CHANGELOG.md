@@ -4,6 +4,29 @@
 
 ---
 
+## v1.90 · 2026-11-12
+
+### M9：修复 U5 正文倾斜（已验证）
+
+- `SketchFrame` 过去把 `Transform.rotate` 包在整个 `child` 外，
+  导致卡片正文也跟着歪，违反 docs/10 §2 ④ / U5「正文永远不倾斜，
+  只倾斜容器」。改为 `Stack`：`Positioned.fill` 里只旋转
+  `CustomPaint` 绘制层（阴影/填充/虚线边），内容层保持水平
+- 测试：`sketch_frame_tilt_test.dart` +1 条（绘制层有旋转、
+  正文祖先链无 Transform）；widget/归档/密码/日记/阅读器共 50 条回归全绿
+  → 全量 **989 → 990**
+
+**边界**：暗色模式纸纹与真实截图对比仍需人工验收；
+M3 硬门槛未过，M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**990/990 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§10）、14（Day 185）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.89 · 2026-11-12
 
 ### M4：归档总览批量计划面板（已验证）

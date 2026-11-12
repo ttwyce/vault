@@ -47,28 +47,41 @@ class SketchFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SketchPalette.of(context);
 
-    Widget framed = CustomPaint(
-      painter: SketchFramePainter(
-        radius: radius,
-        fill: fill ?? palette.surface,
-        borderColor: borderless ? Colors.transparent : (borderColor ?? palette.line),
-        shadowColor: shadowColor ?? palette.shadow,
-        shadowOffset: shadowOffset,
-        strokeWidth: strokeWidth,
-        dash: dash,
-        gap: gap,
-      ),
-      child: Padding(
-        // 给阴影留出画布空间，否则会被祖先裁剪
-        padding: EdgeInsets.only(right: shadowOffset.dx, bottom: shadowOffset.dy),
-        child: Padding(padding: padding, child: child),
+    // docs/10 §2 ④ / U5：倾斜只作用于「纸片」的绘制层，
+    // 正文（child）放在未旋转的上层，永远保持水平。
+    final painterLayer = Transform.rotate(
+      angle: tilt,
+      child: CustomPaint(
+        painter: SketchFramePainter(
+          radius: radius,
+          fill: fill ?? palette.surface,
+          borderColor:
+              borderless ? Colors.transparent : (borderColor ?? palette.line),
+          shadowColor: shadowColor ?? palette.shadow,
+          shadowOffset: shadowOffset,
+          strokeWidth: strokeWidth,
+          dash: dash,
+          gap: gap,
+        ),
       ),
     );
-
-    if (tilt != SketchTilt.none) {
-      framed = Transform.rotate(angle: tilt, child: framed);
-    }
-    return framed;
+    final content = Padding(
+      // 给阴影留出画布空间，否则会被祖先裁剪。
+      padding: EdgeInsets.only(
+        right: shadowOffset.dx,
+        bottom: shadowOffset.dy,
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+    // Positioned.fill 让绘制层拿到与内容相同的尺寸；
+    // 旋转只发生在这层，content 保持水平（U5）。
+    return Stack(
+      alignment: Alignment.center,
+      children: <Widget>[
+        Positioned.fill(child: painterLayer),
+        content,
+      ],
+    );
   }
 }
 
