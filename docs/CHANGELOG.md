@@ -4,6 +4,27 @@
 
 ---
 
+## v1.54 · 2026-11-12
+
+### UI：底部导航 375px 适配判定（U7，已验证）
+
+- 新增 `bottom_nav_fit.dart`（docs/10 §12 U7）：按可用宽度 / 5 个 Tab
+  算每项宽度，375px 时每项 75px 不缩写不横向滚动；更窄时单字缩写、
+  `maxLines: 1` + 省略号，并给建议字号
+- `AppShell` 底部导航接判定层；`widget_test.dart` 移动/桌面 2 条回归全绿
+- 测试：`bottom_nav_fit_test.dart` 3 条 → 全量 **897 → 900**
+
+**边界**：真机 375px 横向滚动仍需人工验收；M3 硬门槛未过，
+M4~M9 未完成。
+
+**验证**：`flutter analyze` 无告警；`flutter test --concurrency=1`
+**900/900 passed**；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+**影响文档**：README（数字）、09（§2）、14（Day 149）、20（当前状态）、
+CHANGELOG（本条）
+
+---
+
 ## v1.53 · 2026-11-12
 
 ### M4：剪贴板 URL 自动识别提示（已验证）

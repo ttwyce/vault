@@ -11,6 +11,7 @@ import '../../features/records/records_page.dart';
 import '../../features/settings/settings_hub_page.dart';
 import '../../features/vault/vault_page.dart';
 import '../chrome/app_actions.dart';
+import '../theme/bottom_nav_fit.dart';
 import '../theme/sketch_metrics.dart';
 import '../theme/sketch_palette.dart';
 
@@ -372,14 +373,26 @@ class _NavItem extends StatelessWidget {
               color: selected ? palette.red : palette.muted,
             ),
             const SizedBox(height: 2),
-            Text(
-              section.label,
-              style: TextStyle(
-                fontSize: 10,
-                height: 1.2,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                color: selected ? palette.ink : palette.muted,
-              ),
+            Builder(
+              builder: (BuildContext context) {
+                final fit = planBottomNavFit(
+                  availableWidth: MediaQuery.sizeOf(context).width,
+                  tabCount: AppSection.values.length,
+                );
+                return Text(
+                  fit.needsAbbreviate
+                      ? section.label.characters.first
+                      : section.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: fit.suggestedFontSize,
+                    height: 1.2,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                    color: selected ? palette.ink : palette.muted,
+                  ),
+                );
+              },
             ),
           ],
         ),
