@@ -4,6 +4,33 @@
 
 ---
 
+## v2.8 · 2026-11-13
+
+### 真实 Nextcloud 外部条件验证（§0 (C)）与服务端兼容修复
+
+- 使用 `try.nextcloud.com` 的 2 小时临时实例，在真实 Nextcloud 35 上
+  用项目自己的 `HttpClientWebDavBackend` 跑通 OPTIONS / PROPFIND /
+  MKCOL / GET / 条件 PUT / 412 / DELETE；curl 对照同样全绿。
+- `VaultSyncRuntime.sync()` 真实一轮：`idle`、水位发布、taxonomy 完成、
+  清理阶段完成（约 66s）。随后 A/B 两个内存库共享同一把密钥：A 条件写
+  加密条目，B 拉取 `tombstones → meta → entries` 并解密出逐字一致的正文。
+- 真实服务商暴露并修复 4 个兼容问题：`MKCOL` 409 需逐级补父集合；
+  集合 `PROPFIND` 404 需建目录后重试；Nextcloud 的 href 是服务器绝对路径，
+  必须还原成 `CloudLayout` 的 `/vault/...`；首次绑定空目录需条件创建
+  `/vault/meta.enc`。新增 `test/real_webdav_compat_test.dart` 用本地
+  `HttpServer` 固化这四类行为（5 条）。
+- **门槛口径不变**：A5 定义要求坚果云 + Nextcloud 双服务商，本次只覆盖
+  Nextcloud 一侧；26 个真实同步用例只跑了「单条目上传 / 两设备拉取」子集，
+  `SyncRegressionReport.pendingRealServer` 不为 0，M3 硬门槛仍未过，
+  `VaultSyncRuntime` 仍零生产引用，M4~M9 不宣称完成。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1084/1084 passed**；
+临时实例上的真实同步单独通过；`git diff --check` OK；未执行构建；
+`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.7 · 2026-11-12
 
 ### §5 A 装配接线 / 跨链路集成 / 代码收敛（一次性收口）

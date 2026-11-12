@@ -21,7 +21,9 @@ import '../../core/sync/hlc.dart';
 import '../../core/sync/http_webdav_backend.dart';
 import '../../core/sync/sync_coordinator.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/sync/cloud_layout.dart';
 import '../../core/sync/entity_sync_engine.dart';
+import '../../core/sync/sync_payloads.dart';
 import '../../core/sync/webdav_backend.dart';
 
 /// 装配一个完整同步运行时所需的全部真实依赖。
@@ -32,6 +34,8 @@ class VaultSyncRuntime {
     required this.workspaceStore,
     required this.entityPort,
     required this.codec,
+    required this.vaultId,
+    required this.schema,
   });
 
   /// 真实 HTTP 后端。调用方负责在不再使用时 `dispose()`。
@@ -41,6 +45,8 @@ class VaultSyncRuntime {
   final DbSyncWorkspaceStore workspaceStore;
   final DbEntitySyncPort entityPort;
   final EncryptedSyncPayloadCodec codec;
+  final String vaultId;
+  final int schema;
 
   /// 从已解锁的本地库 + WebDAV 配置装配整套同步链路。
   factory VaultSyncRuntime.create({
@@ -111,7 +117,43 @@ class VaultSyncRuntime {
       workspaceStore: workspaceStore,
       entityPort: entityPort,
       codec: codec,
+      vaultId: vaultId,
+      schema: schema,
     );
+  }
+
+  /// 首次绑定空 WebDAV 目录：docs/04 §8.1 要求先有 /vault/meta.enc。
+  /// 404 时条件创建；412 说明另一台设备并发创建，交给下一轮校验。
+  Future<bool> ensureVaultMeta() async {
+    try {
+      final got = await backend.get(CloudLayout.metaPath);
+      await codec.decodeMeta(got.bytes);
+      return true;
+    } on WebDavException catch (e) {
+      if (e.statusCode != 404) return false;
+    } on Object {
+      return false;
+    }
+    // 空目录里 /vault 本身还不存在时，Nextcloud 对 /vault/meta.enc 的 PUT
+    // 返回 409；先幂等建好根集合，保持条件写语义不变。
+    try {
+      await backend.mkcol(CloudLayout.root);
+    } on WebDavException catch (e) {
+      if (e.statusCode != 405 && e.statusCode != 409) return false;
+    }
+    final bytes = await codec.encodeMeta(
+      SyncVaultMeta(vaultId: vaultId, schema: schema),
+    );
+    try {
+      await backend.put(
+        CloudLayout.metaPath,
+        bytes,
+        condition: const WebDavCondition.createOnly(),
+      );
+      return true;
+    } on WebDavException catch (e) {
+      return e.statusCode == 412;
+    }
   }
 
   /// 跑一轮完整同步：正文 → taxonomy → 本地清理 → 云端墓碑 TTL。

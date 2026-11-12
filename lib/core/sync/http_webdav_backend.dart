@@ -16,6 +16,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'collection_request.dart';
+import 'mkcol_with_parents.dart';
 import 'webdav_backend.dart';
 
 /// 连接配置。[rootUrl] 以 `https://dav.example.com/remote.php/dav/files/u/`
@@ -189,6 +191,12 @@ class HttpClientWebDavBackend implements WebDavBackend {
 
   @override
   Future<List<WebDavListing>> propfind(String path, {int depth = 1}) async {
+    return collectionRequest(this, path, () => _propfind(path, depth: depth));
+  }
+
+  /// 单次 PROPFIND；集合 404/409 由 [collectionRequest] 补齐父目录后重试。
+  Future<List<WebDavListing>> _propfind(String path,
+      {int depth = 1}) async {
     const String body = '<?xml version="1.0"?>'
         '<d:propfind xmlns:d="DAV:"><d:prop>'
         '<d:getetag/><d:getcontentlength/><d:resourcetype/>'
@@ -206,13 +214,31 @@ class HttpClientWebDavBackend implements WebDavBackend {
       await _bytes(response, method: 'PROPFIND', path: path),
       allowMalformed: true,
     );
-    return _parseMultiStatus(xml, path);
+    return _relativizeListings(_parseMultiStatus(xml, path));
   }
 
-  /// 解析 207 Multi-Status。只取 `<response>` 块里的 href / getetag /
-  /// resourcetype；`collection` 用于把目录本身从 diff 里排除。
+  /// PROPFIND / REPORT 的 href 可能是服务器绝对路径。
   static List<WebDavListing> parseMultiStatus(String xml, String basePath) =>
       _parseMultiStatus(xml, basePath);
+
+  /// Nextcloud 的 PROPFIND/REPORT href 是服务器绝对路径：
+  /// `/remote.php/dav/files/<user>/<root>/vault/items/...`。
+  /// 剥掉 config.rootUrl 的 path 前缀，还原成 CloudLayout 的 `/vault/...`；
+  /// 否则另一台设备拿 href 再拼一次 base 会得到重复前缀而 404。
+  List<WebDavListing> _relativizeListings(List<WebDavListing> listings) {
+    final base = Uri.parse(config.rootUrl).path.replaceAll(RegExp(r'/+$'), '');
+    if (base.isEmpty) return listings;
+    return <WebDavListing>[
+      for (final item in listings)
+        WebDavListing(
+          path: item.path.startsWith('$base/')
+              ? item.path.substring(base.length)
+              : item.path,
+          etag: item.etag,
+          isCollection: item.isCollection,
+        ),
+    ];
+  }
 
   static List<WebDavListing> _parseMultiStatus(String xml, String basePath) {
     final responses = RegExp(
@@ -297,7 +323,7 @@ class HttpClientWebDavBackend implements WebDavBackend {
       await _bytes(response, method: 'REPORT', path: path),
       allowMalformed: true,
     );
-    final listings = _parseMultiStatus(xml, path);
+    final listings = _relativizeListings(_parseMultiStatus(xml, path));
     final changed = <String, String?>{};
     final deleted = <String>{};
     for (final listing in listings) {
@@ -396,8 +422,16 @@ class HttpClientWebDavBackend implements WebDavBackend {
 
   @override
   Future<void> mkcol(String path) async {
-    final response = await _send('MKCOL', path);
-    await response.drain<void>();
+    // 真实 Nextcloud：MKCOL /vault/items/f 在父级 /vault/items 不存在时
+    // 返回 409。逐段补齐父集合后重试；已存在的 405/409 视为幂等成功。
+    try {
+      final response = await _send('MKCOL', path);
+      await response.drain<void>();
+    } on WebDavException catch (e) {
+      if (e.statusCode == 405) return;
+      if (e.statusCode != 409) rethrow;
+      await mkcolWithParents(this, path);
+    }
   }
 
   static String _xmlEscape(String value) => value
