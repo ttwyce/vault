@@ -1,6 +1,7 @@
 package com.shiyi.vault
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
@@ -28,9 +29,21 @@ class MainActivity : FlutterActivity() {
     private val prefsName = "vault_biometric"
     private val ivKey = "iv"
     private val ciphertextKey = "ciphertext"
+    private var pendingShareText: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        captureShareIntent(intent)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, kShareChannelName)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "consumeInitial") {
+                    val text = pendingShareText
+                    pendingShareText = null
+                    result.success(text)
+                } else {
+                    result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -52,6 +65,17 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun captureShareIntent(source: Intent?) {
+        if (source == null || source.action != Intent.ACTION_SEND) return
+        if (source.type != "text/plain") return
+        pendingShareText = source.getStringExtra(Intent.EXTRA_TEXT)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        captureShareIntent(intent)
     }
 
     private fun available(): Boolean {
@@ -144,3 +168,8 @@ class MainActivity : FlutterActivity() {
         }.onFailure { result.success(null) }
     }
 }
+
+
+    companion object {
+        private const val kShareChannelName = "vault/share"
+    }

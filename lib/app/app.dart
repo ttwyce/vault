@@ -6,6 +6,8 @@ import 'settings/local_settings.dart';
 import 'settings/local_settings_provider.dart';
 import 'session/auto_lock_watcher.dart';
 import 'session/llm_runtime_provider.dart';
+import 'session/share_intent_bridge.dart';
+import 'session/vault_session.dart';
 import 'session/vault_gate.dart';
 import 'theme/sketch_palette.dart';
 import 'theme/sketch_theme.dart';
@@ -23,6 +25,11 @@ class VaultApp extends ConsumerWidget {
     // 安全存储里的云端 Key 异步恢复；没保存过就什么都不做，
     // AppRuntime 保持 llmRuntime=null（聊天页继续诚实降级）。
     ref.watch(llmRuntimeBootstrapProvider);
+    // 冷启动系统分享只在解锁后消费一次：provider 缓存结果，
+    // 多次 build 不会重复落队列。
+    if (ref.watch(vaultSessionProvider).isUnlocked) {
+      ref.watch(consumeInitialShareAfterUnlockProvider);
+    }
     final initial = initialSettings;
     if (initial != null &&
         ref.read(localSettingsProvider) == const LocalSettings() &&

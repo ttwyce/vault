@@ -8,6 +8,9 @@ import UIKit
   private let channelName = "vault/biometric"
   private let service = "com.shiyi.vault.biometric"
   private let account = "dek"
+  private let shareChannelName = "vault/share"
+  private let shareSuite = "group.com.shiyi.vault.share"
+  private let shareKey = "pendingShareText"
 
   override func application(
     _ application: UIApplication,
@@ -25,6 +28,20 @@ import UIKit
       name: channelName,
       binaryMessenger: controller.binaryMessenger
     )
+    let shareChannel = FlutterMethodChannel(
+      name: shareChannelName,
+      binaryMessenger: controller.binaryMessenger
+    )
+    shareChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "consumeInitial" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let defaults = UserDefaults(suiteName: self?.shareSuite)
+      let text = defaults?.string(forKey: self?.shareKey ?? "pendingShareText")
+      defaults?.removeObject(forKey: self?.shareKey ?? "pendingShareText")
+      result(text)
+    }
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { return }
       switch call.method {

@@ -4,6 +4,27 @@
 
 ---
 
+## v2.25 · 2026-11-13
+
+### 剪藏分享入口与生物识别平台声明
+
+- 新增 `share_intent_bridge.dart`：`vault/share` MethodChannel、
+  `ShareIntentConsumer` 把系统分享的 URL 排进真实 `job_queue`、纯文本
+  经 `WriteGateway` 落成想法；`VaultApp` 解锁后消费一次冷启动分享。
+- Android `MainActivity` 接收 `ACTION_SEND / text/plain`，缓存文本并在
+  引擎就绪后返回给 Dart；Manifest 增加 intent-filter。
+  iOS `AppDelegate` 增加同一通道，从 App Group UserDefaults 读取预留文本；
+  **独立 Share Extension target 尚未加入 Xcode 工程**，如实标注。
+- 平台声明补齐：Android `USE_BIOMETRIC`、iOS `NSFaceIDUsageDescription`。
+- 新增 `share_intent_bridge_test.dart` 2 条；Android/iOS 原生编译与
+  Extension 真机验收仍需 CI / Xcode / 真机。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1138/1138 passed**；
+`git diff --check` OK；本地未执行构建。
+
+---
+
 ## v2.24 · 2026-11-13
 
 ### 每日一致性校准
