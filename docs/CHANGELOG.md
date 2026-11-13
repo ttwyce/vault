@@ -4,6 +4,30 @@
 
 ---
 
+## v2.17 · 2026-11-13
+
+### CI 构建失败修复：签名指纹校验格式无关化
+
+- 最近一次 Android APK workflow（run `43359373456`）中
+  `Build debug APK` 实际成功，失败发生在其后的
+  `Verify APK signing certificate`：该步骤用
+  `apksigner verify --print-certs | grep <带冒号 SHA1>` 校验，
+  不同 build-tools 版本输出 `SHA-1/SHA-256 digest` 格式不稳定，
+  导致固定字符串匹配误判。
+- 改为两步：`apksigner verify "$APK"` 负责 APK 验签；
+  `keytool -printcert -jarfile "$APK"` 读取 APK 内证书 SHA1，
+  与仓库内固定 keystore 的 SHA1 做「去冒号 + 转大写」归一化比较。
+  不再依赖 apksigner 人类可读输出的具体格式。
+- 同步更新 `test/debug_signing_config_test.dart` 断言；
+  未改 keystore、Gradle signingConfig 与 APK 产物本身。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1120/1120 passed**；
+`git diff --check` OK；本地无 Android SDK，未执行构建；
+修复需由下一次 CI run 的 `Verify APK signing certificate` 步骤实际确认。
+
+---
+
 ## v2.16 · 2026-11-13
 
 ### 第五批缺口：PDF 手账、Passkey 本地登记与按钮点击修复
