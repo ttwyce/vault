@@ -45,66 +45,73 @@ class PageScaffold extends StatelessWidget {
         ),
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SketchSpace.lg,
-            SketchSpace.md,
-            SketchSpace.lg,
-            SketchSpace.sm,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              if (leading != null) ...<Widget>[
-                leading!,
-                const SizedBox(width: SketchSpace.sm),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
-                        color: palette.ink,
-                      ),
-                    ),
-                    if (subtitle != null) ...<Widget>[
-                      const SizedBox(height: 2),
+    // 无 AppBar 的 Scaffold 不会替 body 避开状态栏。统一在这里补 top，
+    // 所有页面（设置 / 编辑 / 诊断 …）的标题栏都不会再压到系统状态栏。
+    // SafeArea 幂等：AppShell 已经处理过的 tab 页不会重复加高。
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              SketchSpace.lg,
+              SketchSpace.md,
+              SketchSpace.lg,
+              SketchSpace.sm,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                if (leading != null) ...<Widget>[
+                  leading!,
+                  const SizedBox(width: SketchSpace.sm),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
                       Text(
-                        subtitle!,
+                        title,
                         style: TextStyle(
-                          fontSize: 11.5,
-                          height: 1.4,
-                          color: palette.muted,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                          color: palette.ink,
                         ),
                       ),
+                      if (subtitle != null) ...<Widget>[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.4,
+                            color: palette.muted,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (trailing.isNotEmpty)
-                Wrap(
-                  spacing: SketchSpace.sm,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: trailing,
-                ),
-            ],
+                if (trailing.isNotEmpty)
+                  Wrap(
+                    spacing: SketchSpace.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: trailing,
+                  ),
+              ],
+            ),
           ),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: SketchSpace.lg),
-          child: SketchDivider(),
-        ),
-        Expanded(child: child),
-      ],
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: SketchSpace.lg),
+            child: SketchDivider(),
+          ),
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 }

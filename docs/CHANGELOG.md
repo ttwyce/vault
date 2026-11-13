@@ -4,6 +4,41 @@
 
 ---
 
+## v2.10 · 2026-11-13
+
+### UI 布局 / 风格收敛与自定义 AI 端点
+
+- **状态栏重叠**：`PageScaffold` 统一补 `SafeArea(top: true)`，设置中心、
+  笔记编辑、诊断、导出备份等无 AppBar 页的标题栏不再从 y=0 起；
+  新增 `test/ui_layout_regression_test.dart` 用伪造 47px 状态栏回归。
+- **FAB 遮挡密码 tab**：移动端底栏改由 `Scaffold.bottomNavigationBar` 承载，
+  由 Scaffold 自动为 FAB 计算避让区；底栏底部同时补 home indicator
+  padding。回归测试断言「快速记录」与「密码」文字矩形不相交。
+- **风格漂移**：`SketchTheme` 补齐 input / switch / checkbox / dialog /
+  listTile / textButton / dropdown 的主题覆盖，全库原生控件不再落回
+  Material3 默认蓝色与标准圆角；新增 `SketchFieldFrame` /
+  `sketchInputDecoration` 统一输入框外壳。设置中心开关、同步设置表单、
+  字体重命名、模型下载弹窗、云端模型页改用 Sketch 组件；云端模型页仍保留
+  `TextField` 类型，不破坏既有 `find.byType` 断言。
+- **自定义端点**：`openai_compat.dart` 新增自定义端点校验 / 解析 /
+  解析函数；`LlmConfigService` 把 `label / base_url / model` 存进
+  `flutter_secure_storage`（仅 https、去尾斜杠、坏 JSON 不加载），
+  切回预设时删除自定义配置；`loadLlmRuntime` 与设置页都能恢复并注入
+  `LlmRuntime`。自定义端点的 `baseUrl / model` 不进脱敏日志，
+  「清除 AI 数据」域同步覆盖。
+- 新增 / 更新 `llm_settings_page_test.dart`、`app_runtime_wiring_test.dart`、
+  `ui_theme_and_endpoint_test.dart`、`ui_layout_regression_test.dart`。
+
+**边界**：主题层统一了全库原生控件的默认视觉；个别历史页面里硬编码的
+局部字号 / 色值没逐文件重写，避免改动面扩大与破坏 63 处 `TextField` 断言。
+`VaultSyncRuntime` 仍零生产引用，M3 硬门槛未过。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1096/1096 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.9 · 2026-11-13
 
 ### 测试阶段：恢复码抽查可显式跳过（仅 debug 构建）

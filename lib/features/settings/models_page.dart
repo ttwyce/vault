@@ -142,10 +142,10 @@ class ModelsPage extends StatelessWidget {
                       style: TextStyle(fontSize: 11, color: p.ink),
                     ),
                   const SizedBox(height: SketchSpace.sm),
-                  const Text(
+                  Text(
                     '每源 3 次重试、全源失败才标记损坏；模型文件不进系统备份'
                     '（三端四标记需平台层落配置）。',
-                    style: TextStyle(fontSize: 10.5, color: Color(0xFF6B6459)),
+                    style: TextStyle(fontSize: 10.5, color: p.muted),
                   ),
                   const SizedBox(height: SketchSpace.sm),
                   SketchButton(
@@ -175,7 +175,10 @@ class ModelsPage extends StatelessWidget {
           title: const Text('模型下载'),
           content: Text(hint),
           actions: <Widget>[
-            TextButton(
+            SketchButton(
+              label: '开始',
+              tone: SketchTone.primary,
+              dense: true,
               onPressed: () async {
                 final factory = downloaderFactory;
                 if (factory == null) {
@@ -198,11 +201,12 @@ class ModelsPage extends StatelessWidget {
                 downloader.close();
                 setDialogState(() => hint = outcome.hint);
               },
-              child: const Text('开始'),
             ),
-            TextButton(
+            SketchButton(
+              label: '关闭',
+              tone: SketchTone.ghost,
+              dense: true,
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('关闭'),
             ),
           ],
         ),

@@ -16,6 +16,7 @@ class LlmEndpoint {
     required this.model,
     this.temperature = 0.3,
     this.maxTokens = 2048,
+    this.isCustom = false,
   });
 
   final String id;
@@ -24,6 +25,9 @@ class LlmEndpoint {
   final String model;
   final double temperature;
   final int maxTokens;
+
+  /// 用户自定义端点：脱敏日志不回显用户填的 baseUrl / model。
+  final bool isCustom;
 
   String get chatCompletionsPath => '/chat/completions';
 
@@ -35,6 +39,65 @@ class LlmEndpoint {
         'temperature': temperature,
         'max_tokens': maxTokens,
       };
+}
+
+/// 自定义端点 id 固定，不把用户填的 label/URL 当存储键。
+const String kCustomLlmEndpointId = 'custom';
+
+/// 校验并构造自定义 OpenAI 兼容端点。
+///
+/// 只接受 https、无 userinfo / query / fragment 的 baseUrl；
+/// 用户填的 id/label 只显示在本地表单里，不替代固定 id，避免和预设撞车。
+LlmEndpoint? tryCustomLlmEndpoint({
+  required String label,
+  required String baseUrl,
+  required String model,
+}) {
+  final trimmedLabel = label.trim();
+  final trimmedUrl = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+  final trimmedModel = model.trim();
+  if (trimmedLabel.isEmpty || trimmedUrl.isEmpty || trimmedModel.isEmpty) {
+    return null;
+  }
+  final uri = Uri.tryParse(trimmedUrl);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return null;
+  if (uri.userInfo.isNotEmpty || uri.query.isNotEmpty || uri.fragment.isNotEmpty) {
+    return null;
+  }
+  return LlmEndpoint(
+    id: kCustomLlmEndpointId,
+    label: trimmedLabel,
+    baseUrl: trimmedUrl,
+    model: trimmedModel,
+    isCustom: true,
+  );
+}
+
+/// 自定义端点的安全存储 JSON → 端点对象；坏值一律返回 null。
+LlmEndpoint? parseCustomLlmEndpoint(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final map = Map<String, Object?>.from(decoded);
+    final label = map['label'];
+    final baseUrl = map['base_url'];
+    final model = map['model'];
+    if (label is! String || baseUrl is! String || model is! String) return null;
+    return tryCustomLlmEndpoint(label: label, baseUrl: baseUrl, model: model);
+  } on Object {
+    return null;
+  }
+}
+
+/// 按保存的 id 解析端点：自定义时读配置的 JSON，预设走代码常量。
+LlmEndpoint? resolveLlmEndpoint(String id, String? customRaw) {
+  if (id == kCustomLlmEndpointId) {
+    return customRaw == null ? null : parseCustomLlmEndpoint(customRaw);
+  }
+  for (final endpoint in kDefaultEndpoints) {
+    if (endpoint.id == id) return endpoint;
+  }
+  return null;
 }
 
 const List<LlmEndpoint> kDefaultEndpoints = <LlmEndpoint>[
@@ -190,16 +253,19 @@ CostEstimate estimateCost({
     );
 
 /// 脱敏日志：只记 URL + 状态码 + token 数，**不记 body / Key**。
+/// 自定义端点的 baseUrl / model 是用户私有配置，同样不进日志。
 Map<String, Object?> redactedRequestLog({
   required LlmEndpoint endpoint,
   required int statusCode,
   required int totalTokens,
 }) =>
     <String, Object?>{
-      'url': '${endpoint.baseUrl}${endpoint.chatCompletionsPath}',
+      'url': endpoint.isCustom
+          ? '<custom>${endpoint.chatCompletionsPath}'
+          : '${endpoint.baseUrl}${endpoint.chatCompletionsPath}',
       'status': statusCode,
       'tokens': totalTokens,
-      'model': endpoint.model,
+      'model': endpoint.isCustom ? '<custom>' : endpoint.model,
     };
 
 /// 检索结果 5 分钟缓存键（相同 query 复用，避免重复烧 token）。

@@ -14,6 +14,7 @@ import '../../core/fonts/font_state.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
+import '../../core/widgets/sketch_field.dart';
 import '../../core/widgets/sketch_frame.dart';
 
 /// 字体设置页。结构见 docs/15 §7：
@@ -156,11 +157,7 @@ class _FontsPageState extends ConsumerState<FontsPage> {
           controller: controller,
           autofocus: true,
           style: TextStyle(color: ctx.sketch.ink, fontSize: 14),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: '显示名称',
-            hintStyle: TextStyle(color: ctx.sketch.muted, fontSize: 13),
-          ),
+          decoration: sketchInputDecoration(ctx, hintText: '显示名称'),
         ),
         actions: <Widget>[
           SketchButton(

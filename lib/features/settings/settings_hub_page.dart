@@ -220,11 +220,15 @@ class _AiDiarySearchTile extends ConsumerWidget {
             : '默认关闭，避免生成文本占据语义空间与搜索结果',
         style: TextStyle(fontSize: 10.5, color: p.muted),
       ),
-      trailing: Switch(
-        value: settings.includeAiDiaryInSearch,
-        onChanged: (bool value) => ref
+      trailing: SketchButton(
+        label: settings.includeAiDiaryInSearch ? '开' : '关',
+        tone: settings.includeAiDiaryInSearch
+            ? SketchTone.primary
+            : SketchTone.ghost,
+        dense: true,
+        onPressed: () => ref
             .read(localSettingsProvider.notifier)
-            .setIncludeAiDiaryInSearch(value),
+            .setIncludeAiDiaryInSearch(!settings.includeAiDiaryInSearch),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/fonts/font_state.dart';
+import 'sketch_metrics.dart';
 import 'sketch_palette.dart';
 import 'sketch_typography.dart';
 
@@ -74,6 +75,86 @@ abstract final class SketchTheme {
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       hoverColor: Colors.transparent,
+      // 业务页里仍保留的原生 TextField / Switch / Checkbox / Dialog /
+      // ListTile 不能落回 Material3 默认蓝色与标准圆角：一处统一到色板，
+      // 避免「很多地方 UI 风格和主风格不一样」。
+      inputDecorationTheme: InputDecorationTheme(
+        filled: false,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        labelStyle: TextStyle(color: p.muted, fontSize: 11.5),
+        hintStyle: TextStyle(color: p.muted, fontSize: 11.5),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: SketchSpace.md,
+          vertical: SketchSpace.sm,
+        ),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: p.red,
+        selectionColor: p.note,
+        selectionHandleColor: p.blue,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith<Color>((Set<WidgetState> s) =>
+            s.contains(WidgetState.selected) ? p.red : p.muted),
+        trackColor: WidgetStateProperty.resolveWith<Color>((Set<WidgetState> s) =>
+            s.contains(WidgetState.selected) ? p.note : p.lineSoft),
+        trackOutlineColor: WidgetStateProperty.all<Color>(p.line),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith<Color>((Set<WidgetState> s) =>
+            s.contains(WidgetState.selected) ? p.red : Colors.transparent),
+        checkColor: WidgetStateProperty.all<Color>(Colors.white),
+        side: BorderSide(color: p.line, width: SketchStroke.hair),
+        shape: RoundedRectangleBorder(borderRadius: SketchRadii.pill),
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: p.blue,
+        textColor: p.ink,
+        titleTextStyle: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w700,
+          color: p.ink,
+        ),
+        subtitleTextStyle: TextStyle(fontSize: 11.5, color: p.muted),
+        shape: RoundedRectangleBorder(borderRadius: SketchRadii.pill),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: p.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: SketchRadii.c,
+          side: BorderSide(color: p.line, width: SketchStroke.hair),
+        ),
+        titleTextStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: p.ink,
+        ),
+        contentTextStyle: TextStyle(fontSize: 12.5, color: p.ink),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.all<Color>(p.ink),
+          textStyle: WidgetStateProperty.all<TextStyle>(
+            const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          ),
+          overlayColor: WidgetStateProperty.all<Color>(Colors.transparent),
+          shape: WidgetStateProperty.all<OutlinedBorder>(
+            RoundedRectangleBorder(borderRadius: SketchRadii.pill),
+          ),
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        textStyle: TextStyle(fontSize: 12.5, color: p.ink),
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStateProperty.all<Color>(p.surface),
+          shape: WidgetStateProperty.all<OutlinedBorder>(
+            RoundedRectangleBorder(borderRadius: SketchRadii.pill),
+          ),
+        ),
+      ),
     );
   }
 }

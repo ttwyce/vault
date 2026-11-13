@@ -12,6 +12,7 @@ import '../../core/icons/sketch_icons.dart';
 import '../../core/sync/sync_settings_plan.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
+import '../../core/widgets/sketch_field.dart';
 import '../../core/widgets/sketch_frame.dart';
 
 class SyncSettingsPage extends StatefulWidget {
@@ -75,23 +76,31 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  TextField(
-                    controller: _url,
-                    decoration: const InputDecoration(
-                      labelText: 'WebDAV 地址（https）',
-                      hintText: 'https://dav.example.com/vault',
+                  SketchFieldFrame(
+                    child: TextField(
+                      controller: _url,
+                      decoration: sketchInputDecoration(
+                        context,
+                        labelText: 'WebDAV 地址（https）',
+                      ),
                     ),
                   ),
                   const SizedBox(height: SketchSpace.sm),
-                  TextField(
-                    controller: _user,
-                    decoration: const InputDecoration(labelText: '账号'),
+                  SketchFieldFrame(
+                    child: TextField(
+                      controller: _user,
+                      decoration: sketchInputDecoration(context,
+                          labelText: '账号'),
+                    ),
                   ),
                   const SizedBox(height: SketchSpace.sm),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: '应用密码'),
+                  SketchFieldFrame(
+                    child: TextField(
+                      controller: _password,
+                      obscureText: true,
+                      decoration: sketchInputDecoration(context,
+                          labelText: '应用密码'),
+                    ),
                   ),
                   const SizedBox(height: SketchSpace.md),
                   SketchButton(

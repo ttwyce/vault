@@ -156,7 +156,7 @@ class _AppShellState extends State<AppShell> {
         // 「想到一句话」不该要求用户先切到「记录」页。
         // 抬高一截是为了不压住移动端的底部导航条。
         floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: SketchSpace.xxl, right: 4),
+          padding: const EdgeInsets.only(right: 4),
           child: SketchButton(
             label: '快速记录',
             glyph: SketchGlyph.plus,
@@ -166,6 +166,11 @@ class _AppShellState extends State<AppShell> {
           ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        // 底栏交给 Scaffold：它会自动把 nav 高度计入 FAB 的避让区，
+        // 不再让右下角按钮压住第 5 个 tab「密码」。
+        bottomNavigationBar: breakpoint.useRail
+            ? null
+            : _BottomNav(current: _index, onSelect: _select),
         body: SafeArea(
           bottom: false,
           child: breakpoint.useRail
@@ -176,12 +181,7 @@ class _AppShellState extends State<AppShell> {
                     Expanded(child: body),
                   ],
                 )
-              : Column(
-                  children: <Widget>[
-                    Expanded(child: body),
-                    _BottomNav(current: _index, onSelect: _select),
-                  ],
-                ),
+              : body,
         ),
       ),
       ),
@@ -390,7 +390,12 @@ class _BottomNav extends StatelessWidget {
     final palette = SketchPalette.of(context);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        0,
+        12,
+        12 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
       child: SketchFrame(
         radius: SketchRadii.a,
         fill: palette.surface,

@@ -50,6 +50,39 @@ void main() {
     expect(await service.load(), isNull);
   });
 
+  test('LlmConfigService 自定义端点往返、切预设与坏 JSON', () async {
+    final store = InMemoryLlmConfigStore();
+    final service = LlmConfigService(store);
+    final custom = tryCustomLlmEndpoint(
+      label: '自建网关',
+      baseUrl: 'https://llm.example.com/v1',
+      model: 'local-chat',
+    )!;
+    await service.save(
+      endpointId: kCustomLlmEndpointId,
+      apiKey: 'sk-custom',
+      customEndpoint: custom,
+    );
+    final loaded = await service.load();
+    expect(loaded, isNotNull);
+    expect(loaded!.customEndpointRaw, isNotNull);
+    expect(parseCustomLlmEndpoint(loaded.customEndpointRaw!)!.baseUrl,
+        'https://llm.example.com/v1');
+
+    final runtime = await loadLlmRuntime(service: service, enabled: true);
+    expect(runtime!.endpoint.isCustom, isTrue);
+    expect(runtime.endpoint.model, 'local-chat');
+    runtime.client.close();
+
+    await service.save(endpointId: 'deepseek', apiKey: 'sk-preset');
+    expect(await store.read(kLlmCustomEndpointStorageKey), isNull);
+    expect((await service.load())!.endpointId, 'deepseek');
+
+    await store.write(kLlmCustomEndpointStorageKey, '{bad json');
+    await store.write(kLlmEndpointIdStorageKey, kCustomLlmEndpointId);
+    expect(await service.load(), isNull);
+  });
+
   test('loadLlmRuntime 从安全存储装配出真实 SSE 客户端', () async {
     final store = InMemoryLlmConfigStore();
     final service = LlmConfigService(store);

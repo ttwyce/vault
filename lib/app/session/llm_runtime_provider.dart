@@ -28,13 +28,10 @@ Future<LlmRuntime?> loadLlmRuntime({
     return null;
   }
   if (config == null || !config.isComplete) return null;
-  LlmEndpoint? endpoint;
-  for (final candidate in kDefaultEndpoints) {
-    if (candidate.id == config.endpointId) {
-      endpoint = candidate;
-      break;
-    }
-  }
+  final endpoint = resolveLlmEndpoint(
+    config.endpointId,
+    config.customEndpointRaw,
+  );
   if (endpoint == null) return null;
   return LlmRuntime(
     endpoint: endpoint,

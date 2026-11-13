@@ -9,7 +9,7 @@ enum AiDataDomain {
   aiDiaries('AI 日记', 'kind=4 生成条目'),
   searchCache('检索缓存', '内存 5 分钟结果缓存'),
   activityQueries('搜索活动记录', 'activity.query 字段'),
-  apiKey('云端 API Key', 'flutter_secure_storage 中的凭据');
+  apiKey('云端 API Key', 'flutter_secure_storage 中的凭据与自定义端点');
 
   const AiDataDomain(this.label, this.detail);
 
@@ -51,7 +51,7 @@ AiDataClearancePlan planAiDataClearance({
     '删除 message / conversation 记录',
     '删除 kind=4 的 AI 日记条目（用户日记不动）',
     '清空 activity.query 搜索词',
-    '删除安全存储中的云端 API Key',
+    '删除安全存储中的云端 API Key 与自定义端点',
     '重置本地 AI 偏好为默认（AI 日记搜索开关关闭）',
   ];
   return AiDataClearancePlan(
