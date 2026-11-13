@@ -20,6 +20,7 @@ import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/credential_template.dart';
+import '../../data/vault/passkey_record.dart';
 
 class CredentialFieldsPage extends ConsumerStatefulWidget {
   const CredentialFieldsPage({
@@ -41,6 +42,10 @@ class _CredentialFieldsPageState extends ConsumerState<CredentialFieldsPage> {
   final Map<String, TextEditingController> _controllers =
       <String, TextEditingController>{};
   final Set<String> _revealed = <String>{};
+  final TextEditingController _passkeyRp = TextEditingController();
+  final TextEditingController _passkeyCredentialId = TextEditingController();
+  final TextEditingController _passkeyFingerprint = TextEditingController();
+  final TextEditingController _passkeyHandle = TextEditingController();
   String _hint = '';
   bool _busy = false;
 
@@ -55,6 +60,10 @@ class _CredentialFieldsPageState extends ConsumerState<CredentialFieldsPage> {
     for (final controller in _controllers.values) {
       controller.dispose();
     }
+    _passkeyRp.dispose();
+    _passkeyCredentialId.dispose();
+    _passkeyFingerprint.dispose();
+    _passkeyHandle.dispose();
     super.dispose();
   }
 
@@ -155,6 +164,46 @@ class _CredentialFieldsPageState extends ConsumerState<CredentialFieldsPage> {
           field.copyWith(value: _controllers[field.id]?.text ?? field.value),
       ]);
 
+  void _addPasskey() {
+    final rp = _passkeyRp.text.trim();
+    final credentialId = _passkeyCredentialId.text.trim();
+    final fingerprint = _passkeyFingerprint.text.trim();
+    final handle = _passkeyHandle.text.trim();
+    if (rp.isEmpty || credentialId.isEmpty || fingerprint.isEmpty) {
+      setState(() => _hint = 'Passkey 需要 RP、凭据 ID 与公钥指纹');
+      return;
+    }
+    try {
+      final record = PasskeyRecord(
+        id: UuidV7().next(),
+        relyingParty: rp,
+        credentialId: credentialId,
+        publicKeyFingerprint: fingerprint,
+        userHandle: handle,
+        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      setState(() {
+        _fields = upsertPasskey(_fields, record);
+        _syncControllers();
+        _hint = '已登记 Passkey：保存后字段级加密';
+      });
+      _passkeyRp.clear();
+      _passkeyCredentialId.clear();
+      _passkeyFingerprint.clear();
+      _passkeyHandle.clear();
+    } on Object catch (error) {
+      setState(() => _hint = '登记失败：$error');
+    }
+  }
+
+  void _removePasskey(String id) {
+    setState(() {
+      _fields = removePasskey(_fields, id);
+      _syncControllers();
+      _hint = '已移除 Passkey 登记：保存后生效';
+    });
+  }
+
   Future<void> _save() async {
     setState(() => _busy = true);
     try {
@@ -222,8 +271,20 @@ class _CredentialFieldsPageState extends ConsumerState<CredentialFieldsPage> {
               ),
             ),
             const SizedBox(height: SketchSpace.lg),
+            _PasskeyCard(
+              key: const ValueKey<String>('passkey-card'),
+              rp: _passkeyRp,
+              credentialId: _passkeyCredentialId,
+              fingerprint: _passkeyFingerprint,
+              handle: _passkeyHandle,
+              records: passkeysIn(_fields),
+              onAdd: _addPasskey,
+              onRemove: _removePasskey,
+            ),
+            const SizedBox(height: SketchSpace.lg),
             for (final field in _fields.fields) ...<Widget>[
               _FieldCard(
+                key: ValueKey<String>('field-${field.id}'),
                 field: field,
                 labelController: _labelController(field),
                 valueController: _controllers[field.id]!,
@@ -279,6 +340,7 @@ class _CredentialFieldsPageState extends ConsumerState<CredentialFieldsPage> {
 
 class _FieldCard extends StatelessWidget {
   const _FieldCard({
+    super.key,
     required this.field,
     required this.labelController,
     required this.valueController,
@@ -377,4 +439,96 @@ class _FieldCard extends StatelessWidget {
       ),
     );
   }
+}
+
+
+class _PasskeyCard extends StatelessWidget {
+  const _PasskeyCard({
+    super.key,
+    required this.rp,
+    required this.credentialId,
+    required this.fingerprint,
+    required this.handle,
+    required this.records,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final TextEditingController rp;
+  final TextEditingController credentialId;
+  final TextEditingController fingerprint;
+  final TextEditingController handle;
+  final List<PasskeyRecord> records;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sketch;
+    return SketchFrame(
+      radius: SketchRadii.c,
+      fill: p.surface,
+      borderColor: p.lineSoft,
+      padding: const EdgeInsets.all(SketchSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text('Passkey 登记', style: context.texts.titleSmall),
+          const SizedBox(height: SketchSpace.xs),
+          Text(
+            '只登记 RP / 凭据 ID / 公钥指纹；私钥始终留在系统认证器，'
+            '真实创建与签名需平台 WebAuthn 能力。',
+            style: context.texts.bodySmall,
+          ),
+          const SizedBox(height: SketchSpace.sm),
+          _PasskeyField('Relying Party', rp),
+          const SizedBox(height: SketchSpace.xs),
+          _PasskeyField('凭据 ID', credentialId),
+          const SizedBox(height: SketchSpace.xs),
+          _PasskeyField('公钥指纹', fingerprint),
+          const SizedBox(height: SketchSpace.xs),
+          _PasskeyField('用户句柄（可选）', handle),
+          const SizedBox(height: SketchSpace.sm),
+          SketchButton(
+            label: '登记 Passkey',
+            dense: true,
+            onPressed: onAdd,
+          ),
+          for (final record in records) ...<Widget>[
+            const SizedBox(height: SketchSpace.sm),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    '${record.relyingParty} · ${record.publicKeyFingerprint}',
+                    style: context.texts.bodySmall,
+                  ),
+                ),
+                SketchButton(
+                  label: '移除',
+                  dense: true,
+                  onPressed: () => onRemove(record.id),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PasskeyField extends StatelessWidget {
+  const _PasskeyField(this.label, this.controller);
+
+  final String label;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) => SketchFieldFrame(
+        child: TextField(
+          controller: controller,
+          decoration: sketchInputDecoration(context, hintText: label),
+        ),
+      );
 }

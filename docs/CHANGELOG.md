@@ -4,6 +4,33 @@
 
 ---
 
+## v2.16 · 2026-11-13
+
+### 第五批缺口：PDF 手账、Passkey 本地登记与按钮点击修复
+
+- `diary_handbook.dart` 复用纯 Dart PDF 生成器，把年度回顾聚合统计导出成
+  PDF 手账；内容不含日记正文 / 密码 / 密钥材料，需二次确认，写入
+  `AppRuntime.exportRoot`。年度回顾页增加确认态与导出入口。
+- `passkey_record.dart` 实现 Passkey **本地登记**结构：RP / 凭据 ID /
+  公钥指纹 / 用户句柄 / 时间写入 `secret` 自定义字段，随 `custom_fields`
+  整体字段级加密；私钥材料不进入 Vault。`CredentialFieldsPage` 增加登记 /
+  列表 / 移除 UI。真实 WebAuthn 创建与签名仍需平台认证器，明确标注未完成。
+- 修复 `SketchButton` 用 `onTapUp` 触发回调在重建/动画中丢点击的问题，
+  改为 `onTap`；这是组件层根因，不是测试规避。
+- 新增 `diary_handbook_and_passkey_test.dart` 4 条（导出闸门/真实写盘、
+  Passkey 往返与坏 JSON），更新年度回顾与字段页 widget 测试。
+
+**仍未完成（全部需要平台或外部条件）**：WebAuthn 真实创建/签名、
+语音转日记、Android Autofill / iOS Credential Provider / Windows 托盘热键、
+相机扫码平台通道、生物识别真机传感器验收、26 个真实同步用例、
+A5 坚果云侧、三套服务器环境、5000 条性能基线。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1120/1120 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.15 · 2026-11-13
 
 ### 第四批缺口：日记模板与年度回顾

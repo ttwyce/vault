@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/app/theme/sketch_theme.dart';
+import 'package:vault/core/widgets/sketch_controls.dart';
 import 'package:vault/data/diary/diary_meta.dart';
+import 'package:vault/data/diary/diary_handbook.dart';
 import 'package:vault/data/diary/diary_review.dart';
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/write/write_gateway.dart';
@@ -15,8 +19,15 @@ import 'support/test_harness.dart';
 /// 日记模板预填与年度回顾入口（docs/11 §1.5）。
 void main() {
   late TestApp app;
-  setUp(() async => app = await TestApp.create());
-  tearDown(() async => app.dispose());
+  late Directory exportRoot;
+  setUp(() async {
+    app = await TestApp.create();
+    exportRoot = await Directory.systemTemp.createTemp('vault-review-export-');
+  });
+  tearDown(() async {
+    if (await exportRoot.exists()) await exportRoot.delete(recursive: true);
+    await app.dispose();
+  });
 
   Future<void> pumpPage(WidgetTester tester, Widget page) async {
     tester.view.physicalSize = const Size(900, 2600);
@@ -70,5 +81,31 @@ void main() {
     expect(find.textContaining('最长连续 1 天'), findsWidgets);
     expect(diaryTemplateById('free').body, isEmpty);
     expect(kDiaryTemplates.length, greaterThan(1));
+  });
+
+  testWidgets('年度回顾导出需二次确认，确认态可见',
+      (WidgetTester tester) async {
+    await pumpPage(
+      tester,
+      DiaryYearReviewPage(
+        year: 2026,
+        exportRunner: ({required DiaryYearReview review,
+            required bool confirmed}) =>
+            exportDiaryHandbook(
+          review: review,
+          root: exportRoot,
+          confirmed: confirmed,
+        ),
+      ),
+    );
+    final exportButton = find.widgetWithText(SketchButton, '导出 PDF');
+    await tester.ensureVisible(exportButton);
+    await tester.tap(exportButton);
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(find.textContaining('请先勾选导出确认'), findsOneWidget);
+    await tester.tap(find.text('未确认'));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(find.text('已确认'), findsOneWidget);
+    expect(find.textContaining('真实导出由纯函数测试覆盖'), findsNothing);
   });
 }

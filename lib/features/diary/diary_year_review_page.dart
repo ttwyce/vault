@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/session/app_runtime.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_theme.dart';
@@ -16,12 +17,23 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/diary/diary_meta.dart';
+import '../../data/diary/diary_handbook.dart';
 import '../../data/diary/diary_review.dart';
 
 class DiaryYearReviewPage extends ConsumerStatefulWidget {
-  const DiaryYearReviewPage({super.key, required this.year});
+  const DiaryYearReviewPage({
+    super.key,
+    required this.year,
+    this.exportRunner,
+  });
 
   final int year;
+
+  /// 测试可注入导出目录；生产由 AppRuntime.exportRoot 决定。
+  final Future<DiaryHandbookResult> Function({
+    required DiaryYearReview review,
+    required bool confirmed,
+  })? exportRunner;
 
   @override
   ConsumerState<DiaryYearReviewPage> createState() =>
@@ -30,6 +42,8 @@ class DiaryYearReviewPage extends ConsumerStatefulWidget {
 
 class _DiaryYearReviewPageState extends ConsumerState<DiaryYearReviewPage> {
   DiaryYearReview? _review;
+  bool _exportConfirmed = false;
+  String _exportHint = '';
 
   @override
   void initState() {
@@ -56,6 +70,28 @@ class _DiaryYearReviewPageState extends ConsumerState<DiaryYearReviewPage> {
           year: widget.year,
           entries: entries,
         ));
+  }
+
+  Future<void> _exportPdf(DiaryYearReview review) async {
+    if (!_exportConfirmed) {
+      setState(() => _exportHint = '请先勾选导出确认');
+      return;
+    }
+    final injected = widget.exportRunner;
+    final root = ref.read(appRuntimeProvider).exportRoot;
+    if (injected == null && root == null) {
+      setState(() => _exportHint = '未装配导出目录');
+      return;
+    }
+    final result = injected != null
+        ? await injected(review: review, confirmed: true)
+        : await exportDiaryHandbook(
+            review: review,
+            root: root!,
+            confirmed: true,
+          );
+    if (!mounted) return;
+    setState(() => _exportHint = result.hint);
   }
 
   @override
@@ -130,6 +166,46 @@ class _DiaryYearReviewPageState extends ConsumerState<DiaryYearReviewPage> {
                     const SizedBox(height: SketchSpace.md),
                     Text('补写 ${review.backfilled} 篇',
                         style: context.texts.bodySmall),
+                  ],
+                ),
+              ),
+              const SizedBox(height: SketchSpace.lg),
+              SketchFrame(
+                radius: SketchRadii.b,
+                fill: p.surface,
+                borderColor: p.lineSoft,
+                padding: const EdgeInsets.all(SketchSpace.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('导出 PDF 手账', style: context.texts.titleSmall),
+                    const SizedBox(height: SketchSpace.sm),
+                    Text(
+                      '只导出聚合统计，不含日记正文；需二次确认。',
+                      style: context.texts.bodySmall,
+                    ),
+                    const SizedBox(height: SketchSpace.sm),
+                    GestureDetector(
+                      onTap: () => setState(
+                          () => _exportConfirmed = !_exportConfirmed),
+                      child: SketchTag(
+                        _exportConfirmed ? '已确认' : '未确认',
+                        tone: _exportConfirmed
+                            ? SketchTone.primary
+                            : SketchTone.ghost,
+                        dense: true,
+                      ),
+                    ),
+                    const SizedBox(height: SketchSpace.sm),
+                    SketchButton(
+                      label: '导出 PDF',
+                      dense: true,
+                      onPressed: () => _exportPdf(review),
+                    ),
+                    if (_exportHint.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: SketchSpace.sm),
+                      Text(_exportHint, style: context.texts.bodySmall),
+                    ],
                   ],
                 ),
               ),

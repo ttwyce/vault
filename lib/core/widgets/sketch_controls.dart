@@ -53,8 +53,8 @@ class _SketchButtonState extends State<SketchButton> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: enabled ? (_) => setState(() => _down = true) : null,
-        onTapUp: enabled
-            ? (_) {
+        onTap: enabled
+            ? () {
                 setState(() => _down = false);
                 widget.onPressed!.call();
               }

@@ -54,10 +54,17 @@ void main() {
 
     await tester.tap(find.text('新增字段'));
     await tester.pump(const Duration(milliseconds: 100));
-    final fields = find.byType(TextField);
-    expect(fields, findsNWidgets(2));
-    await tester.enterText(fields.at(0), '备用邮箱');
-    await tester.enterText(fields.at(1), 'me@example.com');
+    // Passkey 登记卡片也有 4 个输入框；动态字段用固定 hint 区分。
+    // hintText 不是 child Text，用 decoration 精确匹配。
+    final dynamicFields = find.byWidgetPredicate(
+      (Widget w) =>
+          w is TextField &&
+          (w.decoration?.hintText == '字段名' ||
+              w.decoration?.hintText == '字段值'),
+    );
+    expect(dynamicFields, findsNWidgets(2));
+    await tester.enterText(dynamicFields.at(0), '备用邮箱');
+    await tester.enterText(dynamicFields.at(1), 'me@example.com');
     await tester.tap(find.text('保存全部字段'));
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -82,8 +89,8 @@ void main() {
     await tester.tap(find.text('开发平台'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('secret 字段'), findsNothing);
-    // 模板有 3 个字段，其中 API Token 是 secret。
-    expect(find.byType(TextField), findsNWidgets(6));
+    // 4 个 Passkey 输入 + 模板 3×2 个动态字段输入。
+    expect(find.byType(TextField), findsNWidgets(10));
     // 开发平台模板只有 1 个 secret（API Token）；切成普通字段后
     // 保存，应验证 toggle 真的落库，而不是误断言仍有 secret。
     await tester.tap(find.text('秘密字段'));
