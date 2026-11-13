@@ -472,7 +472,7 @@ void main() {
     }
   });
 
-  test('PUT 无响应 ETag 时用 HEAD 回读，不退化成空条件', () async {
+  test('PUT 无响应 ETag 时用 GET 回读，不退化成空条件', () async {
     server.noPutEtag = true;
     const String path = '/vault/items/0/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.enc';
     final put = await backend.put(
@@ -481,7 +481,7 @@ void main() {
       condition: const WebDavCondition.createOnly(),
     );
     expect(put.etag, isNotEmpty);
-    expect(server.calls, contains('HEAD $path'));
+    expect(server.calls, contains('GET $path'));
     // 下一轮用它做 If-Match 必须成功。
     final next = await backend.put(
       path,
@@ -491,7 +491,7 @@ void main() {
     expect(next.statusCode, HttpStatus.noContent);
   });
 
-  test('PUT 与 HEAD 都没有 ETag 时抛 E_PATH，不返回空条件', () async {
+  test('PUT 与 GET 都没有 ETag 时抛 E_PATH，不返回空条件', () async {
     server.noPutEtag = true;
     // 让 HEAD 也拿不到：直接清空该路径的 ETag 头通过覆写 response 较难，
     // 这里用独立服务器验证「服务器完全不实现 HEAD」的退化路径。
@@ -560,7 +560,7 @@ void main() {
     final got = await backend.get(path);
     expect(utf8.decode(got.bytes), '内容');
     expect(got.etag, isNotEmpty);
-    expect(server.calls, contains('HEAD $path'));
+    expect(server.calls, contains('GET $path'));
   });
 
   test('302 登录页重定向不被当成写成功，映射为 E_AUTH', () async {
@@ -673,5 +673,54 @@ void main() {
     expect(listings.first.path, '/vault/items/0/a.enc');
     expect(listings.first.etag, '"x1"');
     expect(listings.last.etag, isNull, reason: '404 的 response 必须收敛成 null');
+  });
+
+  test('坚果云差异：服务端忽略 If-None-Match 时后端预检仍防覆盖', () async {
+    final srv = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => srv.close(force: true));
+    final files = <String, List<int>>{};
+    srv.listen((HttpRequest request) async {
+      final path = request.uri.path;
+      if (request.method == 'GET') {
+        final bytes = files[path];
+        if (bytes == null) {
+          request.response.statusCode = HttpStatus.notFound;
+        } else {
+          request.response.headers.set('etag', '"v1"');
+          request.response.add(bytes);
+        }
+        await request.response.close();
+        return;
+      }
+      if (request.method == 'PUT') {
+        // 故意忽略 If-None-Match: *，模拟坚果云行为。
+        final body = await request.fold<List<int>>(
+            <int>[], (List<int> a, List<int> c) => a..addAll(c));
+        files[path] = body;
+        request.response.statusCode = HttpStatus.created;
+        request.response.headers.set('etag', '"v1"');
+        await request.response.close();
+        return;
+      }
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      await request.response.close();
+    });
+    final b = HttpClientWebDavBackend(
+      HttpWebDavConfig(rootUrl: 'http://127.0.0.1:${srv.port}'),
+    );
+    addTearDown(b.close);
+    const path = '/vault/items/0/jianguoyun.enc';
+    await b.put(path, utf8.encode('v1'),
+        condition: const WebDavCondition.createOnly());
+    await expectLater(
+      b.put(path, utf8.encode('v2'),
+          condition: const WebDavCondition.createOnly()),
+      throwsA(isA<WebDavException>().having(
+        (WebDavException e) => e.statusCode,
+        '412',
+        412,
+      )),
+    );
+    expect(utf8.decode((await b.get(path)).bytes), 'v1');
   });
 }

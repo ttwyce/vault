@@ -4,6 +4,35 @@
 
 ---
 
+## v2.28 · 2026-11-13
+
+### 真实坚果云 WebDAV 验证与服务端兼容修复
+
+- 使用用户临时提供的坚果云账号，在隔离目录
+  `vault-a5-jg-*` 内实测 `https://dav.jianguoyun.com/dav/`：
+  OPTIONS / PROPFIND / MKCOL / GET / PUT / DELETE / `If-Match` 412 全部通过。
+  凭据只走环境变量与临时脚本，未写入仓库、日志或提交；测试目录已用独立
+  前缀隔离。
+- 实测发现两个真实服务商差异：坚果云成功 PUT 不返回 ETag（GET/HEAD 才有），
+  且忽略 `If-None-Match: *`（重复 createOnly PUT 会静默覆盖）。
+  `HttpClientWebDavBackend` 修为：PUT 无 ETag 时用 GET 回读；
+  createOnly 先做 GET 存在性预检，明确 412 防覆盖。
+- 项目后端在坚果云上复测通过；`VaultSyncRuntime` 真实一轮同步
+  （水位发布、taxonomy 完成）与 A/B 两设备加密条目收敛均通过，
+  B 设备解密后标题/正文逐字一致。
+- 新增本地桩回归「服务端忽略 If-None-Match 时仍防覆盖」，更新 ETag
+  回读测试为 GET 兜底。
+- **口径不变**：A5 原文写的是 `webdav_plus` 双服务商，但项目实际用
+  `dart:io` 后端且 pubspec 禁改，故只记「两侧真实 HTTP 行为已验证」；
+  26 个真实同步用例、三套服务器环境、5000 条基线仍未跑满，
+  `VaultSyncRuntime` 仍零生产引用，M3 硬门槛未过。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1148/1148 passed**；
+`git diff --check` OK；本地未执行构建。
+
+---
+
 ## v2.27 · 2026-11-13
 
 ### MCP loopback transport 与本机性能探针

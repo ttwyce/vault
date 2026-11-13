@@ -369,6 +369,17 @@ class HttpClientWebDavBackend implements WebDavBackend {
     if (!condition.isValid) {
       throw ArgumentError.value(condition, 'condition', '条件写不能同时为空');
     }
+    if (condition.isCreateOnly) {
+      // 坚果云忽略 `If-None-Match: *`：重复 createOnly PUT 会静默覆盖。
+      // 先在后端层做一次 GET 存在性预检，保持「永不覆盖」语义；
+      // 只有明确 404 才继续 PUT，其它错误原样抛。
+      try {
+        await get(path);
+        throw WebDavPreconditionFailed(method: 'PUT', path: path);
+      } on WebDavException catch (e) {
+        if (e.statusCode != 404) rethrow;
+      }
+    }
     final response = await _send(
       'PUT',
       path,
@@ -381,16 +392,13 @@ class HttpClientWebDavBackend implements WebDavBackend {
     await response.drain<void>();
     var etag = _header(response, 'etag') ?? '';
     if (etag.isEmpty) {
-      // 部分 WebDAV 实现（尤其坚果云一类）成功 PUT 不在响应头给 ETag。
-      // 空 ETag 会被 SyncEngine 写进 syncState，下一轮退化成 createOnly
-      // 并陷入 412 死循环。这里用一次 HEAD 回读真实 ETag 兜底；
-      // 仍拿不到就抛 E_PATH，交由调用方下一轮重新发现，绝不静默返回空。
+      // 坚果云成功 PUT 不返回 ETag，HEAD 也不带；必须用 GET 回读真实
+      // ETag（GET 响应头有），否则 syncState 会被写成空、下一轮 412 死循环。
       try {
-        final head = await _send('HEAD', path);
-        await head.drain<void>();
-        etag = _header(head, 'etag') ?? '';
+        final readBack = await get(path);
+        etag = readBack.etag;
       } on WebDavException {
-        // HEAD 不被支持时也不伪造 ETag。
+        // 仍拿不到就抛 E_PATH，交由调用方下一轮重新发现，绝不静默返回空。
       }
     }
     if (etag.isEmpty) {
@@ -398,7 +406,7 @@ class HttpClientWebDavBackend implements WebDavBackend {
         statusCode: 409,
         method: 'PUT',
         path: path,
-        message: 'PUT 成功但服务器未提供 ETag',
+        message: 'PUT 成功但 GET/HEAD 均未提供 ETag',
       );
     }
     return WebDavPutResult(
