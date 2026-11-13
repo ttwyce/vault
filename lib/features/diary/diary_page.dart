@@ -19,6 +19,7 @@ import '../../data/diary/diary_meta.dart';
 import '../../data/diary/diary_month_summary.dart';
 import '../../data/diary/diary_review.dart';
 import '../../data/diary/diary_streak.dart';
+import '../../data/platform/platform_capability_bridge.dart';
 import '../../data/write/write_gateway.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
@@ -230,6 +231,29 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     setState(() => _templateId = picked);
   }
 
+  Future<void> _voiceDiary() async {
+    String text;
+    try {
+      text = (await const PlatformCapabilityBridge().transcribeVoice()).text;
+    } on PlatformCapabilityUnavailable {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('语音转写需要平台录音/STT 实现，当前请用文字输入'),
+        ));
+      }
+      return;
+    }
+    if (!mounted || text.trim().isEmpty) return;
+    final day = _selectedDay ?? DateTime.now().day;
+    final date = diaryKey(DateTime(_month.year, _month.month, day));
+    await Navigator.of(context).push<void>(sketchPageRoute<void>(EditorPage(
+          initialKind: EntryKind.diary,
+          initialDate: date,
+          initialBody: text,
+        )));
+    if (mounted) await _load();
+  }
+
   void _openEditor({String? entryId}) {
     // docs/11 §1.2：补写对过去任意一天，date 显式取月历选中日；
     // 没选日期时取今天所在月份里的今天（跨月补写按当前查看月份）。
@@ -268,6 +292,11 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
           label: '生成 AI 日记',
           dense: true,
           onPressed: _generateAiDiary,
+        ),
+        SketchButton(
+          label: '语音转日记',
+          dense: true,
+          onPressed: _voiceDiary,
         ),
         SketchButton(
           label: '补写',

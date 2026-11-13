@@ -4,6 +4,30 @@
 
 ---
 
+## v2.26 · 2026-11-13
+
+### 平台能力桥、RSS/整站计划、标签聚类
+
+- `platform_capability_bridge.dart` 为相机扫码 / 语音转写 / 托盘热键 /
+  Autofill 候选提供 `vault/platform` 接口；缺原生实现时显式抛
+  `PlatformCapabilityUnavailable`，候选含密钥材料本地拒绝。
+  TOTP 页接「相机扫码」，日记页接「语音转日记」（转写结果走编辑器
+  `initialBody`），均不假称原生能力已可用。
+- `site_feed.dart` 用 dart:io 真实 GET RSS/Atom，正则解析 link/href、
+  去重并生成 `site_archive` 队列计划；`tag_cluster.dart` 基于标签共现
+  与显示名归一化给出聚类建议（不写库、不调模型）。
+- 新增 `platform_capability_bridge_test.dart` 2 条与
+  `site_feed_and_cluster_test.dart` 3 条，覆盖本地 HttpServer feed。
+- **仍需外部**：Android Autofill Service / iOS Credential Provider /
+  相机识别 / STT / Windows 托盘热键的原生实现与真机验收；MCP transport、
+  端侧模型推理、商店审核、26 用例与性能基线仍未过。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1143/1143 passed**；
+`git diff --check` OK；未执行构建。
+
+---
+
 ## v2.25 · 2026-11-13
 
 ### 剪藏分享入口与生物识别平台声明

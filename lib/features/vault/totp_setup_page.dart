@@ -17,6 +17,7 @@ import '../../core/widgets/sketch_field.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/totp.dart';
+import '../../data/platform/platform_capability_bridge.dart';
 import '../../data/vault/totp_setup.dart';
 
 class TotpSetupPage extends ConsumerStatefulWidget {
@@ -52,6 +53,19 @@ class _TotpSetupPageState extends ConsumerState<TotpSetupPage> {
     final secret = normalizeTotpSecret(raw);
     if (secret == null) return null;
     return (secret: secret, label: widget.title);
+  }
+
+  Future<void> _scanQr() async {
+    try {
+      final result = await const PlatformCapabilityBridge().scanQr();
+      if (!mounted) return;
+      setState(() {
+        _input.text = result.value;
+        _hint = '${result.hint}，请校验后保存';
+      });
+    } on PlatformCapabilityUnavailable catch (e) {
+      if (mounted) setState(() => _hint = e.toString());
+    }
   }
 
   void _preview() {
@@ -139,6 +153,11 @@ class _TotpSetupPageState extends ConsumerState<TotpSetupPage> {
                     spacing: SketchSpace.sm,
                     runSpacing: SketchSpace.sm,
                     children: <Widget>[
+                      SketchButton(
+                        label: '相机扫码',
+                        dense: true,
+                        onPressed: _busy ? null : _scanQr,
+                      ),
                       SketchButton(
                         label: '校验并预览',
                         dense: true,
