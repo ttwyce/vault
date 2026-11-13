@@ -17,10 +17,12 @@ import '../../data/db/tables/entry_tables.dart';
 import '../../data/entry/entry_models.dart';
 import '../../data/diary/diary_meta.dart';
 import '../../data/diary/diary_month_summary.dart';
+import '../../data/diary/diary_review.dart';
 import '../../data/diary/diary_streak.dart';
 import '../../data/write/write_gateway.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
+import 'diary_year_review_page.dart';
 import '../../core/widgets/sketch_transitions.dart';
 
 /// 日历格子里的状态点直径。刻意不放进 [SketchSpace]：
@@ -53,6 +55,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
   Map<String, List<String>> _citationsById = const <String, List<String>>{};
   int? _selectedDay;
   bool _loading = true;
+  String _templateId = kDiaryTemplates.first.id;
 
   @override
   void initState() {
@@ -206,13 +209,38 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     );
   }
 
+  Future<void> _chooseTemplate() async {
+    final picked = await showSketchDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('选择日记模板'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final template in kDiaryTemplates)
+              ListTile(
+                title: Text(template.label),
+                onTap: () => Navigator.of(dialogContext).pop(template.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _templateId = picked);
+  }
+
   void _openEditor({String? entryId}) {
     // docs/11 §1.2：补写对过去任意一天，date 显式取月历选中日；
     // 没选日期时取今天所在月份里的今天（跨月补写按当前查看月份）。
     final day = _selectedDay ?? DateTime.now().day;
     final date = diaryKey(DateTime(_month.year, _month.month, day));
     Navigator.of(context).push(sketchPageRoute<void>(entryId == null
-          ? EditorPage(initialKind: EntryKind.diary, initialDate: date)
+          ? EditorPage(
+              initialKind: EntryKind.diary,
+              initialDate: date,
+              initialBody: diaryTemplateById(_templateId).body,
+            )
           : EditorPage(entryId: entryId),
     ));
   }
@@ -222,6 +250,20 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     return PageScaffold(
       title: '日记',
       actions: <Widget>[
+        SketchButton(
+          label: '年度回顾',
+          dense: true,
+          onPressed: () => Navigator.of(context).push<void>(
+            sketchPageRoute<void>(
+              DiaryYearReviewPage(year: _month.year),
+            ),
+          ),
+        ),
+        SketchButton(
+          label: '模板：${diaryTemplateById(_templateId).label}',
+          dense: true,
+          onPressed: _chooseTemplate,
+        ),
         SketchButton(
           label: '生成 AI 日记',
           dense: true,

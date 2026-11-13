@@ -37,6 +37,7 @@ class EditorPage extends ConsumerStatefulWidget {
     this.entryId,
     this.initialKind = EntryKind.note,
     this.initialDate,
+    this.initialBody,
   });
 
   /// 为 null 表示新建；非空表示编辑已有条目。
@@ -47,6 +48,9 @@ class EditorPage extends ConsumerStatefulWidget {
 
   /// 新建日记的归属日期（YYYY-MM-DD）；补写过去某一天时由日记页传入。
   final String? initialDate;
+
+  /// 新建时预填的正文（日记模板）；编辑已有条目时忽略。
+  final String? initialBody;
 
   @override
   ConsumerState<EditorPage> createState() => _EditorPageState();
@@ -137,7 +141,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
 
     if (!mounted) return;
     _title.text = title;
-    _body.text = body;
+    _body.text = widget.entryId == null
+        ? (widget.initialBody ?? body)
+        : body;
     setState(() {
       _categories = categories;
       _tags = tags;

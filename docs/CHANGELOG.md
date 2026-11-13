@@ -4,6 +4,30 @@
 
 ---
 
+## v2.15 · 2026-11-13
+
+### 第四批缺口：日记模板与年度回顾
+
+- 新增 `diary_review.dart`：4 套日记模板（自由记录 / 三件事 / 复盘 / 感恩）
+  与年度回顾纯聚合（月份篇数、平均字数、心情分布、全年最长连续段、
+  补写篇数、活跃天数）。不改数据库结构，全部读真实 `entry.meta`。
+- `EditorPage` 新增 `initialBody`，日记页选择模板后「补写」会带着模板正文
+  打开编辑器；`DiaryYearReviewPage` 以只读页面展示当前年份真实汇总，
+  生成 AI 文本 / PDF 手账仍明确列为未完成。
+- 新增 `diary_review_test.dart` 3 条、`diary_review_page_test.dart` 2 条：
+  模板唯一性、跨年过滤、月份/字数/心情/连续天数聚合、模板预填与回顾入口。
+
+**仍未完成**：Passkey 存储（需独立数据结构与 WebAuthn 平台能力）、
+PDF 手账 / 语音转日记、Android Autofill / iOS Credential Provider /
+Windows 托盘热键、相机扫码平台通道、生物识别真机传感器验收、
+26 个真实同步用例、A5 坚果云侧、三套服务器环境、5000 条性能基线。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1115/1115 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.14 · 2026-11-13
 
 ### 第三批缺口：分组拖拽换组与 TOTP 绑定
