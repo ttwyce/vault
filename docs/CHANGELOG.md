@@ -4,6 +4,26 @@
 
 ---
 
+## v2.22 · 2026-11-13
+
+### 批次 4：set_category 工具与剩余缺口口径
+
+- `agent_tools.dart` 新增 `set_category`（confirm / L1）：把条目移动到
+  已存在分类或移出分类，调用 `WriteGateway.setEntryTaxonomy` 并保留已有
+  标签；工具注册表由 18 增至 19，测试同步更新。
+- 补 `agent_tools_test.dart` 一条：confirm 风险、设置分类、移出分类、
+  标签不变。
+- **未硬造的缺口**：分类字段模板目前 `CredentialGroupRepository` 直写
+  `category_field_template` 表，未走 `WriteGateway` / taxonomy 同步实体；
+  每日校准任务也没有。两项涉及数据库/同步结构变更，按硬规则不绕过网关
+  直写，继续留作待办；平台原生能力、真实服务器/真机/外部账号验收同理。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1134/1134 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.21 · 2026-11-13
 
 ### 半接线收敛与中文 PDF（批次 3）

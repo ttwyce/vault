@@ -6,7 +6,8 @@ import 'package:vault/data/agent/agent_tools.dart';
 import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/db/vault_database.dart';
 import 'package:vault/data/entry/entry_repository.dart';
-import 'package:vault/data/taxonomy/taxonomy_models.dart' show TagWrite;
+import 'package:vault/data/taxonomy/taxonomy_models.dart'
+    show CategoryWrite, TagWrite;
 import 'package:vault/data/taxonomy/taxonomy_repository.dart';
 import 'package:vault/data/vault/credential_repository.dart';
 import 'package:vault/data/write/write_gateway.dart';
@@ -48,8 +49,8 @@ void main() {
         entryKind: entryKind,
       );
 
-  test('注册表导出 18 个工具的 schema', () {
-    expect(registry.length, 18);
+  test('注册表导出 19 个工具的 schema', () {
+    expect(registry.length, 19);
     final names = registry.schemas()
         .map((Map<String, Object?> s) => s['name'] as String)
         .toSet();
@@ -71,6 +72,7 @@ void main() {
       'open_entry',
       'update_entry',
       'add_tags',
+      'set_category',
       'archive_url',
     });
   });
@@ -313,5 +315,59 @@ void main() {
     final tagIds = await TaxonomyRepository(db: app.db, gateway: app.gateway)
         .tagIdsForEntry('e1');
     expect(tagIds.toSet(), hasLength(2));
+  });
+
+  test('set_category 保留已有标签并支持移出分类', () async {
+    await app.gateway.writeEntry(EntryWrite.create(
+      id: 'e-set-cat',
+      title: '分类笔记',
+      body: '正文',
+    ));
+    final category = await app.gateway.writeCategory(CategoryWrite.create(
+      id: 'cat-a',
+      name: '工作',
+    ));
+    final tag = await app.gateway.writeTag(TagWrite.create(name: '重要'));
+    await app.gateway.setEntryTaxonomy(
+      entryId: 'e-set-cat',
+      tagIds: <String>[tag.snapshot.id],
+    );
+    final withTaxonomy = buildDefaultToolRegistry(AgentToolDeps(
+      entries: EntryRepository(app.db),
+      credentials: CredentialRepository(app.db, app.gateway),
+      gateway: app.gateway,
+      taxonomy: TaxonomyRepository(db: app.db, gateway: app.gateway),
+    ));
+    final tool = withTaxonomy.lookup('set_category')!;
+    expect(tool.risk, RiskLevel.confirm);
+    final set = await invokeTool(
+      withTaxonomy,
+      'set_category',
+      ctx(
+        confirmed: true,
+        args: <String, Object?>{
+          'entryId': 'e-set-cat',
+          'categoryId': category.snapshot.id,
+        },
+      ),
+    );
+    expect(set.isError, isFalse, reason: set.content);
+    expect((await app.db.select(app.db.entryCategories).get()).single.categoryId,
+        'cat-a');
+    expect((await app.db.select(app.db.entryTags).get()).single.tagId,
+        tag.snapshot.id);
+
+    final cleared = await invokeTool(
+      withTaxonomy,
+      'set_category',
+      ctx(
+        confirmed: true,
+        args: <String, Object?>{'entryId': 'e-set-cat'},
+      ),
+    );
+    expect(cleared.isError, isFalse, reason: cleared.content);
+    expect(await app.db.select(app.db.entryCategories).get(), isEmpty);
+    expect((await app.db.select(app.db.entryTags).get()).single.tagId,
+        tag.snapshot.id);
   });
 }

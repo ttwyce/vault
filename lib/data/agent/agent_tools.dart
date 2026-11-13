@@ -77,6 +77,7 @@ AgentToolRegistry buildDefaultToolRegistry(AgentToolDeps deps) =>
       ..register(_OpenEntryTool(deps))
       ..register(_UpdateEntryTool(deps))
       ..register(_AddTagsTool(deps))
+      ..register(_SetCategoryTool(deps))
       ..register(_ArchiveUrlTool(deps));
 
 /// credential_health：只返回聚合统计（docs/07 §4.3）。
@@ -597,6 +598,66 @@ class _AddTagsTool extends _BaseTool {
       errors.isEmpty ? summary : '$summary；失败：${errors.join("；")}',
       isError: succeeded == 0,
     );
+  }
+}
+
+/// confirm：把条目归入指定分类，保留已有标签（docs/11 §5）。
+class _SetCategoryTool extends _BaseTool {
+  const _SetCategoryTool(this.deps);
+
+  final AgentToolDeps deps;
+
+  @override
+  String get name => 'set_category';
+
+  @override
+  String get description =>
+      '把指定条目移动到一个已存在的分类（保留标签）；'
+      'categoryId 为空表示移出分类。';
+
+  @override
+  Map<String, Object?> get schema => const <String, Object?>{
+        'type': 'object',
+        'properties': <String, Object?>{
+          'entryId': <String, Object?>{'type': 'string'},
+          'categoryId': <String, Object?>{'type': 'string'},
+        },
+        'required': <String>['entryId'],
+      };
+
+  @override
+  RiskLevel get risk => RiskLevel.confirm;
+
+  @override
+  PrivacyLevel get maxPrivacy => PrivacyLevel.l1;
+
+  @override
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final entryId = args['entryId'] as String?;
+    final rawCategory = args['categoryId'];
+    final categoryId = rawCategory is String && rawCategory.trim().isNotEmpty
+        ? rawCategory.trim()
+        : null;
+    if (entryId == null || entryId.isEmpty) {
+      return const ToolResult('缺少 entryId', isError: true);
+    }
+    final taxonomy = deps.taxonomy;
+    if (taxonomy == null) {
+      return const ToolResult('分类仓库不可用', isError: true);
+    }
+    final tags = await taxonomy.tagIdsForEntry(entryId);
+    try {
+      await deps.gateway.setEntryTaxonomy(
+        entryId: entryId,
+        categoryId: categoryId,
+        tagIds: tags,
+      );
+      return ToolResult(
+        categoryId == null ? '已移出分类，标签保留' : '已设置分类：$categoryId',
+      );
+    } on Object catch (e) {
+      return ToolResult('设置分类失败：$e', isError: true);
+    }
   }
 }
 
