@@ -23,11 +23,12 @@ import 'sync_runtime.dart';
 import 'sync_state_machine.dart';
 import 'webdav_backend.dart';
 
-/// 白名单：只有这三实体允许走 `/vault/entities/`。
+/// 白名单：只有这四类实体允许走 `/vault/entities/`。
 const Set<String> kSyncEntityTaxonomy = <String>{
   SyncEntity.category,
   SyncEntity.tag,
   SyncEntity.entryTaxonomy,
+  SyncEntity.categoryFieldTemplate,
 };
 
 bool isSyncEntityTaxonomy(String entity) =>

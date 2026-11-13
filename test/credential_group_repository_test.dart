@@ -4,6 +4,7 @@ import 'package:vault/data/db/tables/entry_tables.dart';
 import 'package:vault/data/taxonomy/taxonomy_models.dart';
 import 'package:vault/data/vault/credential_group_repository.dart';
 import 'package:vault/data/vault/credential_models.dart';
+import 'package:vault/data/db/tables/log_tables.dart';
 
 import 'support/test_harness.dart';
 
@@ -14,7 +15,7 @@ void main() {
 
   setUp(() async {
     app = await TestApp.create();
-    repo = CredentialGroupRepository(db: app.db, uuid: app.uuid);
+    repo = CredentialGroupRepository(db: app.db, gateway: app.gateway);
   });
   tearDown(() async => app.dispose());
 
@@ -63,6 +64,27 @@ void main() {
     expect(fields.fields.first.value, isEmpty);
     expect(fields.fields.last.secret, isTrue);
     expect(fields.fields.last.value, isEmpty);
+  });
+
+  test('模板写入走 WriteGateway 并产生 taxonomy oplog', () async {
+    await repo.addTemplateField(
+      categoryId: 'g1',
+      label: '令牌',
+      type: 'text',
+      secret: true,
+    );
+    final rows = await app.db.select(app.db.oplogs).get();
+    expect(
+      rows.any((r) =>
+          r.entity == SyncEntity.categoryFieldTemplate &&
+          r.entityId.isNotEmpty),
+      isTrue,
+      reason: '模板必须进 oplog 才能跨设备同步',
+    );
+    expect(
+      (await app.db.select(app.db.categoryFieldTemplates).get()).single.label,
+      '令牌',
+    );
   });
 
   test('无分组 / 无模板返回空字段；空 label 拒绝', () async {

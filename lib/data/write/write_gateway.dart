@@ -2220,10 +2220,86 @@ class WriteGateway {
     return OplogOp.update;
   }
 
+  /// 写入一条分类字段模板：经唯一写入口追加 taxonomy oplog，
+  /// 供 `/vault/entities/` 独立通道同步；不再由仓储直写表。
+  Future<TaxonomyWriteResult> writeCategoryFieldTemplate({
+    required String categoryId,
+    required String label,
+    String type = 'text',
+    bool secret = false,
+    int sortOrder = 0,
+  }) {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('模板字段名不能为空');
+    }
+    return _db.transaction(() async {
+      final key = await _keys.item();
+      final duplicate = await (_db.select(_db.categoryFieldTemplates)
+            ..where((t) =>
+                t.categoryId.equals(categoryId) & t.label.equals(trimmed)))
+          .get();
+      if (duplicate.isNotEmpty) {
+        throw FormatException('该分组已有字段「$trimmed」');
+      }
+      final hlc = _clock.tick();
+      final id = _uuid.next();
+      final snapshot = TaxonomySnapshot(
+        entity: SyncEntity.categoryFieldTemplate,
+        id: id,
+        rev: await _nextRev(SyncEntity.categoryFieldTemplate, id),
+        hlc: hlc.encode(),
+        updatedAt: hlc.millis,
+        deleted: false,
+        fields: <String, Object?>{
+          'category_id': categoryId,
+          'label': trimmed,
+          'type': type,
+          'secret': secret ? 1 : 0,
+          'sort_order': sortOrder,
+        },
+      );
+      return _commitTaxonomy(
+        snapshot: snapshot,
+        op: OplogOp.create,
+        key: key,
+        apply: () => _applyCategoryFieldTemplateSnapshot(snapshot),
+      );
+    });
+  }
+
+  Future<void> _applyCategoryFieldTemplateSnapshot(
+      TaxonomySnapshot snapshot) async {
+    final categoryId = _stringField(snapshot.fields, 'category_id');
+    final label = _stringField(snapshot.fields, 'label');
+    if (categoryId == null || label == null) {
+      throw WriteException('invalid', '字段模板快照缺少 category_id / label');
+    }
+    await _db.into(_db.categoryFieldTemplates).insertOnConflictUpdate(
+          CategoryFieldTemplatesCompanion(
+            id: Value<String>(snapshot.id),
+            categoryId: Value<String>(categoryId),
+            label: Value<String>(label),
+            type: Value<String>(
+                _stringField(snapshot.fields, 'type') ?? 'text'),
+            secret: Value<int>(_intField(snapshot.fields, 'secret', 0)),
+            sortOrder:
+                Value<int>(_intField(snapshot.fields, 'sort_order', 0)),
+            hlc: Value<String>(snapshot.hlc),
+          ),
+        );
+    if (snapshot.deleted) {
+      await (_db.delete(_db.categoryFieldTemplates)
+            ..where((t) => t.id.equals(snapshot.id)))
+          .go();
+    }
+  }
+
   bool _isTaxonomyEntity(String entity) =>
       entity == SyncEntity.category ||
       entity == SyncEntity.tag ||
-      entity == SyncEntity.entryTaxonomy;
+      entity == SyncEntity.entryTaxonomy ||
+      entity == SyncEntity.categoryFieldTemplate;
 
   Future<void> _applyTaxonomySnapshot(TaxonomySnapshot snapshot) async {
     switch (snapshot.entity) {
@@ -2235,6 +2311,9 @@ class WriteGateway {
         return;
       case SyncEntity.entryTaxonomy:
         await _applyEntryTaxonomySnapshot(snapshot);
+        return;
+      case SyncEntity.categoryFieldTemplate:
+        await _applyCategoryFieldTemplateSnapshot(snapshot);
         return;
       default:
         throw WriteException('invalid', '不支持的 taxonomy 实体 ${snapshot.entity}');

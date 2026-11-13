@@ -2,14 +2,15 @@
 ///
 /// 分组复用 `category.kind = 6`，模板存 `category_field_template`；
 /// 模板只带结构不带值，建号时用 [instantiateForGroup] 生成空 [CustomFields]。
-/// 不碰同步通道（模板随 taxonomy 通道加密同步由平台层接）。
+/// 模板写入统一走 [WriteGateway] 的 taxonomy oplog，随
+/// `/vault/entities/` 独立通道加密同步；不绕过唯一写入口。
 library;
 
 import 'package:drift/drift.dart';
 
 import '../db/tables/entry_tables.dart';
 import '../db/vault_database.dart';
-import '../../core/identity/uuid_v7.dart' show UuidV7;
+import '../write/write_gateway.dart';
 import 'credential_models.dart';
 
 /// 模板项（数据库行）。
@@ -32,11 +33,11 @@ class FieldTemplateRowView {
 class CredentialGroupRepository {
   CredentialGroupRepository({
     required this.db,
-    UuidV7? uuid,
-  }) : _uuid = uuid ?? UuidV7();
+    required this.gateway,
+  });
 
   final VaultDatabase db;
-  final UuidV7 _uuid;
+  final WriteGateway gateway;
 
   /// 只读列出账号分组（两级树，kind=6，未删除）。
   Future<List<CategoryRow>> groups() async =>
@@ -49,7 +50,7 @@ class CredentialGroupRepository {
             ]))
           .get();
 
-  /// 写入一条模板字段；label 重复时明确拒绝。
+  /// 写入一条模板字段：经 [WriteGateway] 追加 oplog，可跨设备同步。
   Future<void> addTemplateField({
     required String categoryId,
     required String label,
@@ -58,28 +59,13 @@ class CredentialGroupRepository {
     int sortOrder = 0,
     String? hlc,
   }) async {
-    final trimmed = label.trim();
-    if (trimmed.isEmpty) {
-      throw const FormatException('模板字段名不能为空');
-    }
-    final existing = await (db.select(db.categoryFieldTemplates)
-          ..where((t) =>
-              t.categoryId.equals(categoryId) & t.label.equals(trimmed)))
-        .get();
-    if (existing.isNotEmpty) {
-      throw FormatException('该分组已有字段「$trimmed」');
-    }
-    await db.into(db.categoryFieldTemplates).insert(
-          CategoryFieldTemplatesCompanion.insert(
-            id: _uuid.next(),
-            categoryId: categoryId,
-            label: trimmed,
-            type: Value<String>(type),
-            secret: Value<int>(secret ? 1 : 0),
-            sortOrder: Value<int>(sortOrder),
-            hlc: hlc ?? '0000000000000000:0000:local',
-          ),
-        );
+    await gateway.writeCategoryFieldTemplate(
+      categoryId: categoryId,
+      label: label,
+      type: type,
+      secret: secret,
+      sortOrder: sortOrder,
+    );
   }
 
   /// 读取某分组的模板字段（按 sortOrder）。

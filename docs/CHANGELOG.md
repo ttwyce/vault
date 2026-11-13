@@ -4,6 +4,26 @@
 
 ---
 
+## v2.23 · 2026-11-13
+
+### 分类字段模板改为真实同步实体
+
+- 新增 `SyncEntity.categoryFieldTemplate`，加入
+  `kSyncEntityTaxonomy` 白名单与 `WriteGateway._isTaxonomyEntity` /
+  `_applyTaxonomySnapshot` 分支；模板写入统一走
+  `WriteGateway.writeCategoryFieldTemplate`，生成 taxonomy oplog 并可被
+  远端快照落库。不新增表、不改 pubspec。
+- `CredentialGroupRepository` 不再直写 `category_field_template`，
+  构造改用 `WriteGateway`；`VaultPage` 与两处测试同步更新。
+- 新增测试断言模板写入产生 `category_field_template` oplog；
+  既有 taxonomy/同步测试全绿。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1135/1135 passed**；
+`git diff --check` OK；未执行构建。
+
+---
+
 ## v2.22 · 2026-11-13
 
 ### 批次 4：set_category 工具与剩余缺口口径

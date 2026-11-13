@@ -122,6 +122,9 @@ abstract final class SyncEntity {
   /// 甚至覆盖掉对方真正的编辑。
   static const String entryTaxonomy = 'entry_taxonomy';
 
+  /// 分类下的字段模板（账号分组复用字段结构）。
+  static const String categoryFieldTemplate = 'category_field_template';
+
   static const String credential = 'credential';
   static const String conversation = 'conversation';
   static const String message = 'message';

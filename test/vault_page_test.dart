@@ -252,7 +252,7 @@ void main() {
       name: '工作开发',
       kind: EntryKind.credential,
     ));
-    final groupRepo = CredentialGroupRepository(db: app.db, uuid: app.uuid);
+    final groupRepo = CredentialGroupRepository(db: app.db, gateway: app.gateway);
     await groupRepo.addTemplateField(
       categoryId: parent.snapshot.id,
       label: '恢复码',

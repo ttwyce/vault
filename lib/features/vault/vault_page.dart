@@ -106,7 +106,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     String? templateId;
     String? groupId;
     final groupRepo =
-        CredentialGroupRepository(db: ref.read(vaultDatabaseProvider));
+        CredentialGroupRepository(db: ref.read(vaultDatabaseProvider), gateway: ref.read(writeGatewayProvider));
     final groupsFuture = groupRepo.groups();
     final title = await showSketchDialog<String>(
       context: context,
@@ -249,6 +249,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
         created.snapshot.id,
         await CredentialGroupRepository(
           db: ref.read(vaultDatabaseProvider),
+          gateway: ref.read(writeGatewayProvider),
         ).instantiateForGroup(groupId!),
       );
     } else if (templateId != null) {
