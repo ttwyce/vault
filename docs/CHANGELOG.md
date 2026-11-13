@@ -4,6 +4,31 @@
 
 ---
 
+## v2.13 · 2026-11-13
+
+### 第二批缺口：自定义字段编辑与入口回归
+
+- 新增 `CredentialFieldsPage`：密码条目自定义字段的真实编辑 UI，支持
+  套用字段模板、新增/删除、上移/下移、字段名与值编辑、secret 字段掩码
+  与显隐切换；保存走 `CredentialRepository.setCustomFields`，整组字段
+  经 K_item 字段级加密落库，明文不写库、不进日志。
+- `VaultPage` 详情面板新增「编辑自定义字段」入口，关闭 sheet 后经统一
+  页面过渡打开字段页，返回时刷新列表。
+- 新增 `credential_fields_page_test.dart` 3 条（加密往返、模板/secret、
+  排序与删除），`settings_entry_regression_test.dart` 2 条（外壳单一齿轮、
+  安全设置/云端模型入口）。
+- 自动锁定 `AutoLockWatcher` 已在 `VaultApp.home` 接线，本轮复核无缺口。
+
+**仍未完成**：密码分组拖拽换组 UI、TOTP 扫码、Passkey、日记模板 / 年度
+回顾 / PDF 手账、平台 channel 真机验收、26 个真实同步用例、A5 坚果云侧、
+三套服务器环境、5000 条性能基线、生物识别真机传感器验收。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1107/1107 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.12 · 2026-11-13
 
 ### 补齐用户指出的功能缺口（第一批）

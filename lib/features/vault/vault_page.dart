@@ -26,6 +26,7 @@ import '../../data/vault/password_generator.dart';
 import '../../data/vault/sensitive_clipboard.dart';
 import '../../data/write/write_gateway.dart';
 import '../../core/widgets/sketch_transitions.dart';
+import 'credential_fields_page.dart';
 
 /// 密码库。
 ///
@@ -457,6 +458,24 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                     }
                   },
                 ),
+              const SizedBox(height: SketchSpace.sm),
+              SketchButton(
+                label: '编辑自定义字段',
+                dense: true,
+                onPressed: () async {
+                  if (sheetContext.mounted) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                  if (!mounted) return;
+                  await Navigator.of(context).push<void>(
+                    sketchPageRoute<void>(CredentialFieldsPage(
+                      credentialId: id,
+                      title: detail.title,
+                    )),
+                  );
+                  if (mounted) setState(() {});
+                },
+              ),
               const SizedBox(height: SketchSpace.sm),
               SketchButton(
                 label: '生成新密码并替换',
