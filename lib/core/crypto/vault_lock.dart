@@ -14,10 +14,20 @@ import 'vault_meta.dart';
 /// 持有一把活着的 DEK。**用完必须 [dispose]** —— 虽然 Dart 的 GC 迟早会回收，
 /// 但锁屏后立刻清零能让"设备被拿走时内存里还有明文密钥"这个窗口尽量小。
 class UnlockedVault {
-  UnlockedVault({required this.meta, required this.keys, this.recoveryCode});
+  UnlockedVault({
+    required this.meta,
+    required this.keys,
+    this.recoveryCode,
+    this.dekForEnrollment,
+  });
 
   final VaultMeta meta;
   final VaultKeys keys;
+
+  /// 仅「本次用主密码 / 恢复码解包」时有值：把原始 DEK 交给系统安全区
+  /// 注册生物识别解锁。生物识别解锁路径没有这个值（它从安全区读回后
+  /// 直接构造 VaultKeys）。绝不写日志、不落本地文件。
+  final SecretBytes? dekForEnrollment;
 
   /// 仅在"刚创建"或"刚重新生成"时有值。
   ///
@@ -113,6 +123,7 @@ abstract final class VaultLock {
       meta: meta,
       keys: VaultKeys(dek),
       recoveryCode: recovery,
+      dekForEnrollment: dek,
     );
   }
 
@@ -298,7 +309,11 @@ abstract final class VaultLock {
         'meta.enc 可能被篡改。',
       );
     }
-    return UnlockedVault(meta: meta, keys: VaultKeys(dek));
+    return UnlockedVault(
+      meta: meta,
+      keys: VaultKeys(dek),
+      dekForEnrollment: dek,
+    );
   }
 
   static Future<void> _verifyUnwraps({

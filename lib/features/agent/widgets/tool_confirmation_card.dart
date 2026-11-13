@@ -6,6 +6,7 @@ import '../../../app/theme/sketch_theme.dart';
 import '../../../core/widgets/sketch_controls.dart';
 import '../../../core/widgets/sketch_frame.dart';
 import '../../../data/agent/agent_policy.dart';
+import '../../../core/widgets/sketch_transitions.dart';
 
 /// 工具确认卡片（docs/07 §4.1）。
 ///
@@ -173,7 +174,7 @@ Future<bool> showToolConfirmation({
   required bool dataLeavesDevice,
   required String modelName,
 }) async {
-  final approved = await showDialog<bool>(
+  final approved = await showSketchDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (BuildContext dialogContext) => Dialog(

@@ -17,6 +17,7 @@ import '../../data/taxonomy/category_reorder.dart';
 import '../../data/taxonomy/taxonomy_models.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/write/write_gateway.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 组织页一次加载的内容。
 typedef OrganizeData = ({
@@ -101,7 +102,7 @@ class _OrganizePageState extends ConsumerState<OrganizePage> {
     String initial = '',
   }) {
     final controller = TextEditingController(text: initial);
-    return showDialog<String>(
+    return showSketchDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: Text(title),
@@ -128,7 +129,7 @@ class _OrganizePageState extends ConsumerState<OrganizePage> {
   }
 
   Future<bool?> _confirm(String title, String detail) {
-    return showDialog<bool>(
+    return showSketchDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: Text(title),

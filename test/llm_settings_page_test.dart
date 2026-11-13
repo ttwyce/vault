@@ -57,7 +57,7 @@ void main() {
     expect(find.textContaining('状态：已配置'), findsOneWidget);
     expect(find.text('sk-from-user'), findsNothing);
 
-    await tester.tap(find.text('清除'));
+    await tester.tap(find.text('清除全部'));
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -76,7 +76,7 @@ void main() {
     addTearDown(container.dispose);
     await pumpPage(tester, store, container);
 
-    await tester.tap(find.text('自定义端点'));
+    await tester.tap(find.text('新增自定义端点'));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.enterText(
         find.descendant(
@@ -136,7 +136,7 @@ void main() {
     addTearDown(container.dispose);
     await pumpPage(tester, store, container);
 
-    await tester.tap(find.text('自定义端点'));
+    await tester.tap(find.text('新增自定义端点'));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.enterText(
         find.descendant(
@@ -180,7 +180,7 @@ void main() {
     addTearDown(container.dispose);
     await pumpPage(tester, store, container);
 
-    expect(find.textContaining('已保存云端 Key（未显示）'), findsOneWidget);
+    expect(find.textContaining('已保存 1 个端点（Key 未显示）'), findsOneWidget);
     expect(find.text('sk-existing-secret'), findsNothing);
     final keyField = tester.widget<TextField>(find.descendant(
         of: field('api-key'), matching: find.byType(TextField)));

@@ -4,6 +4,40 @@
 
 ---
 
+## v2.12 · 2026-11-13
+
+### 补齐用户指出的功能缺口（第一批）
+
+- **过渡动画**：新增 `SketchPageRoute` / `showSketchDialog`，全库页面跳转
+  统一 200ms 淡入 + 位移、对话框 120ms 淡入；尊重系统「减少动效」，
+  禁止回弹与循环动画。所有 `MaterialPageRoute` / `showDialog` 已替换。
+- **重复设置齿轮**：`PageScaffold.showSettings` 默认改为 false，五个主 tab
+  不再各挂一个齿轮；设置改为外壳单一入口（桌面 rail 底部 / 移动底栏末尾）。
+- **多端点 / 模型列表 / 上下文**：`LlmConfigService` 改为档案列表，可新增、
+  切换、移除多个预设与自定义端点，旧单端点配置平滑迁移；
+  `HttpModelCatalog` 真实 GET `/models` 并校验 Authorization；设置页显示
+  上下文预算，`packLlmContext` 把会话历史按 token 预算打包，超预算时把较早
+  轮次压成历史摘要。聊天页由「只发当前问题」改为携带真实会话历史并显示用量。
+- **生物识别解锁**：`BiometricVaultUnlock` 经 `vault/biometric` MethodChannel
+  接 Android `BiometricPrompt` + Keystore、iOS `LAContext` + Keychain；
+  主密码解锁后注册 DEK，认证通过才返回 DEK 并重建 `UnlockedVault`，
+  跳过 Argon2id。失败 5 次强制主密码；Windows 明确标注不可用。
+- **安全设置**：新增改主密码 / 重置恢复码页面与会话动作，均需二次确认，
+  `meta.enc` 原子写回；重置后由闸门自动展示新恢复码。自动锁定已有
+  `AutoLockWatcher` 接线，本轮确认无需重复实现。
+
+**仍未完成（继续开发，不收口）**：密码条目自定义字段编辑 / 拖拽换组 UI、
+TOTP 扫码、Passkey、日记模板 / 年度回顾 / PDF 手账、真实平台 channel 验收
+（Android Autofill / iOS Credential Provider / Windows 托盘热键）、26 个真实
+同步用例、A5 坚果云侧与三套服务器环境、5000 条性能基线。生物识别的原生
+代码需真机编译与传感器验收，本地不执行构建，故只标「代码已落地」。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1102/1102 passed**；
+`git diff --check` OK；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.11 · 2026-11-13
 
 ### 固定 Android debug 签名（解决每次构建签名不一样）

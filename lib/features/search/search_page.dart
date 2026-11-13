@@ -25,6 +25,7 @@ import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
 import 'highlight.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 独立搜索页。
 ///
@@ -304,7 +305,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       label: '问 AI（逐次授权）',
                       dense: true,
                       onPressed: () {
-                        showDialog<void>(
+                        showSketchDialog<void>(
                           context: context,
                           builder: (BuildContext dialogContext) => AlertDialog(
                             title: const Text('隐私提示'),
@@ -353,8 +354,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 query: trimmed,
                 archiveBadge: badges[rows[index].id],
                 onTap: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => EditorPage(entryId: rows[index].id),
+                  sketchPageRoute<void>(EditorPage(entryId: rows[index].id),
                   ),
                 ),
               ),

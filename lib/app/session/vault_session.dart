@@ -7,6 +7,7 @@ import '../../core/crypto/argon2_params.dart';
 import '../../core/crypto/recovery_code.dart';
 import '../../core/crypto/vault_lock.dart';
 import '../../core/crypto/vault_meta.dart';
+import 'biometric_unlock.dart';
 import '../../core/identity/uuid_v7.dart';
 import '../../core/sync/hlc.dart';
 import '../../data/activity/activity_logger.dart';
@@ -313,6 +314,139 @@ class VaultSession extends Notifier<VaultSessionState> {
       unlocked?.dispose();
       state = state.copyWith(
         status: VaultStatus.locked,
+        error: describeFailure(error),
+        clearDeriving: true,
+      );
+    }
+  }
+
+  /// 生物识别解锁：认证通过 → 从系统安全区读回 DEK → 直接进入解锁态。
+  /// 不跑 Argon2id；原生层未就绪 / 未注册 / 认证失败都给出明确错误文案。
+  Future<void> unlockWithBiometric({
+    BiometricVaultUnlock? unlock,
+  }) async {
+    final meta = state.meta;
+    if (meta == null) return;
+    if (state.isBusy) return;
+    final service = unlock ?? const BiometricVaultUnlock();
+    state = state.copyWith(
+      status: VaultStatus.unlocking,
+      clearError: true,
+      derivingSince: DateTime.now(),
+    );
+    UnlockedVault? unlocked;
+    try {
+      final result = await service.unlock(meta);
+      if (!result.ok || result.unlocked == null) {
+        state = state.copyWith(
+          status: VaultStatus.locked,
+          error: result.hint,
+          clearDeriving: true,
+        );
+        return;
+      }
+      final opened = result.unlocked!;
+      unlocked = opened;
+      await _activate(opened);
+    } on Object catch (error) {
+      unlocked?.dispose();
+      state = state.copyWith(
+        status: VaultStatus.locked,
+        error: describeFailure(error),
+        clearDeriving: true,
+      );
+    }
+  }
+
+  /// 主密码 / 恢复码解锁成功后注册生物识别。原始 DEK 只在这一刻可用；
+  /// 锁定时不需要清它（系统安全区由平台访问控制负责）。
+  Future<void> enrollBiometric({
+    required BiometricVaultUnlock unlock,
+    required bool enabled,
+  }) async {
+    final vault = state.unlocked;
+    final dek = vault?.dekForEnrollment;
+    if (vault == null || dek == null) return;
+    if (!enabled) {
+      await unlock.disable();
+      return;
+    }
+    await unlock.enroll(dek: dek);
+  }
+
+  /// 改主密码：只重包 DEK，不换 DEK、不 rekey 本地库。
+  /// 成功后原子写回 meta.enc；DEK 与所有本地数据保持不变。
+  Future<void> changePassphrase({
+    required String currentPassphrase,
+    required String newPassphrase,
+  }) async {
+    final meta = state.meta;
+    if (!state.isUnlocked || meta == null || state.isBusy) return;
+    state = state.copyWith(
+      status: VaultStatus.unlocking,
+      clearError: true,
+      derivingSince: DateTime.now(),
+    );
+    try {
+      final nextMeta = await VaultLock.changePassphrase(
+        meta: meta,
+        currentPassphrase: currentPassphrase,
+        newPassphrase: newPassphrase,
+      );
+      await _storage.writeMeta(nextMeta);
+      final unlocked = state.unlocked!;
+      state = state.copyWith(
+        status: VaultStatus.unlocked,
+        meta: nextMeta,
+        unlocked: UnlockedVault(
+          meta: nextMeta,
+          keys: unlocked.keys,
+          dekForEnrollment: unlocked.dekForEnrollment,
+        ),
+        error: '主密码已更新，DEK 保持不变',
+        clearDeriving: true,
+      );
+    } on Object catch (error) {
+      state = state.copyWith(
+        status: VaultStatus.unlocked,
+        error: describeFailure(error),
+        clearDeriving: true,
+      );
+    }
+  }
+
+  /// 重置恢复码：旧码立即失效，新码只在这次状态里出现一次。
+  Future<void> regenerateRecoveryCode(String passphrase) async {
+    final meta = state.meta;
+    if (!state.isUnlocked || meta == null || state.isBusy) return;
+    state = state.copyWith(
+      status: VaultStatus.unlocking,
+      clearError: true,
+      derivingSince: DateTime.now(),
+    );
+    try {
+      final result = await VaultLock.regenerateRecoveryCode(
+        meta: meta,
+        passphrase: passphrase,
+      );
+      await _storage.writeMeta(result.meta);
+      final unlocked = state.unlocked!;
+      state = state.copyWith(
+        status: VaultStatus.unlocked,
+        meta: result.meta,
+        unlocked: UnlockedVault(
+          meta: result.meta,
+          keys: unlocked.keys,
+          recoveryCode: result.code,
+          dekForEnrollment: unlocked.dekForEnrollment,
+        ),
+        recoveryCode: result.code,
+        error: '恢复码已重置，旧码立即失效',
+        clearDeriving: true,
+      );
+    } on Object catch (error) {
+      state = state.copyWith(
+        status: VaultStatus.unlocked,
         error: describeFailure(error),
         clearDeriving: true,
       );

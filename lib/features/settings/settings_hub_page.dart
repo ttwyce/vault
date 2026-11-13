@@ -22,8 +22,10 @@ import '../settings/fonts_page.dart';
 import '../settings/llm_settings_page.dart';
 import '../settings/models_page.dart';
 import '../settings/pending_jobs_page.dart';
+import '../settings/security_settings_page.dart';
 import '../settings/sync_settings_page.dart';
 import '../trash/trash_page.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 设置中心。
 ///
@@ -117,6 +119,12 @@ class SettingsHubPage extends ConsumerWidget {
                   )),
             ),
             _SettingsTile(
+              glyph: SketchGlyph.vault,
+              title: '安全设置',
+              subtitle: '改主密码、重置恢复码、二次确认',
+              onTap: () => _push(context, const SecuritySettingsPage()),
+            ),
+            _SettingsTile(
               glyph: SketchGlyph.settings,
               title: '同步设置',
               subtitle: 'WebDAV 配置校验，A5 未过不启动同步',
@@ -149,7 +157,7 @@ class SettingsHubPage extends ConsumerWidget {
 
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => page),
+      sketchPageRoute<void>(page),
     );
   }
 }

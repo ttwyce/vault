@@ -18,6 +18,7 @@ import '../theme/bottom_nav_fit.dart';
 import 'desktop_shortcuts.dart';
 import '../theme/sketch_metrics.dart';
 import '../theme/sketch_palette.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 五个顶层分区。顺序即导航顺序，桌面与移动一致。
 enum AppSection { chat, records, diary, archive, vault }
@@ -86,9 +87,7 @@ class _AppShellState extends State<AppShell> {
 
   /// 全局快速记录：任何分区都能一键记一条想法。
   void _openQuickCapture() {
-    Navigator.of(context).push<void>(MaterialPageRoute<void>(
-      builder: (_) => const QuickCapturePage(),
-    ));
+    Navigator.of(context).push<void>(sketchPageRoute<void>(const QuickCapturePage()));
   }
 
   Route<void> _settingsRoute() {
@@ -170,14 +169,25 @@ class _AppShellState extends State<AppShell> {
         // 不再让右下角按钮压住第 5 个 tab「密码」。
         bottomNavigationBar: breakpoint.useRail
             ? null
-            : _BottomNav(current: _index, onSelect: _select),
+            : _BottomNav(
+                current: _index,
+                onSelect: _select,
+                onOpenSettings: _openSettings,
+              ),
         body: SafeArea(
           bottom: false,
           child: breakpoint.useRail
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    SizedBox(width: 68, child: _Rail(current: _index, onSelect: _select)),
+                    SizedBox(
+                      width: 68,
+                      child: _Rail(
+                        current: _index,
+                        onSelect: _select,
+                        onOpenSettings: _openSettings,
+                      ),
+                    ),
                     Expanded(child: body),
                   ],
                 )
@@ -202,7 +212,7 @@ class _AppShellState extends State<AppShell> {
       case DesktopShortcutAction.search:
         if (mounted) {
           Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(builder: (_) => const SearchPage()),
+            sketchPageRoute<void>(const SearchPage()),
           );
         }
       case DesktopShortcutAction.nextSection:
@@ -231,10 +241,15 @@ class _ShortcutIntent {
 // ---------------------------------------------------------------------------
 
 class _Rail extends StatelessWidget {
-  const _Rail({required this.current, required this.onSelect});
+  const _Rail({
+    required this.current,
+    required this.onSelect,
+    required this.onOpenSettings,
+  });
 
   final int current;
   final ValueChanged<int> onSelect;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +278,12 @@ class _Rail extends StatelessWidget {
               ),
             const Spacer(),
             _StatusDot(palette: palette),
+            const SizedBox(height: SketchSpace.sm),
+            SketchIconButton(
+              glyph: SketchGlyph.settings,
+              tooltip: '设置',
+              onPressed: onOpenSettings,
+            ),
           ],
         ),
       ),
@@ -380,10 +401,15 @@ class _StatusDot extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.current, required this.onSelect});
+  const _BottomNav({
+    required this.current,
+    required this.onSelect,
+    required this.onOpenSettings,
+  });
 
   final int current;
   final ValueChanged<int> onSelect;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -412,6 +438,14 @@ class _BottomNav extends StatelessWidget {
                   onTap: () => onSelect(i),
                 ),
               ),
+            SizedBox(
+              width: 38,
+              child: SketchIconButton(
+                glyph: SketchGlyph.settings,
+                tooltip: '设置',
+                onPressed: onOpenSettings,
+              ),
+            ),
           ],
         ),
       ),

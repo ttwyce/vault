@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/session/biometric_session_policy.dart';
+import '../../app/session/biometric_unlock.dart';
 import '../../app/session/unlock_policy.dart';
 import '../../app/session/vault_session.dart';
 import '../../app/theme/sketch_metrics.dart';
@@ -54,6 +56,9 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
   bool _obscure = true;
   UnlockPolicyState _policy = const UnlockPolicyState();
   String? _lastError;
+  bool _biometricAvailable = false;
+  bool _biometricEnrolled = false;
+  final BiometricVaultUnlock _biometric = const BiometricVaultUnlock();
 
   /// 只用于"每秒重建一次"以刷新已用秒数，本身不存任何进度。
   Timer? _ticker;
@@ -64,6 +69,17 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     // gate 在 `unlocking` 状态下也返回本页，所以首帧可能已经处于派生中
     // （例如热重启时）。这里补一次同步，避免计时器晚一秒才起来。
     _syncTicker(ref.read(vaultSessionProvider).isBusy);
+    _probeBiometric();
+  }
+
+  Future<void> _probeBiometric() async {
+    final available = await _biometric.isAvailable();
+    final enrolled = await _biometric.hasEnrollment();
+    if (!mounted) return;
+    setState(() {
+      _biometricAvailable = available;
+      _biometricEnrolled = enrolled;
+    });
   }
 
   @override
@@ -225,9 +241,50 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
               ),
             ),
           ],
+          const SizedBox(height: SketchSpace.sm),
+          _biometricAction(policy, nowMs, busy),
         ],
       ),
     );
+  }
+
+  Widget _biometricAction(
+    UnlockPolicyState policy,
+    int nowMs,
+    bool busy,
+  ) {
+    final decision = decideBiometricGate(
+      platformAvailable: _biometricAvailable,
+      enrolled: _biometricEnrolled,
+      policy: policy,
+      nowMs: nowMs,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        SketchButton(
+          label: decision.gate == BiometricGate.notEnrolled
+              ? '启用生物识别（先输入主密码解锁）'
+              : '用指纹 / 面容解锁',
+          glyph: SketchGlyph.vault,
+          tone: SketchTone.ghost,
+          dense: true,
+          onPressed: busy || decision.gate != BiometricGate.available
+              ? null
+              : _unlockWithBiometric,
+        ),
+        const SizedBox(height: SketchSpace.xs),
+        Text(decision.hint,
+            style: TextStyle(fontSize: 10.5, color: context.sketch.muted)),
+      ],
+    );
+  }
+
+  void _unlockWithBiometric() {
+    ref
+        .read(vaultSessionProvider.notifier)
+        .unlockWithBiometric(unlock: _biometric);
   }
 
   void _toggleMode() {
@@ -241,8 +298,30 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
   void _unlockWithPassphrase() {
     final value = _passphrase.text;
     if (value.isEmpty) return;
-    // 不 await：成功时 gate 会把本页整个换掉，此时再 setState 是无意义的。
+    // 主密码成功解锁后注册生物识别：DEK 只在 _activate 前这一刻可取。
+    unawaited(_enrollAfterPassphrase());
     ref.read(vaultSessionProvider.notifier).unlock(value);
+  }
+
+  Future<void> _enrollAfterPassphrase() async {
+    // 等 unlock 完成后会话里才有 dekForEnrollment；轮询改为一次
+    // Future.delayed 仅作 UI 侧等待，不写任何凭据。
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // 真实 Argon2 派生约 2 秒：由会话状态变为 unlocked 后再注册。
+    for (var i = 0; i < 40; i++) {
+      if (!mounted) return;
+      final session = ref.read(vaultSessionProvider);
+      if (session.isUnlocked) {
+        await ref.read(vaultSessionProvider.notifier).enrollBiometric(
+              unlock: _biometric,
+              enabled: _biometricAvailable,
+            );
+        await _probeBiometric();
+        return;
+      }
+      if (session.status == VaultStatus.locked && session.error != null) return;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
   }
 
   void _unlockWithRecovery() {

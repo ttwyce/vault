@@ -4,6 +4,7 @@ import '../../../app/theme/sketch_metrics.dart';
 import '../../../app/theme/sketch_theme.dart';
 import '../../../core/widgets/sketch_controls.dart';
 import '../../../core/widgets/sketch_frame.dart';
+import '../../../core/widgets/sketch_transitions.dart';
 
 /// L2 / L1 离设备数据的**逐次授权**弹窗（docs/07 §4.2）。
 ///
@@ -89,7 +90,7 @@ Future<bool> requestPrivacyAuthorization({
   required int entryCount,
   required int outgoingChars,
 }) async {
-  final approved = await showDialog<bool>(
+  final approved = await showSketchDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (BuildContext dialogContext) => Dialog(

@@ -25,6 +25,7 @@ import '../editor/widgets/markdown_preview_view.dart';
 import '../../data/vault/password_generator.dart';
 import '../../data/vault/sensitive_clipboard.dart';
 import '../../data/write/write_gateway.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 密码库。
 ///
@@ -104,7 +105,7 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     final groupRepo =
         CredentialGroupRepository(db: ref.read(vaultDatabaseProvider));
     final groupsFuture = groupRepo.groups();
-    final title = await showDialog<String>(
+    final title = await showSketchDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext dialogContext, StateSetter setDialogState) {

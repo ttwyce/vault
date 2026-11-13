@@ -1,8 +1,7 @@
-/// 云端模型设置（docs/20 §5 A1）。
+/// 云端模型设置：多端点 / 自动拉取模型 / 上下文预算（docs/20 §5 A1）。
 ///
-/// Key 与自定义端点配置只经 LlmConfigService 写入系统安全区；页面不显示
-/// 已保存的 Key、不写本地偏好、不发请求。保存后即时通知 AppRuntime，
-/// ChatPage 下次重建就能拿到 LlmRuntime；未配置时保持「不会回答」的诚实状态。
+/// Key 与端点档案只写入系统安全区；页面不回显 Key、不写本地偏好。
+/// 保存后即时通知 AppRuntime，ChatPage 用打包后的会话历史发请求。
 library;
 
 import 'package:flutter/material.dart';
@@ -17,10 +16,13 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_field.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../data/agent/context_compressor.dart';
 import '../../data/agent/http_llm_client.dart';
+import '../../data/agent/http_model_catalog.dart';
 import '../../data/agent/llm_chat_service.dart';
 import '../../data/agent/llm_config_store.dart';
 import '../../data/agent/openai_compat.dart';
+import '../../data/agent/system_prompt.dart';
 
 class LlmSettingsPage extends ConsumerStatefulWidget {
   const LlmSettingsPage({super.key});
@@ -34,16 +36,18 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
   final TextEditingController _customLabel = TextEditingController();
   final TextEditingController _customBaseUrl = TextEditingController();
   final TextEditingController _customModel = TextEditingController();
-  late String _endpointId;
-  String _hint = '';
-  bool _busy = false;
 
-  bool get _isCustom => _endpointId == kCustomLlmEndpointId;
+  List<LlmProfile> _profiles = <LlmProfile>[];
+  String _activeId = kDefaultEndpoints.first.id;
+  bool _isCustom = false;
+  String _hint = '';
+  String _contextHint = '';
+  List<String> _remoteModels = <String>[];
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _endpointId = kDefaultEndpoints.first.id;
     _load();
   }
 
@@ -56,6 +60,13 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
     super.dispose();
   }
 
+  LlmProfile? get _active {
+    for (final profile in _profiles) {
+      if (profile.id == _activeId) return profile;
+    }
+    return null;
+  }
+
   Future<void> _load() async {
     final LlmConfig? config;
     try {
@@ -64,20 +75,87 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
       return;
     }
     if (!mounted || config == null) return;
-    final savedEndpointId = config.endpointId;
-    final endpoint = savedEndpointId == kCustomLlmEndpointId
-        ? parseCustomLlmEndpoint(config.customEndpointRaw ?? '')
-        : null;
+    final loaded = config;
     setState(() {
-      _endpointId = savedEndpointId;
-      if (endpoint != null) {
-        _customLabel.text = endpoint.label;
-        _customBaseUrl.text = endpoint.baseUrl;
-        _customModel.text = endpoint.model;
+      _profiles = loaded.profiles;
+      _activeId = loaded.endpointId;
+      _isCustom = loaded.endpointId == kCustomLlmEndpointId;
+      final active = loaded.active;
+      if (_isCustom && active != null) {
+        _customLabel.text = active.label;
+        _customBaseUrl.text = active.baseUrl;
+        _customModel.text = active.model;
       }
-      // 输入框留空：已保存的 Key 不回填到可截图 / 可复制的表单里。
-      _hint = '已保存云端 Key（未显示），可直接清除或覆盖';
+      _hint = '已保存 ${_profiles.length} 个端点（Key 未显示）';
+      _updateContextHint();
     });
+  }
+
+  void _updateContextHint() {
+    final endpoint = _active?.toEndpoint() ??
+        (_isCustom
+            ? tryCustomLlmEndpoint(
+                label: _customLabel.text,
+                baseUrl: _customBaseUrl.text,
+                model: _customModel.text,
+              )
+            : resolveLlmEndpoint(_activeId, null));
+    if (endpoint == null) {
+      _contextHint = '';
+      return;
+    }
+    final plan = packLlmContext(
+      systemPrompt: kSystemPrompt,
+      history: const <LlmMessage>[],
+      currentQuestion: '你好',
+      maxTokens: endpoint.maxTokens,
+    );
+    _contextHint = '上下文预算 ${plan.budgetTokens} token'
+        '（回答预留 $kDefaultCompletionReserveTokens，'
+        '单次上限 ${endpoint.maxTokens}）；超预算自动压缩较早历史';
+  }
+
+  void _select(LlmProfile profile) {
+    if (_busy) return;
+    setState(() {
+      _activeId = profile.id;
+      _isCustom = profile.id == kCustomLlmEndpointId;
+      if (_isCustom) {
+        _customLabel.text = profile.label;
+        _customBaseUrl.text = profile.baseUrl;
+        _customModel.text = profile.model;
+      }
+      _remoteModels = <String>[];
+      _updateContextHint();
+    });
+  }
+
+  void _startCustom() {
+    setState(() {
+      _isCustom = true;
+      _activeId = kCustomLlmEndpointId;
+      _customLabel.clear();
+      _customBaseUrl.clear();
+      _customModel.clear();
+      _remoteModels = <String>[];
+      _hint = '填写自定义端点，保存后即可切换';
+      _updateContextHint();
+    });
+  }
+
+  LlmProfile? _draftProfile() {
+    final endpoint = tryCustomLlmEndpoint(
+      label: _customLabel.text,
+      baseUrl: _customBaseUrl.text,
+      model: _customModel.text,
+    );
+    if (endpoint == null) return null;
+    return LlmProfile(
+      id: kCustomLlmEndpointId,
+      label: endpoint.label,
+      baseUrl: endpoint.baseUrl,
+      model: endpoint.model,
+    );
   }
 
   Future<void> _save() async {
@@ -86,40 +164,106 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
       setState(() => _hint = '请先填写 Key');
       return;
     }
-    final LlmEndpoint? endpoint;
+    final LlmProfile profile;
     if (_isCustom) {
-      endpoint = tryCustomLlmEndpoint(
-        label: _customLabel.text,
-        baseUrl: _customBaseUrl.text,
-        model: _customModel.text,
-      );
-      if (endpoint == null) {
+      final draft = _draftProfile();
+      if (draft == null) {
         setState(() => _hint = '自定义端点需要名称、https 地址与模型名');
         return;
       }
+      profile = draft;
     } else {
-      endpoint = resolveLlmEndpoint(_endpointId, null);
-    }
-    if (endpoint == null) {
-      setState(() => _hint = '端点配置无效，未保存');
-      return;
+      final endpoint = resolveLlmEndpoint(_activeId, null);
+      if (endpoint == null) {
+        setState(() => _hint = '端点配置无效，未保存');
+        return;
+      }
+      profile = LlmProfile(
+        id: endpoint.id,
+        label: endpoint.label,
+        baseUrl: endpoint.baseUrl,
+        model: endpoint.model,
+      );
     }
     setState(() => _busy = true);
     try {
-      await ref.read(llmConfigServiceProvider).save(
-            endpointId: endpoint.id,
-            apiKey: key,
-            customEndpoint: _isCustom ? endpoint : null,
-          );
+      final service = ref.read(llmConfigServiceProvider);
+      await service.saveProfile(profile: profile, apiKey: key);
+      final loaded = await service.load();
+      _profiles = loaded?.profiles ?? <LlmProfile>[profile];
       ref.read(appRuntimeProvider.notifier).setLlmRuntime(LlmRuntime(
-            endpoint: endpoint,
+            endpoint: profile.toEndpoint(),
             apiKey: key,
             client: HttpLlmClient(),
           ));
       _apiKey.clear();
-      if (mounted) setState(() => _hint = '已保存，模型回复现在可用');
+      if (mounted) {
+        setState(() {
+          _activeId = profile.id;
+          _hint = '已保存端点：${profile.label}（共 ${_profiles.length} 个）';
+          _updateContextHint();
+        });
+      }
     } on Object {
       if (mounted) setState(() => _hint = '安全存储不可用，未保存');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _fetchModels() async {
+    final endpoint = _isCustom
+        ? tryCustomLlmEndpoint(
+            label: _customLabel.text.isEmpty ? '自定义' : _customLabel.text,
+            baseUrl: _customBaseUrl.text,
+            model: _customModel.text.isEmpty ? 'placeholder' : _customModel.text,
+          )
+        : (_active?.toEndpoint() ?? resolveLlmEndpoint(_activeId, null));
+    if (endpoint == null) {
+      setState(() => _hint = '先填写合法的 https 接口地址');
+      return;
+    }
+    final key = _apiKey.text.trim().isNotEmpty
+        ? _apiKey.text.trim()
+        : (await ref.read(llmConfigServiceProvider).load())?.apiKey ?? '';
+    if (key.isEmpty) {
+      setState(() => _hint = '获取模型列表需要先填写或已保存 Key');
+      return;
+    }
+    setState(() => _busy = true);
+    final catalog = HttpModelCatalog();
+    try {
+      final result = await catalog.listModels(
+        baseUrl: endpoint.baseUrl,
+        apiKey: key,
+      );
+      if (!mounted) return;
+      setState(() {
+        _remoteModels = result.models;
+        _hint = result.hint;
+      });
+    } finally {
+      catalog.close();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _remove(LlmProfile profile) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(llmConfigServiceProvider).removeProfile(profile.id);
+      final loaded = await ref.read(llmConfigServiceProvider).load();
+      if (!mounted) return;
+      setState(() {
+        _profiles = loaded?.profiles ?? <LlmProfile>[];
+        _activeId = loaded?.endpointId ?? kDefaultEndpoints.first.id;
+        _isCustom = _activeId == kCustomLlmEndpointId;
+        _hint = loaded == null ? '已清除全部端点' : '已移除 ${profile.label}';
+        _updateContextHint();
+      });
+      if (loaded == null) {
+        ref.read(appRuntimeProvider.notifier).setLlmRuntime(null);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -136,8 +280,12 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
       _customModel.clear();
       if (mounted) {
         setState(() {
-          _endpointId = kDefaultEndpoints.first.id;
-          _hint = '已清除云端 Key 与自定义端点';
+          _profiles = <LlmProfile>[];
+          _activeId = kDefaultEndpoints.first.id;
+          _isCustom = false;
+          _remoteModels = <String>[];
+          _hint = '已清除云端 Key 与全部端点';
+          _contextHint = '';
         });
       }
     } on Object {
@@ -147,21 +295,15 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
     }
   }
 
-  void _select(String id) {
-    if (_busy) return;
-    setState(() => _endpointId = id);
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
-    // watch：Key 保存 / 清除后立即重建状态说明。
     final configured = ref.watch(appRuntimeProvider).llmRuntime != null;
     return Scaffold(
       backgroundColor: p.bg,
       body: PageScaffold(
         title: '云端模型',
-        subtitle: '预设 / 自定义 OpenAI 兼容端点 · Key 只存系统安全区',
+        subtitle: '多端点 · 自动模型列表 · 上下文预算',
         showSettings: false,
         leading: SketchIconButton(
           glyph: SketchGlyph.close,
@@ -183,9 +325,39 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                     configured ? '状态：已配置' : '状态：未配置（不会生成模型回复）',
                     style: context.texts.bodyMedium,
                   ),
-                  const SizedBox(height: SketchSpace.md),
-                  Text('选择端点', style: context.texts.bodySmall),
                   const SizedBox(height: SketchSpace.sm),
+                  Text('已保存的端点', style: context.texts.bodySmall),
+                  const SizedBox(height: SketchSpace.sm),
+                  if (_profiles.isEmpty)
+                    Text('还没有保存端点，选择预设或新增自定义端点。',
+                        style: context.texts.bodySmall)
+                  else
+                    for (final profile in _profiles)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: SketchSpace.xs),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => _select(profile),
+                                child: SketchTag(
+                                  '${profile.label} · ${profile.model}',
+                                  tone: profile.id == _activeId
+                                      ? SketchTone.primary
+                                      : SketchTone.ghost,
+                                  dense: true,
+                                ),
+                              ),
+                            ),
+                            SketchIconButton(
+                              glyph: SketchGlyph.close,
+                              tooltip: '移除 ${profile.label}',
+                              onPressed: _busy ? null : () => _remove(profile),
+                            ),
+                          ],
+                        ),
+                      ),
+                  const SizedBox(height: SketchSpace.md),
                   Wrap(
                     spacing: SketchSpace.sm,
                     runSpacing: SketchSpace.sm,
@@ -194,14 +366,19 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                         _EndpointTag(
                           key: ValueKey<String>('endpoint-${endpoint.id}'),
                           label: endpoint.label,
-                          selected: _endpointId == endpoint.id,
-                          onTap: () => _select(endpoint.id),
+                          selected: !_isCustom && _activeId == endpoint.id,
+                          onTap: () => _select(LlmProfile(
+                            id: endpoint.id,
+                            label: endpoint.label,
+                            baseUrl: endpoint.baseUrl,
+                            model: endpoint.model,
+                          )),
                         ),
                       _EndpointTag(
                         key: const ValueKey<String>('endpoint-custom'),
-                        label: '自定义端点',
+                        label: '新增自定义端点',
                         selected: _isCustom,
-                        onTap: () => _select(kCustomLlmEndpointId),
+                        onTap: _startCustom,
                       ),
                     ],
                   ),
@@ -236,8 +413,35 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                     hintText: '保存后不再显示',
                     obscureText: true,
                   ),
+                  const SizedBox(height: SketchSpace.sm),
+                  SketchButton(
+                    label: '自动获取模型列表',
+                    glyph: SketchGlyph.search,
+                    dense: true,
+                    onPressed: _busy ? null : _fetchModels,
+                  ),
+                  if (_remoteModels.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: SketchSpace.sm),
+                    Wrap(
+                      spacing: SketchSpace.sm,
+                      runSpacing: SketchSpace.sm,
+                      children: <Widget>[
+                        for (final model in _remoteModels)
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _customModel.text = model;
+                              if (!_isCustom) _startCustom();
+                              _hint = '已选择模型 $model，保存后生效';
+                            }),
+                            child: SketchTag(model, dense: true),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: SketchSpace.md),
-                  Row(
+                  Wrap(
+                    spacing: SketchSpace.sm,
+                    runSpacing: SketchSpace.sm,
                     children: <Widget>[
                       SketchButton(
                         label: '保存',
@@ -245,9 +449,8 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                         dense: true,
                         onPressed: _busy ? null : _save,
                       ),
-                      const SizedBox(width: SketchSpace.sm),
                       SketchButton(
-                        label: '清除',
+                        label: '清除全部',
                         dense: true,
                         onPressed: _busy ? null : _clear,
                       ),
@@ -266,11 +469,24 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
               fill: p.noteAlt,
               borderColor: p.lineSoft,
               padding: const EdgeInsets.all(SketchSpace.lg),
-              child: Text(
-                'Key 与自定义端点不写入 settings.json、不进入日志与诊断输出；'
-                '清除 AI 数据时会一并删除。真实云端回复仍需外网与厂商可用性验收，'
-                '未配置时聊天页只保存你的消息。',
-                style: context.texts.bodySmall,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('上下文信息', style: context.texts.titleSmall),
+                  const SizedBox(height: SketchSpace.xs),
+                  Text(
+                    _contextHint.isEmpty
+                        ? '保存端点后显示上下文预算。'
+                        : _contextHint,
+                    style: context.texts.bodySmall,
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    'Key 与端点档案只存系统安全区，不进 settings.json、日志或诊断输出；'
+                    '聊天请求会带最近会话历史，超预算时自动压缩较早轮次。',
+                    style: context.texts.bodySmall,
+                  ),
+                ],
               ),
             ),
           ],
@@ -324,9 +540,7 @@ class _LabeledField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Text(label,
-            style: context.texts.bodySmall
-                ?.copyWith(color: p.muted)),
+        Text(label, style: context.texts.bodySmall?.copyWith(color: p.muted)),
         const SizedBox(height: SketchSpace.xs),
         SketchFieldFrame(
           child: TextField(

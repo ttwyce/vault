@@ -16,6 +16,7 @@ import '../../../core/widgets/sketch_frame.dart';
 import '../../../data/search/embedding_manifest.dart';
 import '../../../data/search/http_model_downloader.dart';
 import '../../../data/search/model_downloader.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 class ModelsPage extends StatelessWidget {
   const ModelsPage({super.key, this.downloaderFactory});
@@ -167,7 +168,7 @@ class ModelsPage extends StatelessWidget {
     EmbeddingModelSpec spec,
   ) async {
     String hint = '准备下载 ${spec.name}';
-    await showDialog<void>(
+    await showSketchDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext sheetContext, StateSetter setDialogState) =>

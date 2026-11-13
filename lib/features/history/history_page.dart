@@ -15,6 +15,7 @@ import '../../data/taxonomy/taxonomy_repository.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/sync/version_diff.dart';
 import '../../data/write/write_gateway.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 一次加载的结果。
 typedef HistoryData = ({
@@ -218,7 +219,7 @@ class _HistoryTile extends StatelessWidget {
 
   void _showDiff(BuildContext context, String currentBody) {
     final view = buildVersionDiff(version.body, currentBody);
-    showDialog<void>(
+    showSketchDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: Text('r${version.rev} 与当前内容对比 · ${view.summary}'),

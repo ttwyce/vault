@@ -19,6 +19,7 @@ import '../../data/vault/credential_models.dart';
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/chat/conversation_repository_provider.dart';
 import '../../data/agent/model_availability_provider.dart';
+import '../../data/agent/context_compressor.dart';
 import '../../data/agent/llm_chat_service.dart';
 import '../../data/agent/model_status.dart';
 import '../../data/agent/openai_compat.dart';
@@ -28,6 +29,7 @@ import '../../data/chat/conversation_scroll.dart';
 import '../../data/chat/conversation_writer.dart';
 import '../editor/editor_page.dart';
 import 'widgets/conversation_drawer.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 聊天首页。
 ///
@@ -53,6 +55,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       Future<List<ConversationMessageView>>.value(
     const <ConversationMessageView>[],
   );
+  String _contextHint = '';
 
   /// 抽屉用 OverlayEntry 挂在根 Overlay 上：不进 PageScaffold 的布局树，
   /// 因此不会改变主区尺寸，也不会与 Expanded / ListView 的高度约束打架。
@@ -175,12 +178,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final secrets = await ref
         .read(credentialRepositoryProvider)
         .knownSecretValues();
+    // 真实会话历史（append-only 顺序）→ token 预算打包 / 自动压缩。
+    // 当前问题由 _send 刚写入，历史里去掉最后一条，避免重复发两遍。
+    final repo = ref.read(conversationRepositoryProvider);
+    final conversationId = draft.currentId;
+    final all = conversationId == null
+        ? const <ConversationMessageView>[]
+        : await repo.messages(conversationId, plan: MessagePagePlan.latest());
+    final history = <LlmMessage>[
+      for (final view in all.isEmpty ? const <ConversationMessageView>[] : all.take(all.length - 1))
+        if (view.role == 1 || view.role == 2)
+          LlmMessage(
+            role: view.role == 1 ? 'user' : 'assistant',
+            content: view.content,
+          ),
+    ];
+    final plan = packLlmContext(
+      systemPrompt: kSystemPrompt,
+      history: history,
+      currentQuestion: question,
+      maxTokens: runtime.endpoint.maxTokens,
+    );
+    if (mounted) setState(() => _contextHint = plan.hint);
     final reply = await service.generateAndAppend(
       endpoint: runtime.endpoint,
       apiKey: runtime.apiKey,
-      messages: buildPromptMessages(<LlmMessage>[
-        LlmMessage(role: 'user', content: question),
-      ]),
+      messages: plan.messages,
       draft: draft,
       knownSecrets: secrets,
     );
@@ -239,6 +262,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             modelLabel: status.subtitle,
             currentId: _draft.currentId,
           ),
+          if (_contextHint.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SketchSpace.lg,
+                SketchSpace.xs,
+                SketchSpace.lg,
+                0,
+              ),
+              child: Text(
+                _contextHint,
+                style: context.texts.bodySmall,
+              ),
+            ),
           Expanded(
             child: ListView(
               controller: _scroll,
@@ -619,8 +655,7 @@ class _CitationChips extends StatelessWidget {
           for (final id in ids)
             GestureDetector(
               onTap: () => Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(
-                  builder: (_) => EditorPage(entryId: id),
+                sketchPageRoute<void>(EditorPage(entryId: id),
                 ),
               ),
               child: SketchTag('见：$id', tone: SketchTone.blue),

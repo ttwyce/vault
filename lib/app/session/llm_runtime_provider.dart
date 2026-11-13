@@ -28,13 +28,22 @@ Future<LlmRuntime?> loadLlmRuntime({
     return null;
   }
   if (config == null || !config.isComplete) return null;
-  final endpoint = resolveLlmEndpoint(
-    config.endpointId,
-    config.customEndpointRaw,
-  );
-  if (endpoint == null) return null;
+  final active = config.active;
+  if (active == null) {
+    // 旧版配置 / 坏档案列表：仍按 endpointId 解析一次，避免启动时突然失效。
+    final legacy = resolveLlmEndpoint(
+      config.endpointId,
+      config.customEndpointRaw,
+    );
+    if (legacy == null) return null;
+    return LlmRuntime(
+      endpoint: legacy,
+      apiKey: config.apiKey,
+      client: HttpLlmClient(),
+    );
+  }
   return LlmRuntime(
-    endpoint: endpoint,
+    endpoint: active.toEndpoint(),
     apiKey: config.apiKey,
     client: HttpLlmClient(),
   );

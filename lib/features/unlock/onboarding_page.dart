@@ -15,6 +15,7 @@ import '../../core/crypto/recovery_code.dart';
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 // ---------------------------------------------------------------------------
 // 页面级常量
@@ -475,7 +476,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   /// 走的是和正常校验成功完全相同的 [VaultSession.acknowledgeRecoveryCode]；
   /// 不改写状态机、不绕过闸门，也不会把恢复码留到下一屏。
   Future<void> _skipCheck(RecoveryCode code) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSketchDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: const Text('跳过恢复码抽查？'),

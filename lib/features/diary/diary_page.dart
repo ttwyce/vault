@@ -21,6 +21,7 @@ import '../../data/diary/diary_streak.dart';
 import '../../data/write/write_gateway.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 日历格子里的状态点直径。刻意不放进 [SketchSpace]：
 /// 那是间距语义，这里是一个具体图形的尺寸。
@@ -170,7 +171,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     }
     final row = await ref.read(entryRepositoryProvider).getRow(entry.id);
     if (!mounted || row == null) return;
-    await showDialog<void>(
+    await showSketchDialog<void>(
       // ignore: use_build_context_synchronously
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
@@ -210,8 +211,7 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     // 没选日期时取今天所在月份里的今天（跨月补写按当前查看月份）。
     final day = _selectedDay ?? DateTime.now().day;
     final date = diaryKey(DateTime(_month.year, _month.month, day));
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => entryId == null
+    Navigator.of(context).push(sketchPageRoute<void>(entryId == null
           ? EditorPage(initialKind: EntryKind.diary, initialDate: date)
           : EditorPage(entryId: entryId),
     ));
@@ -819,7 +819,7 @@ class _DiaryTile extends StatelessWidget {
   }
 
   void _showCitations(BuildContext context, List<String> ids) {
-    showDialog<void>(
+    showSketchDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: const Text('引用原文'),
@@ -836,9 +836,7 @@ class _DiaryTile extends StatelessWidget {
                     title: Text(id, style: const TextStyle(fontSize: 11)),
                     onTap: () {
                       Navigator.of(dialogContext).pop();
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                        builder: (_) => EditorPage(entryId: id),
-                      ));
+                      Navigator.of(context).push(sketchPageRoute<void>(EditorPage(entryId: id)));
                     },
                   ),
               ],

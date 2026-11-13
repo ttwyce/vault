@@ -16,6 +16,7 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_field.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 字体设置页。结构见 docs/15 §7：
 /// 预设 → 分角色指定 → 导入 → 已导入 → 说明。
@@ -149,7 +150,7 @@ class _FontsPageState extends ConsumerState<FontsPage> {
 
   Future<void> _rename(FontFace face) async {
     final controller = TextEditingController(text: face.displayName);
-    final name = await showDialog<String>(
+    final name = await showSketchDialog<String>(
       context: context,
       builder: (BuildContext ctx) => _SketchDialog(
         title: '重命名字体',
@@ -181,7 +182,7 @@ class _FontsPageState extends ConsumerState<FontsPage> {
   }
 
   Future<void> _confirmDelete(FontFace face) async {
-    final ok = await showDialog<bool>(
+    final ok = await showSketchDialog<bool>(
       context: context,
       builder: (BuildContext ctx) => _SketchDialog(
         title: '删除「${face.displayName}」？',
@@ -214,7 +215,7 @@ class _FontsPageState extends ConsumerState<FontsPage> {
     if (report.added.isEmpty && report.errors.isEmpty && report.skipped.isEmpty) {
       return;
     }
-    await showDialog<void>(
+    await showSketchDialog<void>(
       context: context,
       builder: (BuildContext ctx) => _SketchDialog(
         title: report.summary,

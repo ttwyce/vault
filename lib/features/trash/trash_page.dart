@@ -13,6 +13,7 @@ import '../../data/taxonomy/taxonomy_repository.dart';
 import '../../data/taxonomy/taxonomy_repository_provider.dart';
 import '../../data/write/write_gateway.dart';
 import '../history/history_page.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 回收站。
 ///
@@ -125,8 +126,7 @@ class _TrashPageState extends ConsumerState<TrashPage> {
                   onRestore: () => _restore(item.id),
                   onHistory: () async {
                     await Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => HistoryPage(entryId: item.id),
+                      sketchPageRoute<void>(HistoryPage(entryId: item.id),
                       ),
                     );
                     // 历史页可能回滚了内容，回到列表时刷新一次

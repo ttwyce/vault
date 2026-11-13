@@ -18,6 +18,7 @@ import '../../data/entry/entry_models.dart';
 import '../../data/entry/entry_repository_provider.dart';
 import '../editor/editor_page.dart';
 import '../organize/organize_page.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 记录页：笔记 / 想法两个分段 + 分类/标签筛选 + 搜索。
 ///
@@ -128,11 +129,9 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
   }
 
   void _openEditor({String? entryId, EntryKind? kind}) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => entryId == null
+    Navigator.of(context).push(sketchPageRoute<void>(entryId == null
           ? EditorPage(initialKind: kind ?? _kind)
-          : EditorPage(entryId: entryId),
-    ));
+          : EditorPage(entryId: entryId)));
   }
 
   @override
@@ -148,9 +147,7 @@ class _RecordsPageState extends ConsumerState<RecordsPage> {
           dense: true,
           glyph: SketchGlyph.menu,
           onPressed: () {
-            Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) => const OrganizePage(),
-            ));
+            Navigator.of(context).push(sketchPageRoute<void>(const OrganizePage()));
           },
         ),
         SketchIconButton(

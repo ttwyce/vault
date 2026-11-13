@@ -30,6 +30,7 @@ import '../../data/archive/archive_repository_provider.dart';
 import '../../data/db/tables/entry_tables.dart';
 import '../../data/db/vault_database.dart' show BlobRefRow, EntryHistoryRow;
 import '../../data/write/write_gateway.dart';
+import '../../core/widgets/sketch_transitions.dart';
 
 /// 归档网站总览（docs/11 §3.2）。
 ///
@@ -76,7 +77,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
   /// 新建归档：只持久化 L1 元数据层（URL / site / 状态），真实抓取、
   /// readability 注入与 PDF 生成由 M4 平台层按策略补上。
   Future<void> _addArchiveUrl() async {
-    final url = await showDialog<String>(
+    final url = await showSketchDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: const Text('归档网址'),
@@ -128,7 +129,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
       final existing = data.entries
           .where((ArchiveEntry e) => e.id == plan.existingEntryId)
           .firstOrNull;
-      final open = await showDialog<bool>(
+      final open = await showSketchDialog<bool>(
             // 上面已用 mounted 守住异步间隙。
             // ignore: use_build_context_synchronously
             context: context,
@@ -537,7 +538,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     if (!mounted) return;
     if (!result.available) {
       // docs/05 §6.3：把 URL 发给第三方必须用户逐次勾选。
-      final optedIn = await showDialog<bool>(
+      final optedIn = await showSketchDialog<bool>(
         context: context,
         builder: (BuildContext dialogContext) => AlertDialog(
           title: const Text('提交到 Internet Archive？'),
@@ -645,7 +646,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     String hint, {
     Future<int> Function()? onExecute,
   }) {
-    showDialog<void>(
+    showSketchDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: Text(title),
@@ -765,21 +766,19 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
     final hasPrevious = previousBody != null && body != null;
     if (!mounted) return;
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext _) => ArchiveReaderPage(
-          entryId: entry.id,
-          title: entry.title ?? entry.meta.title ?? '(无标题)',
-          meta: entry.meta,
-          archivedAtMs: entry.updatedAt,
-          pdfLocal: pdfLocal,
-          hasPreviousTextVersion: hasPrevious,
-          body: body,
-          previousBody: previousBody,
-          textDownload: textRequest,
-          pdfDownload: pdfRequest,
-          blobBaseUrl: widget.blobBaseUrl,
-        ),
-      ),
+      sketchPageRoute<void>(ArchiveReaderPage(
+        entryId: entry.id,
+        title: entry.title ?? entry.meta.title ?? '(无标题)',
+        meta: entry.meta,
+        archivedAtMs: entry.updatedAt,
+        pdfLocal: pdfLocal,
+        hasPreviousTextVersion: hasPrevious,
+        body: body,
+        previousBody: previousBody,
+        textDownload: textRequest,
+        pdfDownload: pdfRequest,
+        blobBaseUrl: widget.blobBaseUrl,
+      )),
     );
   }
 

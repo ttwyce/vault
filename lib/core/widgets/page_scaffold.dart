@@ -19,7 +19,7 @@ class PageScaffold extends StatelessWidget {
     this.subtitle,
     this.leading,
     this.actions = const <Widget>[],
-    this.showSettings = true,
+    this.showSettings = false,
   });
 
   final String title;
@@ -28,7 +28,8 @@ class PageScaffold extends StatelessWidget {
   final Widget? leading;
   final List<Widget> actions;
 
-  /// 是否显示右上角设置入口。单独测试页面时通常关掉。
+  /// 是否显示右上角设置入口。**默认关闭**：五个主 tab 曾被 AppActions
+  /// 挂上重复齿轮，设置只保留外壳一个入口；需要该入口的独立页面显式开启。
   final bool showSettings;
 
   @override
