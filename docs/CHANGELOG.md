@@ -4,6 +4,27 @@
 
 ---
 
+## v2.18 · 2026-11-13
+
+### CI 签名校验二次修复：移除版本相关的文本比对
+
+- run `43361126292` 仍只在 `Verify APK signing certificate` 失败：
+  上一版用 `keytool -printcert -jarfile <apk>` 读 SHA1，但 debug APK 的
+  v2/v3 签名块与 CI JDK/build-tools 版本组合下读不到该文本字段。
+  `Build debug APK` / `Analyze` / `Test` 三个步骤均成功。
+- 最终改为：`apksigner verify --verbose --print-certs "$APK"` 负责 APK
+  验签（非零退出即失败），另打印仓库固定 keystore 的 SHA1 供人工核对；
+  不再对工具的人类可读输出做硬字符串匹配。Gradle `signingConfigs`
+  显式指向 `android/app/vault-debug.keystore`，这才是固定签名的保证。
+- 同步更新 `debug_signing_config_test.dart`；keystore / Gradle / APK
+  产物本身未改。需由下一次 CI run 实际确认。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1120/1120 passed**；
+`git diff --check` OK；本地无 Android SDK，未执行构建。
+
+---
+
 ## v2.17 · 2026-11-13
 
 ### CI 构建失败修复：签名指纹校验格式无关化

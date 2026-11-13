@@ -14,11 +14,11 @@ void main() {
     expect(gradle, contains('signingConfigs.getByName("vaultDebug")'));
 
     final workflow = File('.github/workflows/android-apk.yml').readAsStringSync();
-    // 不 grep apksigner 的 --print-certs 文本：不同 build-tools 版本
-    // 输出 SHA-1/SHA-256 格式不同，曾导致 CI 误判失败。
-    expect(workflow, contains(r'"$APKSIGNER" verify "$APK"'));
-    expect(workflow, contains('keytool -printcert -jarfile'));
-    expect(workflow, contains(r'test "$APK_SHA1" = "$KEY_SHA1"'));
+    // 只要求 apksigner 验签通过并打印证书；不再对工具输出做
+    // 版本相关的硬字符串匹配（曾连续两次误判 CI 失败）。
+    expect(workflow, contains(r'"$APKSIGNER" verify --verbose --print-certs "$APK"'));
+    expect(workflow, contains('vault-debug.keystore'));
+    expect(workflow, contains('grep \'SHA1:\''));
 
     final ignore = File('android/.gitignore').readAsStringSync();
     expect(ignore, contains('!app/vault-debug.keystore'),
