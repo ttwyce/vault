@@ -71,7 +71,11 @@ class LlmProfile {
       kDefaultEndpoints.any((LlmEndpoint e) => e.id == id);
 
   LlmEndpoint toEndpoint() => isPreset
-      ? kDefaultEndpoints.firstWhere((LlmEndpoint e) => e.id == id)
+      ? kDefaultEndpoints.firstWhere((LlmEndpoint e) => e.id == id).copyWith(
+          label: label,
+          model: model,
+          baseUrl: baseUrl,
+        )
       : LlmEndpoint(
           id: kCustomLlmEndpointId,
           label: label,
@@ -253,6 +257,13 @@ class LlmConfigService {
     if (customEndpoint == null) {
       await store.delete(kLlmCustomEndpointStorageKey);
     }
+  }
+
+  /// 切换活动档案：只改 activeId，不重写 Key / 档案列表。
+  Future<void> setActiveProfile(String id) async {
+    final profiles = await _loadProfiles();
+    if (profiles.every((LlmProfile p) => p.id != id)) return;
+    await store.write(kLlmEndpointIdStorageKey, id);
   }
 
   Future<void> removeProfile(String id) async {

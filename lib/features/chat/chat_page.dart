@@ -72,6 +72,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       barrierDismissible: true,
       barrierLabel: '关闭对话抽屉',
       barrierColor: context.sketch.scrim,
+      transitionDuration: SketchMotion.of(context, SketchMotion.drawer),
       pageBuilder: (
         BuildContext dialogContext,
         Animation<double> animation,
@@ -89,6 +90,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
         ),
       ),
+      transitionBuilder: (
+        BuildContext dialogContext,
+        Animation<double> animation,
+        Animation<double> secondaryAnimation,
+        Widget child,
+      ) {
+        if (SketchMotion.of(context, SketchMotion.drawer) == Duration.zero) {
+          return child;
+        }
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(-1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: SketchMotion.drawerCurve,
+            reverseCurve: SketchMotion.drawerCurve,
+          )),
+          child: child,
+        );
+      },
     ).whenComplete(() => _drawerOpen = false);
   }
 

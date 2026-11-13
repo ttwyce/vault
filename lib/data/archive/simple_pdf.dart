@@ -1,10 +1,11 @@
 /// 纯 Dart 简易 PDF 生成（docs/05 §8 二级降级 `dartPdf`）。
 ///
 /// 不引 `pdf` / `printing` 包：手写最小 PDF 1.4 字节流
-/// （Catalog / Pages / 每页 Page + Contents / Helvetica 字体 / xref）。
-/// 按 `planPdfPagination` 的 A4 分页把 L1 正文逐行排进内容流；
-/// 非 Latin-1 字符用八进制转义或 `?` 兜底 —— **不保真但可用**，
-/// 保真快照仍由平台原生 WebView PDF 负责。
+/// （Catalog / Pages / 每页 Page + Contents / Helvetica + 标准 CJK 字体 / xref）。
+/// ASCII/Latin-1 行走 Helvetica；含 CJK 的行切到 Adobe 标准简体中文字体
+/// STSong-Light + UniGB-UCS2-H，文本用 UTF-16BE 十六进制字符串写入，
+/// 中文不再全部变成 `?`。字体由阅读器提供，不嵌入字体文件、不新增依赖；
+/// 图片/复杂排版保真快照仍由平台原生 WebView PDF 负责。
 library;
 
 import 'dart:convert';
@@ -69,6 +70,25 @@ String _pdfLiteral(String line) {
   return buffer.toString();
 }
 
+bool _needsCjk(String line) => line.runes.any((int r) => r > 0xff);
+
+String _pdfUtf16Hex(String line) {
+  final units = <int>[
+    0xfeff, // BOM，标明 UCS2 大端
+    for (final rune in line.runes)
+      if (rune <= 0xffff)
+        rune
+      else ...<int>[
+        0xd800 + ((rune - 0x10000) >> 10),
+        0xdc00 + ((rune - 0x10000) & 0x3ff),
+      ],
+  ];
+  return <String>[
+    for (final unit in units)
+      unit.toRadixString(16).toUpperCase().padLeft(4, '0'),
+  ].join();
+}
+
 String _contentStream(List<String> lines) {
   final buffer = StringBuffer()
     ..writeln('BT')
@@ -77,7 +97,13 @@ String _contentStream(List<String> lines) {
     ..writeln('1 0 0 1 ${kPdfMarginPt.toStringAsFixed(1)} '
         '${(kA4HeightPt - kPdfMarginPt).toStringAsFixed(1)} Tm');
   for (final line in lines) {
-    buffer.writeln('(${_pdfLiteral(line)}) Tj T*');
+    if (_needsCjk(line)) {
+      buffer.writeln('/F2 11 Tf');
+      buffer.writeln('<${_pdfUtf16Hex(line)}> Tj T*');
+      buffer.writeln('/F1 11 Tf');
+    } else {
+      buffer.writeln('(${_pdfLiteral(line)}) Tj T*');
+    }
   }
   buffer.writeln('ET');
   return buffer.toString();
@@ -112,12 +138,13 @@ SimplePdfResult buildSimplePdf(String markdown) {
           .toList(),
   ];
 
-  // object 1 Catalog, 2 Pages, 3 Font, 4..(3+pages) Page,
-  // 之后每页一个 Contents stream。
+  // object 1 Catalog, 2 Pages, 3 Helvetica, 4 CJK Type0,
+  // 5..(4+pages) Page，之后每页一个 Contents stream。
   final fontObj = 3;
-  final firstPageObj = 4;
+  final cjkFontObj = 4;
+  final firstPageObj = 5;
   final firstContentObj = firstPageObj + plan.pageCount;
-  final objectCount = firstContentObj + plan.pageCount - 1;
+  var objectCount = firstContentObj + plan.pageCount - 1;
 
   final objects = <int, List<int>>{};
   objects[1] = ascii.encode('<< /Type /Catalog /Pages 2 0 R >>');
@@ -132,6 +159,11 @@ SimplePdfResult buildSimplePdf(String markdown) {
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica '
     '/Encoding /WinAnsiEncoding >>',
   );
+  objects[cjkFontObj] = ascii.encode(
+    '<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light '
+    '/Encoding /UniGB-UCS2-H '
+    '/DescendantFonts [${cjkFontObj + plan.pageCount * 2 + 1} 0 R] >>',
+  );
   for (var i = 0; i < plan.pageCount; i++) {
     final pageObj = firstPageObj + i;
     final contentObj = firstContentObj + i;
@@ -139,7 +171,7 @@ SimplePdfResult buildSimplePdf(String markdown) {
       '<< /Type /Page /Parent 2 0 R '
       '/MediaBox [0 0 ${kA4WidthPt.toStringAsFixed(0)} '
       '${kA4HeightPt.toStringAsFixed(0)}] '
-      '/Resources << /Font << /F1 $fontObj 0 R >> >> '
+      '/Resources << /Font << /F1 $fontObj 0 R /F2 $cjkFontObj 0 R >> >> '
       '/Contents $contentObj 0 R >>',
     );
     final stream = ascii.encode(_contentStream(pageLines[i]));
@@ -149,6 +181,14 @@ SimplePdfResult buildSimplePdf(String markdown) {
       ...ascii.encode('\nendstream'),
     ];
   }
+
+  final descendantFontObj = cjkFontObj + plan.pageCount * 2 + 1;
+  objects[descendantFontObj] = ascii.encode(
+    '<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light '
+    '/CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> '
+    '/DW 1000 >>',
+  );
+  objectCount = descendantFontObj;
 
   final out = BytesBuilder(copy: false);
   void write(String s) => out.add(ascii.encode(s));

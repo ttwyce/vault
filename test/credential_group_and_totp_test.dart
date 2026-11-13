@@ -107,4 +107,41 @@ void main() {
     expect(find.byType(DragTarget<String>), findsWidgets);
     expect(find.text('工作'), findsWidgets);
   });
+
+  testWidgets('分组落点对应的 setEntryTaxonomy 会原子替换关联并保留标签',
+      (WidgetTester tester) async {
+    await seed();
+    await app.gateway.writeCategory(CategoryWrite.create(
+      id: 'cat-a',
+      name: '工作',
+      kind: EntryKind.credential,
+    ));
+    await app.gateway.writeCategory(CategoryWrite.create(
+      id: 'cat-b',
+      name: '生活',
+      kind: EntryKind.credential,
+    ));
+    await app.gateway.writeTag(TagWrite.create(name: '重要'));
+    final tagId = (await app.db.select(app.db.tags).get()).single.id;
+    await app.gateway.setEntryTaxonomy(
+      entryId: 'cred-x',
+      categoryId: 'cat-a',
+      tagIds: <String>[tagId],
+    );
+    expect((await app.db.select(app.db.entryCategories).get()).single.categoryId,
+        'cat-a');
+
+    // 与 _moveToCategory 落点同一写入路径：移动到 cat-b，标签不动。
+    final repo = app.gateway;
+    final tags = await app.db.select(app.db.entryTags).get();
+    await repo.setEntryTaxonomy(
+      entryId: 'cred-x',
+      categoryId: 'cat-b',
+      tagIds: <String>[for (final row in tags) row.tagId],
+    );
+    final links = await app.db.select(app.db.entryCategories).get();
+    expect(links, hasLength(1));
+    expect(links.single.categoryId, 'cat-b');
+    expect((await app.db.select(app.db.entryTags).get()).single.tagId, tagId);
+  });
 }

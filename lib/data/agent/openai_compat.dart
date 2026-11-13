@@ -29,6 +29,24 @@ class LlmEndpoint {
   /// 用户自定义端点：脱敏日志不回显用户填的 baseUrl / model。
   final bool isCustom;
 
+  LlmEndpoint copyWith({
+    String? label,
+    String? baseUrl,
+    String? model,
+    double? temperature,
+    int? maxTokens,
+    bool? isCustom,
+  }) =>
+      LlmEndpoint(
+        id: id,
+        label: label ?? this.label,
+        baseUrl: baseUrl ?? this.baseUrl,
+        model: model ?? this.model,
+        temperature: temperature ?? this.temperature,
+        maxTokens: maxTokens ?? this.maxTokens,
+        isCustom: isCustom ?? this.isCustom,
+      );
+
   String get chatCompletionsPath => '/chat/completions';
 
   Map<String, Object?> toJson() => <String, Object?>{

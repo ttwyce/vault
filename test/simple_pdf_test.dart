@@ -25,7 +25,8 @@ void main() {
     expect(text, contains('/BaseFont /Helvetica'));
     expect(text, contains('/MediaBox [0 0 595 842]'));
     expect(text, contains('startxref'));
-    expect(text.contains('A B C'), isTrue);
+    // 含中文的行走 UTF-16BE hex，ASCII 文本也在其中编码。
+    expect(text.toUpperCase(), contains('00410020004200200043'));
   });
 
   test('长正文按 A4 分页，xref 条目数 = 对象数 + 1', () {
@@ -40,8 +41,9 @@ void main() {
     final xrefIndex = text.indexOf('xref\n');
     final xrefHeader = text.substring(xrefIndex, text.indexOf('\n', xrefIndex + 5) + 1);
     final size = int.parse(xrefHeader.split('\n')[1].trim().split(' ')[1]);
-    // 1 Catalog + 1 Pages + 1 Font + pages Page + pages Contents + 1 空闲
-    expect(size, 4 + result.pageCount * 2);
+    // 1 Catalog + 1 Pages + 2 Font + 1 CIDFont + pages Page +
+    // pages Contents + 1 空闲
+    expect(size, 6 + result.pageCount * 2);
     expect(text, contains('/Count ${result.pageCount}'));
   });
 
@@ -49,8 +51,21 @@ void main() {
     final result = buildSimplePdf('中文正文 (括号) \\ 反斜杠');
     expect(result.ok, isTrue);
     final text = ascii.decode(result.bytes);
-    expect(text, contains('\\('));
-    expect(text, contains('\\)'));
-    expect(text, contains('\\\\'));
+    // 中文行走 CJK 字体的 UTF-16BE hex：括号/反斜杠以码位出现，
+    // 不再需要 PDF 字符串字面量转义。
+    expect(text, contains('0028'));
+    expect(text, contains('0029'));
+    expect(text, contains('005C'));
+  });
+
+  test('中文使用标准 CJK 字体与 UTF-16BE 字符串，不再全变问号', () {
+    final result = buildSimplePdf('中文正文测试');
+    expect(result.ok, isTrue);
+    final text = ascii.decode(result.bytes);
+    expect(text, contains('/Subtype /Type0'));
+    expect(text, contains('/BaseFont /STSong-Light'));
+    expect(text, contains('/Encoding /UniGB-UCS2-H'));
+    expect(text.toUpperCase(), contains('4E2D6587'));
+    expect(text, isNot(contains('????')));
   });
 }

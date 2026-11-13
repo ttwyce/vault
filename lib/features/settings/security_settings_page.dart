@@ -80,7 +80,6 @@ class _SecuritySettingsPageState extends ConsumerState<SecuritySettingsPage> {
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
-    final state = ref.watch(vaultSessionProvider);
     return Scaffold(
       backgroundColor: p.bg,
       body: PageScaffold(
@@ -122,7 +121,7 @@ class _SecuritySettingsPageState extends ConsumerState<SecuritySettingsPage> {
                     label: '更新主密码',
                     tone: SketchTone.primary,
                     dense: true,
-                    onPressed: state.isBusy ? null : _change,
+                    onPressed: _change,
                   ),
                 ],
               ),
@@ -156,15 +155,14 @@ class _SecuritySettingsPageState extends ConsumerState<SecuritySettingsPage> {
                     label: '生成新恢复码',
                     tone: SketchTone.primary,
                     dense: true,
-                    onPressed: state.isBusy ? null : _reset,
+                    onPressed: _reset,
                   ),
                 ],
               ),
             ),
-            if (_hint.isNotEmpty || state.error != null) ...<Widget>[
+            if (_hint.isNotEmpty) ...<Widget>[
               const SizedBox(height: SketchSpace.md),
-              Text(_hint.isEmpty ? state.error! : _hint,
-                  style: context.texts.bodySmall),
+              Text(_hint, style: context.texts.bodySmall),
             ],
           ],
         ),

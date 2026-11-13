@@ -4,6 +4,8 @@
 /// 保存后即时通知 AppRuntime，ChatPage 用打包后的会话历史发请求。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -115,19 +117,37 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
         '单次上限 ${endpoint.maxTokens}）；超预算自动压缩较早历史';
   }
 
-  void _select(LlmProfile profile) {
+  Future<void> _select(LlmProfile profile) async {
     if (_busy) return;
-    setState(() {
-      _activeId = profile.id;
-      _isCustom = profile.id == kCustomLlmEndpointId;
-      if (_isCustom) {
-        _customLabel.text = profile.label;
-        _customBaseUrl.text = profile.baseUrl;
-        _customModel.text = profile.model;
+    setState(() => _busy = true);
+    try {
+      final service = ref.read(llmConfigServiceProvider);
+      await service.setActiveProfile(profile.id);
+      final config = await service.load();
+      final key = config?.apiKey ?? _apiKey.text.trim();
+      if (key.isNotEmpty) {
+        ref.read(appRuntimeProvider.notifier).setLlmRuntime(LlmRuntime(
+              endpoint: profile.toEndpoint(),
+              apiKey: key,
+              client: HttpLlmClient(),
+            ));
       }
-      _remoteModels = <String>[];
-      _updateContextHint();
-    });
+      if (!mounted) return;
+      setState(() {
+        _activeId = profile.id;
+        _isCustom = profile.id == kCustomLlmEndpointId;
+        if (_isCustom) {
+          _customLabel.text = profile.label;
+          _customBaseUrl.text = profile.baseUrl;
+          _customModel.text = profile.model;
+        }
+        _remoteModels = <String>[];
+        _hint = '已切换到「${profile.label}」';
+        _updateContextHint();
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   void _startCustom() {
@@ -339,7 +359,7 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                           children: <Widget>[
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => _select(profile),
+                                onTap: () => unawaited(_select(profile)),
                                 child: SketchTag(
                                   '${profile.label} · ${profile.model}',
                                   tone: profile.id == _activeId
@@ -367,12 +387,12 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                           key: ValueKey<String>('endpoint-${endpoint.id}'),
                           label: endpoint.label,
                           selected: !_isCustom && _activeId == endpoint.id,
-                          onTap: () => _select(LlmProfile(
+                          onTap: () => unawaited(_select(LlmProfile(
                             id: endpoint.id,
                             label: endpoint.label,
                             baseUrl: endpoint.baseUrl,
                             model: endpoint.model,
-                          )),
+                          ))),
                         ),
                       _EndpointTag(
                         key: const ValueKey<String>('endpoint-custom'),

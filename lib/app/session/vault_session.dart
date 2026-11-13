@@ -394,6 +394,8 @@ class VaultSession extends Notifier<VaultSessionState> {
         newPassphrase: newPassphrase,
       );
       await _storage.writeMeta(nextMeta);
+      // 主密码变了，旧生物识别凭据必须失效；下次用主密码登录再注册。
+      await const BiometricVaultUnlock().disable();
       final unlocked = state.unlocked!;
       state = state.copyWith(
         status: VaultStatus.unlocked,

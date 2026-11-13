@@ -4,6 +4,29 @@
 
 ---
 
+## v2.21 · 2026-11-13
+
+### 半接线收敛与中文 PDF（批次 3）
+
+- 多端点切换 `_select()` 改为写活动 `endpointId` 并重建 `LlmRuntime`；
+  `LlmProfile.toEndpoint()` 对预设档案保留用户保存的 model/baseUrl；
+  新增 `LlmConfigService.setActiveProfile`。
+- `changePassphrase` 成功后 disable 旧生物识别凭据；聊天抽屉补 280ms
+  滑入并尊重减少动效；上下文压缩注释明确为「确定性拼接裁剪」而非模型摘要；
+  清理年度回顾页「不导出 PDF」遗留文案。
+- `simple_pdf.dart` 增加标准 CJK 字体 `STSong-Light / UniGB-UCS2-H`，
+  含中文的行用 UTF-16BE hex 写出，不再整片变 `?`；不嵌入字体文件、
+  不新增依赖。PDF 手账与归档 L2 快照共同受益。
+- 新增 `llm_profile_switch_test.dart`、`security_settings_page_test.dart`，
+  补分组落点写入断言与中文 PDF 断言；更新 `simple_pdf_test.dart` 的
+  xref / 转义断言。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1133/1133 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.20 · 2026-11-13
 
 ### 端侧模型下载源可用（批次 2）
