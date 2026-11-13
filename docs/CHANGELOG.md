@@ -4,6 +4,31 @@
 
 ---
 
+## v2.14 · 2026-11-13
+
+### 第三批缺口：分组拖拽换组与 TOTP 绑定
+
+- `VaultPage` 的账号卡片改为 `Draggable<String>`，分类标签与「未分类」
+  成为 `DragTarget<String>`；落点经 `WriteGateway.setEntryTaxonomy`
+  原子替换分类关联并保留既有标签，写入后重读关联、刷新筛选。
+- 新增 `TotpSetupPage` 与 `totp_setup.dart`：支持粘贴
+  `otpauth://totp/...` 链接（等价于扫码内容）或手动 Base32 密钥，
+  校验参数、预览 6 位验证码，保存走 `setTotpSecret` 字段级加密并同步
+  `meta.has_totp`。相机扫码仍需 Android / iOS 平台层图像识别，页面明确标注。
+- 新增 `credential_group_and_totp_test.dart` 3 条：URI/Base32 解析、
+  TOTP 保存后验证码生成与加密落库、拖拽控件与分组落点存在性。
+
+**仍未完成**：Passkey、日记模板 / 年度回顾 / PDF 手账、Android Autofill /
+iOS Credential Provider / Windows 托盘热键、生物识别真机传感器验收、
+26 个真实同步用例、A5 坚果云侧、三套服务器环境、5000 条性能基线、
+相机扫码平台通道。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1110/1110 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.13 · 2026-11-13
 
 ### 第二批缺口：自定义字段编辑与入口回归

@@ -21,12 +21,14 @@ import '../../data/vault/credential_groups.dart';
 
 import '../../data/vault/credential_repository_provider.dart';
 import '../../data/vault/credential_template.dart';
+import '../../data/taxonomy/taxonomy_repository.dart';
 import '../editor/widgets/markdown_preview_view.dart';
 import '../../data/vault/password_generator.dart';
 import '../../data/vault/sensitive_clipboard.dart';
 import '../../data/write/write_gateway.dart';
 import '../../core/widgets/sketch_transitions.dart';
 import 'credential_fields_page.dart';
+import 'totp_setup_page.dart';
 
 /// 密码库。
 ///
@@ -262,6 +264,28 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     setState(() {});
   }
 
+  Future<void> _moveToCategory(String entryId, String? categoryId) async {
+    final tagIds = await TaxonomyRepository(
+      db: ref.read(vaultDatabaseProvider),
+      gateway: ref.read(writeGatewayProvider),
+    ).tagIdsForEntry(entryId);
+    await ref.read(writeGatewayProvider).setEntryTaxonomy(
+          entryId: entryId,
+          categoryId: categoryId,
+          tagIds: tagIds,
+        );
+    await _loadCategoryData();
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(categoryId == null
+            ? '已移出分类'
+            : '已移动到「${_categoryNames[categoryId] ?? categoryId}」'),
+      ),
+    );
+  }
+
   Future<void> _openDetail(String id) async {
     final repo = ref.read(credentialRepositoryProvider);
     final detail = await repo.detail(id);
@@ -460,6 +484,24 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 ),
               const SizedBox(height: SketchSpace.sm),
               SketchButton(
+                label: '绑定 / 更新 TOTP',
+                dense: true,
+                onPressed: () async {
+                  if (sheetContext.mounted) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                  if (!mounted) return;
+                  await Navigator.of(context).push<void>(
+                    sketchPageRoute<void>(TotpSetupPage(
+                      credentialId: id,
+                      title: detail.title,
+                    )),
+                  );
+                  if (mounted) setState(() {});
+                },
+              ),
+              const SizedBox(height: SketchSpace.sm),
+              SketchButton(
                 label: '编辑自定义字段',
                 dense: true,
                 onPressed: () async {
@@ -630,19 +672,44 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 categories: _categoryNodes,
                 links: _categoryLinks,
               ))
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _activeCategoryId =
-                        _activeCategoryId == node.id ? null : node.id;
-                  }),
-                  child: SketchTag(
-                    _categoryName(node),
-                    tone: _activeCategoryId == node.id
-                        ? SketchTone.primary
-                        : SketchTone.ghost,
-                    dense: true,
+                DragTarget<String>(
+                  onAcceptWithDetails: (DragTargetDetails<String> details) =>
+                      _moveToCategory(details.data, node.id),
+                  builder: (
+                    BuildContext context,
+                    List<String?> candidate,
+                    List<Object?> rejected,
+                  ) =>
+                      GestureDetector(
+                    onTap: () => setState(() {
+                      _activeCategoryId =
+                          _activeCategoryId == node.id ? null : node.id;
+                    }),
+                    child: SketchTag(
+                      candidate.isEmpty
+                          ? _categoryName(node)
+                          : '放到「${_categoryName(node)}」',
+                      tone: _activeCategoryId == node.id || candidate.isNotEmpty
+                          ? SketchTone.primary
+                          : SketchTone.ghost,
+                      dense: true,
+                    ),
                   ),
                 ),
+              DragTarget<String>(
+                onAcceptWithDetails: (DragTargetDetails<String> details) =>
+                    _moveToCategory(details.data, null),
+                builder: (
+                  BuildContext context,
+                  List<String?> candidate,
+                  List<Object?> rejected,
+                ) =>
+                    SketchTag(
+                  candidate.isEmpty ? '未分类（拖到这里移出）' : '移出分类',
+                  tone: candidate.isEmpty ? SketchTone.ghost : SketchTone.primary,
+                  dense: true,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: SketchSpace.lg),
@@ -697,18 +764,48 @@ class _VaultPageState extends ConsumerState<VaultPage> {
                 children: <Widget>[
                   for (var i = 0; i < items.length; i++) ...<Widget>[
                     if (i > 0) const SizedBox(height: SketchSpace.md),
-                    GestureDetector(
-                      onTap: () => _openDetail(items[i].id),
-                      child: _VaultTile(
-                        variant: i % 4,
-                        letter: items[i].letter,
-                        name: items[i].title,
-                        account: items[i].username ?? '未填写用户名',
-                        badges: <(String, SketchTone)>[
-                          if (items[i].totpCode != null)
-                            ('TOTP ${items[i].totpCode}', SketchTone.blue),
-                          if (items[i].breached) ('已泄露', SketchTone.primary),
-                        ],
+                    Draggable<String>(
+                      data: items[i].id,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          width: 220,
+                          child: SketchTag(
+                            '移动 ${items[i].title}',
+                            tone: SketchTone.blue,
+                            dense: true,
+                          ),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.4,
+                        child: _VaultTile(
+                          variant: i % 4,
+                          letter: items[i].letter,
+                          name: items[i].title,
+                          account: items[i].username ?? '未填写用户名',
+                          badges: <(String, SketchTone)>[
+                            if (items[i].totpCode != null)
+                              ('TOTP ${items[i].totpCode}', SketchTone.blue),
+                            if (items[i].breached)
+                              ('已泄露', SketchTone.primary),
+                          ],
+                        ),
+                      ),
+                      child: GestureDetector(
+                        onTap: () => _openDetail(items[i].id),
+                        child: _VaultTile(
+                          variant: i % 4,
+                          letter: items[i].letter,
+                          name: items[i].title,
+                          account: items[i].username ?? '未填写用户名',
+                          badges: <(String, SketchTone)>[
+                            if (items[i].totpCode != null)
+                              ('TOTP ${items[i].totpCode}', SketchTone.blue),
+                            if (items[i].breached)
+                              ('已泄露', SketchTone.primary),
+                          ],
+                        ),
                       ),
                     ),
                   ],
