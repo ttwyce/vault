@@ -13,7 +13,6 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../organize/organize_page.dart';
-import '../quick/quick_capture_page.dart';
 import '../search/search_page.dart';
 import '../settings/about_page.dart';
 import '../settings/diagnostics_page.dart';
@@ -90,12 +89,6 @@ class SettingsHubPage extends ConsumerWidget {
               title: '回收站',
               subtitle: '删除的内容保留 30 天，可恢复、可看历史版本',
               onTap: () => _push(context, const TrashPage()),
-            ),
-            _SettingsTile(
-              glyph: SketchGlyph.plus,
-              title: '快速记录',
-              subtitle: '一句话存成想法',
-              onTap: () => _push(context, const QuickCapturePage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.type,

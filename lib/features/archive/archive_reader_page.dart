@@ -95,9 +95,9 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
       formatDate: _formatDate,
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: PageScaffold(
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: PageScaffold(
         title: '归档阅读',
       subtitle: widget.title,
       child: Column(
@@ -196,8 +196,8 @@ class _ArchiveReaderPageState extends ConsumerState<ArchiveReaderPage> {
             Text(reason,
                 style: TextStyle(fontSize: 10.5, color: p.blue)),
         ],
-        ),
       ),
+    ),
     );
   }
 

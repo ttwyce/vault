@@ -45,19 +45,9 @@ void main() {
         greaterThanOrEqualTo(top));
   });
 
-  testWidgets('移动端 FAB 与「密码」tab 不重叠', (WidgetTester tester) async {
+  testWidgets('移动端不再渲染无效快速记录按钮', (WidgetTester tester) async {
     await pumpPage(tester, const AppShell());
-    final fab = find.widgetWithText(SketchButton, '快速记录');
-    expect(fab, findsOneWidget);
-    final fabRect = tester.getRect(fab);
-    final nav = find.text('密码');
-    expect(nav, findsWidgets);
-    // 底栏里的「密码」文字可能同时在侧栏 tooltip 里，逐个检查可见文本框：
-    // 只要 FAB 不与任何文字矩形相交，就不会吞掉第 5 个 tab 的点击。
-    for (final element in nav.evaluate()) {
-      final rect = tester.getRect(find.byWidget(element.widget));
-      expect(fabRect.overlaps(rect), isFalse,
-          reason: 'FAB $fabRect 压住了密码 tab $rect');
-    }
+    expect(find.widgetWithText(SketchButton, '快速记录'), findsNothing);
+    expect(find.text('密码'), findsWidgets);
   });
 }

@@ -53,48 +53,51 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.sketch;
-    return PageScaffold(
-      title: '关于与隐私',
-      subtitle: '离线优先 · 端侧加密 · 零遥测',
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          SketchSpace.lg,
-          SketchSpace.md,
-          SketchSpace.lg,
-          SketchSpace.xxl,
-        ),
-        children: <Widget>[
-          for (final (title, body) in _sections) ...<Widget>[
-            SketchFrame(
-              radius: SketchRadii.c,
-              fill: p.surface,
-              padding: const EdgeInsets.all(SketchSpace.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: p.ink,
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: PageScaffold(
+        title: '关于与隐私',
+        subtitle: '离线优先 · 端侧加密 · 零遥测',
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            SketchSpace.lg,
+            SketchSpace.md,
+            SketchSpace.lg,
+            SketchSpace.xxl,
+          ),
+          children: <Widget>[
+            for (final (title, body) in _sections) ...<Widget>[
+              SketchFrame(
+                radius: SketchRadii.c,
+                fill: p.surface,
+                padding: const EdgeInsets.all(SketchSpace.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: p.ink,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: SketchSpace.sm),
-                  Text(
-                    body,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      height: 1.7,
-                      color: p.muted,
+                    const SizedBox(height: SketchSpace.sm),
+                    Text(
+                      body,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.7,
+                        color: p.muted,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: SketchSpace.md),
+              const SizedBox(height: SketchSpace.md),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

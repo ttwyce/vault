@@ -7,7 +7,6 @@ import '../../core/widgets/sketch_frame.dart';
 import '../../features/archive/archive_page.dart';
 import '../../features/chat/chat_page.dart';
 import '../../features/diary/diary_page.dart';
-import '../../features/quick/quick_capture_page.dart';
 import '../../features/records/records_page.dart';
 import '../../features/search/search_page.dart';
 import '../../features/settings/settings_hub_page.dart';
@@ -85,11 +84,6 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  /// 全局快速记录：任何分区都能一键记一条想法。
-  void _openQuickCapture() {
-    Navigator.of(context).push<void>(sketchPageRoute<void>(const QuickCapturePage()));
-  }
-
   Route<void> _settingsRoute() {
     return PageRouteBuilder<void>(
       transitionDuration: SketchMotion.page,
@@ -151,20 +145,6 @@ class _AppShellState extends State<AppShell> {
       bindings: breakpoint.useRail ? shortcuts : const <ShortcutActivator, VoidCallback>{},
       child: Focus(autofocus: breakpoint.useRail, child: Scaffold(
         backgroundColor: palette.bg,
-        // 快速记录是全局入口，放在内容区右下而不是塞进某个分区 ——
-        // 「想到一句话」不该要求用户先切到「记录」页。
-        // 抬高一截是为了不压住移动端的底部导航条。
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: SketchButton(
-            label: '快速记录',
-            glyph: SketchGlyph.plus,
-            tone: SketchTone.primary,
-            dense: true,
-            onPressed: _openQuickCapture,
-          ),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         // 底栏交给 Scaffold：它会自动把 nav 高度计入 FAB 的避让区，
         // 不再让右下角按钮压住第 5 个 tab「密码」。
         bottomNavigationBar: breakpoint.useRail
@@ -208,7 +188,8 @@ class _AppShellState extends State<AppShell> {
     );
     switch (action) {
       case DesktopShortcutAction.newEntry:
-        _openQuickCapture();
+        // 快速记录全局按钮已移除：快捷键不再跳到无效入口。
+        break;
       case DesktopShortcutAction.search:
         if (mounted) {
           Navigator.of(context).push<void>(

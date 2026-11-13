@@ -113,454 +113,457 @@ class DiagnosticsPage extends ConsumerWidget {
       models: <String>[for (final spec in specs) spec.id],
     );
 
-    return PageScaffold(
-      title: '诊断与备份',
-      subtitle:
-          '${report.passed ? '自检通过' : '自检有未通过项'} · '
-          '${toolRegistry.length} 个 Agent 工具',
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          SketchSpace.lg,
-          SketchSpace.md,
-          SketchSpace.lg,
-          SketchSpace.xxl,
-        ),
-        children: <Widget>[
-          SketchButton(
-            label: '演示死链重检查判定',
-            dense: true,
-            onPressed: () {
-              final outcome = decideLinkCheck(
-                httpStatus: 404,
-                retries: 0,
-                previousSimhash: null,
-                currentSimhash: null,
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('模拟 404 → ${outcome.result.name} · '
-                      'Wayback ${outcome.tryWayback ? '建议' : '不需要'}'
-                      '（不发真实请求）'),
-                ),
-              );
-            },
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: PageScaffold(
+        title: '诊断与备份',
+        subtitle:
+            '${report.passed ? '自检通过' : '自检有未通过项'} · '
+            '${toolRegistry.length} 个 Agent 工具',
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            SketchSpace.lg,
+            SketchSpace.md,
+            SketchSpace.lg,
+            SketchSpace.xxl,
           ),
-          const SizedBox(height: SketchSpace.sm),
-          SketchButton(
-            label: '预览 L1 逐次授权',
-            dense: true,
-            onPressed: () async {
-              final approved = await requestPrivacyAuthorization(
-                context: context,
-                level: 'L1 脱敏',
-                modelName: '云端模型（演示）',
-                entryCount: 3,
-                outgoingChars: 512,
-              );
-              if (context.mounted) {
+          children: <Widget>[
+            SketchButton(
+              label: '演示死链重检查判定',
+              dense: true,
+              onPressed: () {
+                final outcome = decideLinkCheck(
+                  httpStatus: 404,
+                  retries: 0,
+                  previousSimhash: null,
+                  currentSimhash: null,
+                );
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(approved
-                        ? '仅本次允许（演示，不发送任何数据）'
-                        : '已拒绝授权'),
+                    content: Text('模拟 404 → ${outcome.result.name} · '
+                        'Wayback ${outcome.tryWayback ? '建议' : '不需要'}'
+                        '（不发真实请求）'),
                   ),
                 );
-              }
-            },
-          ),
-          const SizedBox(height: SketchSpace.sm),
-          SketchButton(
-            label: '预览工具确认卡片',
-            dense: true,
-            onPressed: () async {
-              const decision = PolicyDecision(
-                PolicyAction.requireConfirm,
-                <String>['写类工具需要用户确认'],
-                '内容预览',
-              );
-              final approved = await showToolConfirmation(
-                context: context,
-                toolName: 'create_note',
-                decision: decision,
-                humanAction: '新建一条笔记（演示，不写库）',
-                contentPreview: '标题：演示\n正文：确认卡片只做展示，不执行任何工具。',
-                dataLeavesDevice: false,
-                modelName: '端侧模型',
-              );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(approved ? '用户已批准（演示）' : '用户已拒绝'),
-                  ),
+              },
+            ),
+            const SizedBox(height: SketchSpace.sm),
+            SketchButton(
+              label: '预览 L1 逐次授权',
+              dense: true,
+              onPressed: () async {
+                final approved = await requestPrivacyAuthorization(
+                  context: context,
+                  level: 'L1 脱敏',
+                  modelName: '云端模型（演示）',
+                  entryCount: 3,
+                  outgoingChars: 512,
                 );
-              }
-            },
-          ),
-          const SizedBox(height: SketchSpace.sm),
-          SketchButton(
-            label: '生成昨日总结',
-            dense: true,
-            onPressed: () async {
-              final session = ref.read(vaultSessionProvider);
-              final db = session.database;
-              final gateway = session.gateway;
-              final activity = session.activity;
-              if (db == null || gateway == null || activity == null) return;
-              final yesterday = DateTime.now()
-                  .subtract(const Duration(days: 1));
-              final summary = await DailySummaryService(
-                logger: ActivityLogger(db: db, deviceId: 'local'),
-                gateway: gateway,
-                db: db,
-              ).buildAndStore(yesterday);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(summary == null
-                        ? '昨天没有活动记录'
-                        : '已生成：${summary.headline}'),
-                  ),
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(approved
+                          ? '仅本次允许（演示，不发送任何数据）'
+                          : '已拒绝授权'),
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: SketchSpace.sm),
+            SketchButton(
+              label: '预览工具确认卡片',
+              dense: true,
+              onPressed: () async {
+                const decision = PolicyDecision(
+                  PolicyAction.requireConfirm,
+                  <String>['写类工具需要用户确认'],
+                  '内容预览',
                 );
-              }
-            },
-          ),
-          SketchButton(
-            label: '生成上月摘要',
-            dense: true,
-            onPressed: () async {
-              final session = ref.read(vaultSessionProvider);
-              final db = session.database;
-              final gateway = session.gateway;
-              if (db == null || gateway == null) return;
-              final now = DateTime.now();
-              final monthKey =
-                  '${now.year}-${now.month.toString().padLeft(2, '0')}';
-              final summary = await RollupService(
-                db: db,
-                gateway: gateway,
-              ).rollup(
-                target: SummaryGranularity.month,
-                periodKey: monthKey,
-                from: '$monthKey-W1',
-                to: '$monthKey-W5',
-              );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(summary == null
-                        ? '没有可汇总的周摘要'
-                        : '已生成：${summary.headline}'),
-                  ),
+                final approved = await showToolConfirmation(
+                  context: context,
+                  toolName: 'create_note',
+                  decision: decision,
+                  humanAction: '新建一条笔记（演示，不写库）',
+                  contentPreview: '标题：演示\n正文：确认卡片只做展示，不执行任何工具。',
+                  dataLeavesDevice: false,
+                  modelName: '端侧模型',
                 );
-              }
-            },
-          ),
-          const SizedBox(height: SketchSpace.lg),
-          const SizedBox(height: SketchSpace.sm),
-          Text(
-            '全局热键：默认 $kDefaultGlobalHotkey / '
-            '${HotkeyCheck.values.length} 态判定（保留键 / 冲突 / 可注册）\n'
-            '桌面布局：${DesktopLayout.values.length} 档（紧凑 / rail / '
-            '≥${kThreeColumnMinWidth.toInt()} 三栏，窗口下限 '
-            '${kWindowsMinWidth.toInt()}×${kWindowsMinHeight.toInt()}）',
-            style: TextStyle(fontSize: 10.5, color: p.blue),
-          ),
-          Text(
-            'U4 红色：一屏 ≤ $kMaxRedPerScreen 处（${RedUsage.values.length} 类用途），'
-            '超限/越权给降级建议（示例 ${auditRedUsage(const <RedUsage>[]).passed}）\n'
-            'U3 对比度：亮/暗双主题 ink·muted 在 4 类底面上均 '
-            '≥ $kMinBodyContrast:1（${_contrastSummary()}）',
-            style: TextStyle(fontSize: 10.5, color: p.blue),
-          ),
-          Text(
-            '发布前确定性自检（不替代真实服务器集成用例）',
-            style: TextStyle(fontSize: 12, color: p.muted),
-          ),
-          const SizedBox(height: SketchSpace.md),
-          for (final check in report.checks)
-            _CheckTile(check: check),
-          const SizedBox(height: SketchSpace.xl),
-          SketchCard(
-            variant: 1,
-            fill: p.note,
-            tilt: SketchTilt.left,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '向量模型下载与索引重建',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
-                  ),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  'A2 退路：Dart 内 int8 暴力余弦 KNN，'
-                  '维度不匹配跳过、同分稳定（topK ${bruteForceKnn(query: const <int>[1], vectors: const <String, List<int>>{}, topK: 1).length} 示例）\n'
-                  'L2 PDF：纯 Dart 简易 PDF（A4 分页 + xref）降级路径已落地，'
-                  'blob_ref(kind=2) 与 status=full 真实登记\n'
-                  '模型镜像：${ModelMirrorService.pathFor('model')} 已接真实 '
-                  '条件 PUT / GET + sha256，默认关闭、超配额拒传\n'
-                  '向量同步：/vault/vec/ 已接真实 WebDAV GET / 条件 PUT，'
-                  'model_id/dim/dtype 不匹配丢弃重算（412 不覆盖云端）\n'
-                  '向量同步开关默认关（${const VectorSyncSetting().mode.name}），'
-                  '关闭不删云端/本地向量，换设备需全量重算\n'
-                  '相关推荐：标签 Jaccard + 标题 bigram 打分 top3，'
-                  'kind ${kNeverRecommendKinds.join('/')} 永不推荐、无重合不凑数',
-                  style: TextStyle(fontSize: 11, color: p.blue),
-                ),
-                const SizedBox(height: SketchSpace.xs),
-                Text(
-                  '分类/标签建议：关键词抽取 -> 1 个分类 + 2~4 个标签，'
-                  '上限 $kMaxTagsPerEntry、不自动写入',
-                  style: TextStyle(fontSize: 11, color: p.blue),
-                ),
-                const SizedBox(height: SketchSpace.xs),
-                Text(
-                  '源优先级：${kDefaultSourceOrder.map((ModelSource s) => s.name).join(' → ')}\n'
-                  '每源 $kMaxAttemptsPerSource 次重试 · 校验失败换源 · 全源失败标记损坏\n'
-                  '磁盘需 ≥ 1.5×disk_bytes · .part 断点续传',
-                  style: TextStyle(fontSize: 11, height: 1.7, color: p.muted),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  '备份排除三端四标记：${BackupExclusion(
-                    androidDataExtraction: true,
-                    androidFullBackup: true,
-                    iosIsExcludedFromBackup: true,
-                    windowsOutsideOneDrive: true,
-                  ).allConfigured ? '已配置' : '未配置'} · '
-                  '切换模型全量重建每批 20 条、cursor 可续\n'
-                  '下载中/校验中检索降级纯 FTS；向量同步 '
-                  'model_id/dim/dtype 不匹配直接丢弃并排重算'
-                  '（${VectorDecision.discard.name}）\n'
-                  '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
-                  '云端任务未授权降级端侧\n'
-                  'Agent 降级：${AgentFailureKind.values.length} 类失败 + '
-                  '6 轮上限 / 拒绝 / 待确认，均明确检索仍可用\n'
-                  'AI 日记排期：$kAiDiaryHour:${kAiDiaryMinute.toString().padLeft(2, '0')} '
-                  '${AiDiaryPlatform.values.length} 端文案 / 当天已生成不重复 / 前台补偿\n'
-                  '清除所有 AI 数据：${AiDataDomain.values.length} 个数据域 / '
-                  '二次确认 / 用户手写内容永不删除\n'
-                  '日总结 JSON 解析：${SummaryGranularity.values.length} 种层级 / '
-                  '坏响应拒绝、假引用剔除、时间线归一化\n'
-                  'System Prompt 五段结构 + 输出四道关卡'
-                  '（假引用整句移除 / 密码整段隐藏 / 300 字 / token 预算，'
-                  '${kSystemPrompt.split('\n').length} 行提示词）\n'
-                  'OpenAI 兼容 ${kDefaultEndpoints.length} 家服务商 / '
-                  '真实 SSE 流式客户端（dart:io POST + 逐行 data: 解析） / '
-                  '流式回答经安全约束后 append-only 落会话 / '
-                  '6 轮上下文裁剪 / 脱敏日志（不记 body/Key）\n'
-                  'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮 / '
-                  '${LoopStop.values.length} 种停轮原因、'
-                  '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
-                  'MCP 适配器骨架已就位（transport 未连接）',
-                  style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
-                ),
-              ],
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(approved ? '用户已批准（演示）' : '用户已拒绝'),
+                    ),
+                  );
+                }
+              },
             ),
-          ),
-          const SizedBox(height: SketchSpace.xl),
-          SketchCard(
-            variant: 2,
-            fill: p.surface,
-            tilt: SketchTilt.left,
-            child: Text(
-              'AI 入口：L0 数据禁入 prompt，'
-              '${AiEntryPoint.values.length} 类入口云端必弹逐次授权并显示发送字数\n'
-              '剪贴板 URL：${ClipboardHintAction.values.length} 态提示 / '
-              '前台单链才问、已提示过不重复打扰、不自动抓取\n'
-              '剪藏分享：多 URL 去重、纯文本落想法、'
-              'Extension 只接收不抓取（${ShareIntentKind.archiveUrls.name}）\n'
-              '变更检测：只对手动标记或 '
-              '${kRecentlyVisitedMs ~/ 86400000} 天内访问过的条目重抓，'
-              'simhash 汉明距离 > 3 才提示并保留旧版\n'
-              '按需下载：L1 自动 + 骨架屏 / L2 点原貌才下 / '
-              '本地缓存 ${kDefaultBlobCacheMaxBytes ~/ 1024 ~/ 1024}MB 按 LRU 只置 local=0\n'
-              'PDF 分页 A4 ${kA4WidthPt.toInt()}×${kA4HeightPt.toInt()}pt / '
-              '${PdfFallbackStage.values.length} 级降级到只保留 L1+L3\n'
-              'Wayback：availability 响应解析 / 时间戳兜底 / '
-              '自动提交默认关闭（${shouldSubmitToWayback(userOptedIn: false)}）\n'
-              '完整快照排期：每日 02:00 / 每周日 02:00 / '
-              '当天已跑不重复（$kSnapshotHour:00 窗口）\n'
-              '死链排期：${defaultRecheckPolicy(PlatformKind.windows).wire}（Windows）/ '
-              '${defaultRecheckPolicy(PlatformKind.android).wire}（移动端），'
-              '批量 ${recheckBatchSize(PlatformKind.windows)}:${recheckBatchSize(PlatformKind.android)}\n'
-              '归档配置：L1 常开、完整快照 ${SnapshotSchedule.values.length} 种排期、'
-              '配额 ${const ArchiveSettings().quotaRatio * 100}% '
-              '超限只存 L1、不承诺后台自动\n'
-              '图片过滤：宽或高 ≥ $kMinArchiveImageEdge px 保留，'
-              '下载失败保留原 URL 并标注\n'
-              '内容闸门：反爬 / 付费墙 ${ContentGate.values.length} 态，'
-              '正文过短按加载失败只存元数据\n'
-              '归档维护计划器：重检查 / Wayback 回退 / 本地缓存清理 / '
-              '快照降级 ${MaintenanceAction.values.length} 类动作；'
-              '抓取流水线 ${kArchivePipeline.length} 步 + PDF 失败降级 / '
-              '按需下载 L1 优先（真实抓取仍属平台层）',
-              style: TextStyle(fontSize: 11, color: p.muted),
+            const SizedBox(height: SketchSpace.sm),
+            SketchButton(
+              label: '生成昨日总结',
+              dense: true,
+              onPressed: () async {
+                final session = ref.read(vaultSessionProvider);
+                final db = session.database;
+                final gateway = session.gateway;
+                final activity = session.activity;
+                if (db == null || gateway == null || activity == null) return;
+                final yesterday = DateTime.now()
+                    .subtract(const Duration(days: 1));
+                final summary = await DailySummaryService(
+                  logger: ActivityLogger(db: db, deviceId: 'local'),
+                  gateway: gateway,
+                  db: db,
+                ).buildAndStore(yesterday);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(summary == null
+                          ? '昨天没有活动记录'
+                          : '已生成：${summary.headline}'),
+                    ),
+                  );
+                }
+              },
             ),
-          ),
-          const SizedBox(height: SketchSpace.xl),
-          SketchCard(
-            variant: 0,
-            fill: p.surface,
-            tilt: SketchTilt.none,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Autofill 字段识别 ${AutofillFieldType.values.length} 类 / '
-                  '域名与包名匹配，候选数据不含密码明文\n'
-                  '同步状态 → UI 映射（docs/04 §11）',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
-                  ),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  'IDLE 无提示 / PROBE·PULL 细进度条 / PUSH 正在上传 N 项 / '
-                  '冲突橙色横幅 / BACKOFF 静默 / E_AUTH·E_QUOTA 横幅；'
-                  '隔离文件红点见设置页。真实状态注入需 M0 A5。',
-                  style: TextStyle(fontSize: 10.5, color: p.muted),
-                ),
-                Text(
-                  '写入后 debounce ${kSyncKickDebounceMs ~/ 1000}s 才触发同步，'
-                  '未解锁/后台/同步中推迟到前台补偿\n'
-                  'E_RATE 请求预算每次减半（基线 $kDefaultSyncBudget，下限 1）/'
-                  ' 连续成功 2 轮恢复，致命错误预算归零\n'
-                  'meta.schema 双向判定：${SchemaSyncAction.values.length} 种动作 / '
-                  '云端更高拒绝、更低须所有设备升级后才写回\n'
-                  '首次绑定已有 vault：${planFirstBind(cloudHasVault: true, localHasData: true).length} 选一'
-                  '（合并推荐 / 云端为准先入 trash / 本地为准需二次确认入 quarantine）\n'
-                  '预算 200 请求耗尽时保存分片游标（已完成不重复入列）；'
-                  '水位一致且 7 天内才续跑，否则保守重跑。',
-                  style: TextStyle(fontSize: 10.5, color: p.muted),
-                ),
-                Text(
-                  '映射层已就绪 · 当前默认 '
-                  '${resolveSyncBanner(phase: SyncPhase.idle).tone.name} · '
-                  '分片续跑 ${CheckpointResume.resume.name}',
-                  style: TextStyle(fontSize: 10.5, color: p.blue),
-                ),
-              ],
+            SketchButton(
+              label: '生成上月摘要',
+              dense: true,
+              onPressed: () async {
+                final session = ref.read(vaultSessionProvider);
+                final db = session.database;
+                final gateway = session.gateway;
+                if (db == null || gateway == null) return;
+                final now = DateTime.now();
+                final monthKey =
+                    '${now.year}-${now.month.toString().padLeft(2, '0')}';
+                final summary = await RollupService(
+                  db: db,
+                  gateway: gateway,
+                ).rollup(
+                  target: SummaryGranularity.month,
+                  periodKey: monthKey,
+                  from: '$monthKey-W1',
+                  to: '$monthKey-W5',
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(summary == null
+                          ? '没有可汇总的周摘要'
+                          : '已生成：${summary.headline}'),
+                    ),
+                  );
+                }
+              },
             ),
-          ),
-          const SizedBox(height: SketchSpace.xl),
-          SketchCard(
-            variant: 3,
-            fill: p.noteAlt,
-            tilt: SketchTilt.none,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '性能基线（5000 条 / 真机）',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
-                  ),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  '${PerfBudget.defaults.length} 项预算 · '
-                  '${evaluatePerformance(const <PerfMetric, num>{}).failures().length} 项未测 · '
-                  '发布门禁未通过',
-                  style: TextStyle(fontSize: 11, color: p.red),
-                ),
-                Text(
-                  '改主密码 / 重置恢复码：表单校验 + 二次确认，'
-                  '${VaultCredentialAction.values.length - 1} 类动作、旧码立即失效\n'
-                  '解锁策略：生物识别失败 $kMaxBiometricFailures 次强制主密码 / '
-                  '主密码 $kMaxPassphraseFailures 次锁定 5 分钟\n'
-                  '同步回归 ${auditSyncRegression().total} 用例：'
-                  '本地 ${auditSyncRegression().localVerified} 条 · '
-                  '需真实服务器 ${auditSyncRegression().pendingRealServer} 条\n'
-                  '图片附件按文件头识别 PNG/JPEG/WebP/GIF，'
-                  '上限 ${kMaxAttachmentBytes ~/ (1024 * 1024)}MB、路径与扩展名规范化\n'
-                  '冷启动 < 1.2s、中文搜索 P95 < 150ms、混合检索 P95 < 300ms、'
-                  '1000 条 60fps、5000 条重建 < 8min。未测 ≠ 达标。',
-                  style: TextStyle(fontSize: 10.5, color: p.muted),
-                ),
-              ],
+            const SizedBox(height: SketchSpace.lg),
+            const SizedBox(height: SketchSpace.sm),
+            Text(
+              '全局热键：默认 $kDefaultGlobalHotkey / '
+              '${HotkeyCheck.values.length} 态判定（保留键 / 冲突 / 可注册）\n'
+              '桌面布局：${DesktopLayout.values.length} 档（紧凑 / rail / '
+              '≥${kThreeColumnMinWidth.toInt()} 三栏，窗口下限 '
+              '${kWindowsMinWidth.toInt()}×${kWindowsMinHeight.toInt()}）',
+              style: TextStyle(fontSize: 10.5, color: p.blue),
             ),
-          ),
-          const SizedBox(height: SketchSpace.xl),
-          SketchCard(
-            variant: 0,
-            fill: p.surface,
-            tilt: SketchTilt.right,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '三端能力缺口（docs/08）',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
-                  ),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                for (final platform in PlatformKind.values)
+            Text(
+              'U4 红色：一屏 ≤ $kMaxRedPerScreen 处（${RedUsage.values.length} 类用途），'
+              '超限/越权给降级建议（示例 ${auditRedUsage(const <RedUsage>[]).passed}）\n'
+              'U3 对比度：亮/暗双主题 ink·muted 在 4 类底面上均 '
+              '≥ $kMinBodyContrast:1（${_contrastSummary()}）',
+              style: TextStyle(fontSize: 10.5, color: p.blue),
+            ),
+            Text(
+              '发布前确定性自检（不替代真实服务器集成用例）',
+              style: TextStyle(fontSize: 12, color: p.muted),
+            ),
+            const SizedBox(height: SketchSpace.md),
+            for (final check in report.checks)
+              _CheckTile(check: check),
+            const SizedBox(height: SketchSpace.xl),
+            SketchCard(
+              variant: 1,
+              fill: p.note,
+              tilt: SketchTilt.left,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
                   Text(
-                    '${platform.name}：仍需原生 '
-                    '${auditPlatformGaps().gapsFor(platform).length} 项 · '
-                    '不可用 ${unavailableFor(platform).length} 项',
+                    '向量模型下载与索引重建',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    'A2 退路：Dart 内 int8 暴力余弦 KNN，'
+                    '维度不匹配跳过、同分稳定（topK ${bruteForceKnn(query: const <int>[1], vectors: const <String, List<int>>{}, topK: 1).length} 示例）\n'
+                    'L2 PDF：纯 Dart 简易 PDF（A4 分页 + xref）降级路径已落地，'
+                    'blob_ref(kind=2) 与 status=full 真实登记\n'
+                    '模型镜像：${ModelMirrorService.pathFor('model')} 已接真实 '
+                    '条件 PUT / GET + sha256，默认关闭、超配额拒传\n'
+                    '向量同步：/vault/vec/ 已接真实 WebDAV GET / 条件 PUT，'
+                    'model_id/dim/dtype 不匹配丢弃重算（412 不覆盖云端）\n'
+                    '向量同步开关默认关（${const VectorSyncSetting().mode.name}），'
+                    '关闭不删云端/本地向量，换设备需全量重算\n'
+                    '相关推荐：标签 Jaccard + 标题 bigram 打分 top3，'
+                    'kind ${kNeverRecommendKinds.join('/')} 永不推荐、无重合不凑数',
+                    style: TextStyle(fontSize: 11, color: p.blue),
+                  ),
+                  const SizedBox(height: SketchSpace.xs),
+                  Text(
+                    '分类/标签建议：关键词抽取 -> 1 个分类 + 2~4 个标签，'
+                    '上限 $kMaxTagsPerEntry、不自动写入',
+                    style: TextStyle(fontSize: 11, color: p.blue),
+                  ),
+                  const SizedBox(height: SketchSpace.xs),
+                  Text(
+                    '源优先级：${kDefaultSourceOrder.map((ModelSource s) => s.name).join(' → ')}\n'
+                    '每源 $kMaxAttemptsPerSource 次重试 · 校验失败换源 · 全源失败标记损坏\n'
+                    '磁盘需 ≥ 1.5×disk_bytes · .part 断点续传',
+                    style: TextStyle(fontSize: 11, height: 1.7, color: p.muted),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    '备份排除三端四标记：${BackupExclusion(
+                      androidDataExtraction: true,
+                      androidFullBackup: true,
+                      iosIsExcludedFromBackup: true,
+                      windowsOutsideOneDrive: true,
+                    ).allConfigured ? '已配置' : '未配置'} · '
+                    '切换模型全量重建每批 20 条、cursor 可续\n'
+                    '下载中/校验中检索降级纯 FTS；向量同步 '
+                    'model_id/dim/dtype 不匹配直接丢弃并排重算'
+                    '（${VectorDecision.discard.name}）\n'
+                    '双模型路由：L0 强制端侧 / 可选需逐次授权 / '
+                    '云端任务未授权降级端侧\n'
+                    'Agent 降级：${AgentFailureKind.values.length} 类失败 + '
+                    '6 轮上限 / 拒绝 / 待确认，均明确检索仍可用\n'
+                    'AI 日记排期：$kAiDiaryHour:${kAiDiaryMinute.toString().padLeft(2, '0')} '
+                    '${AiDiaryPlatform.values.length} 端文案 / 当天已生成不重复 / 前台补偿\n'
+                    '清除所有 AI 数据：${AiDataDomain.values.length} 个数据域 / '
+                    '二次确认 / 用户手写内容永不删除\n'
+                    '日总结 JSON 解析：${SummaryGranularity.values.length} 种层级 / '
+                    '坏响应拒绝、假引用剔除、时间线归一化\n'
+                    'System Prompt 五段结构 + 输出四道关卡'
+                    '（假引用整句移除 / 密码整段隐藏 / 300 字 / token 预算，'
+                    '${kSystemPrompt.split('\n').length} 行提示词）\n'
+                    'OpenAI 兼容 ${kDefaultEndpoints.length} 家服务商 / '
+                    '真实 SSE 流式客户端（dart:io POST + 逐行 data: 解析） / '
+                    '流式回答经安全约束后 append-only 落会话 / '
+                    '6 轮上下文裁剪 / 脱敏日志（不记 body/Key）\n'
+                    'Agent 主循环最多 ${AgentLoopLimits().maxTurns} 轮 / '
+                    '${LoopStop.values.length} 种停轮原因、'
+                    '工具结果截断 ${AgentLoopLimits().maxResultChars} 字；'
+                    'MCP 适配器骨架已就位（transport 未连接）',
+                    style: TextStyle(fontSize: 10.5, height: 1.7, color: p.blue),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: SketchSpace.xl),
+            SketchCard(
+              variant: 2,
+              fill: p.surface,
+              tilt: SketchTilt.left,
+              child: Text(
+                'AI 入口：L0 数据禁入 prompt，'
+                '${AiEntryPoint.values.length} 类入口云端必弹逐次授权并显示发送字数\n'
+                '剪贴板 URL：${ClipboardHintAction.values.length} 态提示 / '
+                '前台单链才问、已提示过不重复打扰、不自动抓取\n'
+                '剪藏分享：多 URL 去重、纯文本落想法、'
+                'Extension 只接收不抓取（${ShareIntentKind.archiveUrls.name}）\n'
+                '变更检测：只对手动标记或 '
+                '${kRecentlyVisitedMs ~/ 86400000} 天内访问过的条目重抓，'
+                'simhash 汉明距离 > 3 才提示并保留旧版\n'
+                '按需下载：L1 自动 + 骨架屏 / L2 点原貌才下 / '
+                '本地缓存 ${kDefaultBlobCacheMaxBytes ~/ 1024 ~/ 1024}MB 按 LRU 只置 local=0\n'
+                'PDF 分页 A4 ${kA4WidthPt.toInt()}×${kA4HeightPt.toInt()}pt / '
+                '${PdfFallbackStage.values.length} 级降级到只保留 L1+L3\n'
+                'Wayback：availability 响应解析 / 时间戳兜底 / '
+                '自动提交默认关闭（${shouldSubmitToWayback(userOptedIn: false)}）\n'
+                '完整快照排期：每日 02:00 / 每周日 02:00 / '
+                '当天已跑不重复（$kSnapshotHour:00 窗口）\n'
+                '死链排期：${defaultRecheckPolicy(PlatformKind.windows).wire}（Windows）/ '
+                '${defaultRecheckPolicy(PlatformKind.android).wire}（移动端），'
+                '批量 ${recheckBatchSize(PlatformKind.windows)}:${recheckBatchSize(PlatformKind.android)}\n'
+                '归档配置：L1 常开、完整快照 ${SnapshotSchedule.values.length} 种排期、'
+                '配额 ${const ArchiveSettings().quotaRatio * 100}% '
+                '超限只存 L1、不承诺后台自动\n'
+                '图片过滤：宽或高 ≥ $kMinArchiveImageEdge px 保留，'
+                '下载失败保留原 URL 并标注\n'
+                '内容闸门：反爬 / 付费墙 ${ContentGate.values.length} 态，'
+                '正文过短按加载失败只存元数据\n'
+                '归档维护计划器：重检查 / Wayback 回退 / 本地缓存清理 / '
+                '快照降级 ${MaintenanceAction.values.length} 类动作；'
+                '抓取流水线 ${kArchivePipeline.length} 步 + PDF 失败降级 / '
+                '按需下载 L1 优先（真实抓取仍属平台层）',
+                style: TextStyle(fontSize: 11, color: p.muted),
+              ),
+            ),
+            const SizedBox(height: SketchSpace.xl),
+            SketchCard(
+              variant: 0,
+              fill: p.surface,
+              tilt: SketchTilt.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Autofill 字段识别 ${AutofillFieldType.values.length} 类 / '
+                    '域名与包名匹配，候选数据不含密码明文\n'
+                    '同步状态 → UI 映射（docs/04 §11）',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    'IDLE 无提示 / PROBE·PULL 细进度条 / PUSH 正在上传 N 项 / '
+                    '冲突橙色横幅 / BACKOFF 静默 / E_AUTH·E_QUOTA 横幅；'
+                    '隔离文件红点见设置页。真实状态注入需 M0 A5。',
+                    style: TextStyle(fontSize: 10.5, color: p.muted),
+                  ),
+                  Text(
+                    '写入后 debounce ${kSyncKickDebounceMs ~/ 1000}s 才触发同步，'
+                    '未解锁/后台/同步中推迟到前台补偿\n'
+                    'E_RATE 请求预算每次减半（基线 $kDefaultSyncBudget，下限 1）/'
+                    ' 连续成功 2 轮恢复，致命错误预算归零\n'
+                    'meta.schema 双向判定：${SchemaSyncAction.values.length} 种动作 / '
+                    '云端更高拒绝、更低须所有设备升级后才写回\n'
+                    '首次绑定已有 vault：${planFirstBind(cloudHasVault: true, localHasData: true).length} 选一'
+                    '（合并推荐 / 云端为准先入 trash / 本地为准需二次确认入 quarantine）\n'
+                    '预算 200 请求耗尽时保存分片游标（已完成不重复入列）；'
+                    '水位一致且 7 天内才续跑，否则保守重跑。',
+                    style: TextStyle(fontSize: 10.5, color: p.muted),
+                  ),
+                  Text(
+                    '映射层已就绪 · 当前默认 '
+                    '${resolveSyncBanner(phase: SyncPhase.idle).tone.name} · '
+                    '分片续跑 ${CheckpointResume.resume.name}',
+                    style: TextStyle(fontSize: 10.5, color: p.blue),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: SketchSpace.xl),
+            SketchCard(
+              variant: 3,
+              fill: p.noteAlt,
+              tilt: SketchTilt.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '性能基线（5000 条 / 真机）',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    '${PerfBudget.defaults.length} 项预算 · '
+                    '${evaluatePerformance(const <PerfMetric, num>{}).failures().length} 项未测 · '
+                    '发布门禁未通过',
+                    style: TextStyle(fontSize: 11, color: p.red),
+                  ),
+                  Text(
+                    '改主密码 / 重置恢复码：表单校验 + 二次确认，'
+                    '${VaultCredentialAction.values.length - 1} 类动作、旧码立即失效\n'
+                    '解锁策略：生物识别失败 $kMaxBiometricFailures 次强制主密码 / '
+                    '主密码 $kMaxPassphraseFailures 次锁定 5 分钟\n'
+                    '同步回归 ${auditSyncRegression().total} 用例：'
+                    '本地 ${auditSyncRegression().localVerified} 条 · '
+                    '需真实服务器 ${auditSyncRegression().pendingRealServer} 条\n'
+                    '图片附件按文件头识别 PNG/JPEG/WebP/GIF，'
+                    '上限 ${kMaxAttachmentBytes ~/ (1024 * 1024)}MB、路径与扩展名规范化\n'
+                    '冷启动 < 1.2s、中文搜索 P95 < 150ms、混合检索 P95 < 300ms、'
+                    '1000 条 60fps、5000 条重建 < 8min。未测 ≠ 达标。',
+                    style: TextStyle(fontSize: 10.5, color: p.muted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: SketchSpace.xl),
+            SketchCard(
+              variant: 0,
+              fill: p.surface,
+              tilt: SketchTilt.right,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '三端能力缺口（docs/08）',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  for (final platform in PlatformKind.values)
+                    Text(
+                      '${platform.name}：仍需原生 '
+                      '${auditPlatformGaps().gapsFor(platform).length} 项 · '
+                      '不可用 ${unavailableFor(platform).length} 项',
+                      style: TextStyle(fontSize: 11, color: p.muted),
+                    ),
+                  Text(
+                    '纯逻辑已落地 ≠ 三端可用；原生模块与上架审核仍缺。',
+                    style: TextStyle(fontSize: 10.5, color: p.blue),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: SketchSpace.xl),
+            SketchCard(
+              variant: 2,
+              fill: p.noteAlt,
+              tilt: SketchTilt.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '加密备份包',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    '路径 ${backupPath('vault-${_datePart(nowMs)}.enc')} · '
+                    '下次备份 ${_datePart(nextBackupAt(null, nowMs))}',
                     style: TextStyle(fontSize: 11, color: p.muted),
                   ),
-                Text(
-                  '纯逻辑已落地 ≠ 三端可用；原生模块与上架审核仍缺。',
-                  style: TextStyle(fontSize: 10.5, color: p.blue),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: SketchSpace.xl),
-          SketchCard(
-            variant: 2,
-            fill: p.noteAlt,
-            tilt: SketchTilt.none,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '加密备份包',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: p.ink,
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    const JsonEncoder.withIndent('  ').convert(manifest.toJson()),
+                    style: context.typography.monoStyle(
+                      size: 10,
+                      color: p.ink,
+                    ),
                   ),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  '路径 ${backupPath('vault-${_datePart(nowMs)}.enc')} · '
-                  '下次备份 ${_datePart(nextBackupAt(null, nowMs))}',
-                  style: TextStyle(fontSize: 11, color: p.muted),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  const JsonEncoder.withIndent('  ').convert(manifest.toJson()),
-                  style: context.typography.monoStyle(
-                    size: 10,
-                    color: p.ink,
+                  const SizedBox(height: SketchSpace.sm),
+                  Text(
+                    '加密备份已接真实 VLT1 打包与 WebDAV /backup/ 条件上传；'
+                    '还原目前只校验 manifest，不写回条目。'
+                    '明文导出必须二次确认。',
+                    style: TextStyle(fontSize: 10.5, color: p.blue),
                   ),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                Text(
-                  '加密备份已接真实 VLT1 打包与 WebDAV /backup/ 条件上传；'
-                  '还原目前只校验 manifest，不写回条目。'
-                  '明文导出必须二次确认。',
-                  style: TextStyle(fontSize: 10.5, color: p.blue),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

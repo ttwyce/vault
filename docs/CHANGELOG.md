@@ -4,6 +4,25 @@
 
 ---
 
+## v2.19 · 2026-11-13
+
+### 可见 UI 缺陷修复（批次 1）
+
+- 移除无效的全局「快速记录」FAB、设置中心入口与快捷键跳转；
+  `QuickCapturePage` 及其测试保留，不再从外壳/设置误入。
+- 修复裸 `PageScaffold` 页面在暗色主题下露出黑底：关于与隐私、
+  诊断与备份、导出与备份、归档阅读四页统一自带
+  `Scaffold(backgroundColor: context.sketch.bg)`；阅读器不再用
+  `Material(color: transparent)` 顶替背景。
+- 新增 `dark_background_regression_test.dart` 4 条暗主题背景断言，
+  更新 `ui_layout_regression_test.dart` 断言 FAB 不再渲染。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1124/1124 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.18 · 2026-11-13
 
 ### CI 签名校验二次修复：移除版本相关的文本比对
