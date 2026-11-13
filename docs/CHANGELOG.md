@@ -4,6 +4,28 @@
 
 ---
 
+## v2.11 · 2026-11-13
+
+### 固定 Android debug 签名（解决每次构建签名不一样）
+
+- 根因：`android/app/build.gradle.kts` 没有显式 `storeFile`，AGP 使用每台机器
+  `~/.android/debug.keystore`；CI 每次是全新 runner，会现生成一把新 key，
+  产物证书随之变化、覆盖安装报签名不一致。git 提交署名本来就是统一的。
+- 新增仓库内测试专用 `android/app/vault-debug.keystore`（RSA 2048，
+  SHA1 `54:E9:99:07:67:A0:B1:CE:AE:FF:8A:F9:FE:9F:12:62:E4:E1:D1:07`），
+  debug / release 构建与 AGP 自带 debug signingConfig 都显式指向它；
+  `android/.gitignore` 只对这一文件开例外，发布私钥 / `key.properties` 仍忽略。
+- CI 构建后用 `apksigner verify --print-certs` 打印证书并断言固定 SHA1；
+  新增 `test/debug_signing_config_test.dart` 防止配置被改回默认 keystore。
+- **边界**：这是测试 / CI 包的固定签名，不是应用商店发布密钥；
+  正式发布仍需独立 keystore 与 `key.properties`，且永不入库。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1097/1097 passed**；
+`git diff --check` OK；本地未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.10 · 2026-11-13
 
 ### UI 布局 / 风格收敛与自定义 AI 端点

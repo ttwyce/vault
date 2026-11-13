@@ -255,7 +255,7 @@ vault/                            Flutter 工程根（package: vault）
 └── _archive/                 # 已废弃的方案，仅作留档
 ```
 
-**当前进度**：**M2 已完成；M3 编排已补齐，真实 Nextcloud 单服务商同步与两设备收敛已实测（见 CHANGELOG v2.8），但 A5 双服务商与 26 用例硬门槛仍未过；M4~M9 预备层与 §5 A 装配接线 / 跨链路集成已落地（1096/1096 已验证）；M4~M9 未完成**。
+**当前进度**：**M2 已完成；M3 编排已补齐，真实 Nextcloud 单服务商同步与两设备收敛已实测（见 CHANGELOG v2.8），但 A5 双服务商与 26 用例硬门槛仍未过；M4~M9 预备层与 §5 A 装配接线 / 跨链路集成已落地（1097/1097 已验证）；M4~M9 未完成**。
 
 **仓库状态（2026-11-12）**：`ttwyce/vault` 已公开；`.github/workflows/android-apk.yml`
 自动构建 debug APK；172 个提交署名统一为 `ttwyce <323808844478@qq.com>`。
@@ -302,7 +302,7 @@ category / tag / `entry_taxonomy` 走 `/vault/entities/` 独立通道（条件�
 与 90 天墓碑 TTL 分开判定，清理闸门是「本条墓碑 ETag 已确认」；
 `test/entity_sync_engine_test.dart` 13 条钉住这些红线。
 
-`flutter analyze` 无告警，`flutter test --concurrency=1` **1096 条全绿**；决策表 D1~D110
+`flutter analyze` 无告警，`flutter test --concurrency=1` **1097 条全绿**；决策表 D1~D110
 （交接基线 376 + 后续各批次 693，逐批明细见 CHANGELOG）。慢机器上建议
 继续用 `--concurrency=1`：
 默认并发全量测试时 `kdf_perf_probe_test.dart` 曾因机器负载出现

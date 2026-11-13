@@ -7,8 +7,9 @@ gradle-wrapper.jar
 GeneratedPluginRegistrant.java
 .cxx/
 
-# Remember to never publicly share your keystore.
-# See https://flutter.dev/to/reference-keystore
+# 发布私钥 / 本地 key.properties 永不入库。
 key.properties
-**/*.keystore
 **/*.jks
+# 测试专用的固定 debug keystore 例外：它只用于 CI / 本机 debug 包，
+# 保证每次构建签名一致；不是发布密钥，不含用户数据。
+!app/vault-debug.keystore
