@@ -1586,6 +1586,10 @@ class WriteGateway {
 
   /// 标签改名 / 删除 / 合并后重建该条目的 FTS 文档。
   /// 分类不进 FTS（文档 11 §5），所以这里只处理标签。
+  /// 一致性校准专用：只重建一条目的 FTS 派生文档，不写 oplog、不改实体。
+  Future<void> rebuildEntrySearchDocument(String entryId) =>
+      _rebuildEntrySearch(entryId);
+
   Future<void> _rebuildEntrySearch(String entryId) async {
     final row = await _loadEntry(entryId);
     if (row == null || row.deleted != 0) {

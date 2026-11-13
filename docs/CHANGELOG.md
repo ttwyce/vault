@@ -4,6 +4,25 @@
 
 ---
 
+## v2.24 · 2026-11-13
+
+### 每日一致性校准
+
+- 新增 `daily_calibration.dart`：一次调用真实重算全库 FTS 文档、
+  `category.entry_count` / `tag.usage_count`，并清理指向不存在/已删条目的
+  `entry_category` / `entry_tag` 派生关联；不改写正文、历史、oplog。
+- `WriteGateway.rebuildEntrySearchDocument` 只暴露派生索引重建；
+  诊断与备份页新增「运行每日一致性校准」按钮与结果提示。
+- 新增 `daily_calibration_test.dart`：人为制造错计数与孤儿关联，
+  校准后断言计数恢复、孤儿消失、报告计数正确。
+- 后台定时仍由既有前台补偿/排期层负责，不新增后台定时器或平台通道。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1136/1136 passed**；
+`git diff --check` OK；未执行构建。
+
+---
+
 ## v2.23 · 2026-11-13
 
 ### 分类字段模板改为真实同步实体

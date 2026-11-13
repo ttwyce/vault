@@ -17,6 +17,7 @@ import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
 import '../agent/widgets/privacy_authorization_sheet.dart';
 import '../agent/widgets/tool_confirmation_card.dart';
+import '../../data/audit/daily_calibration.dart';
 import '../../data/audit/performance_baseline.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/audit/sync_regression_matrix.dart';
@@ -128,6 +129,8 @@ class DiagnosticsPage extends ConsumerWidget {
             SketchSpace.xxl,
           ),
           children: <Widget>[
+            const _CalibrationButton(),
+            const SizedBox(height: SketchSpace.sm),
             SketchButton(
               label: '演示死链重检查判定',
               dense: true,
@@ -573,6 +576,49 @@ class DiagnosticsPage extends ConsumerWidget {
     String two(int v) => v.toString().padLeft(2, '0');
     return '${date.year}-${two(date.month)}-${two(date.day)}';
   }
+}
+
+class _CalibrationButton extends ConsumerStatefulWidget {
+  const _CalibrationButton();
+
+  @override
+  ConsumerState<_CalibrationButton> createState() => _CalibrationButtonState();
+}
+
+class _CalibrationButtonState extends ConsumerState<_CalibrationButton> {
+  String _hint = '';
+  bool _busy = false;
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    try {
+      final report = await DailyCalibration(
+        db: ref.read(vaultDatabaseProvider),
+        gateway: ref.read(writeGatewayProvider),
+      ).run();
+      if (mounted) setState(() => _hint = report.hint);
+    } on Object catch (e) {
+      if (mounted) setState(() => _hint = '校准失败：$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SketchButton(
+            label: '运行每日一致性校准',
+            dense: true,
+            onPressed: _busy ? null : _run,
+          ),
+          if (_hint.isNotEmpty) ...<Widget>[
+            const SizedBox(height: SketchSpace.xs),
+            Text(_hint, style: context.texts.bodySmall),
+          ],
+        ],
+      );
 }
 
 class _CheckTile extends StatelessWidget {
