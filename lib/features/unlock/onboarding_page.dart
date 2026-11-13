@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../../app/session/flutter_clipboard_port.dart';
@@ -44,6 +45,13 @@ const int _minPassphraseLength = 8;
 /// 抽查几个词。
 const int _checkCount = 3;
 
+/// 测试阶段专用：debug 构建允许显式跳过抽查。
+///
+/// release 构建里这个常量为 false，编译器会把按钮与确认分支一起裁掉；
+/// 生产用户仍然必须完成抄写校验。跳过不是"没抄也安全"：
+/// 恢复码只显示这一屏，跳过就等于接受"以后再也拿不回来"的风险。
+const bool _allowSkipRecoveryCheck = kDebugMode;
+
 /// 「已复制」文案保留时长。
 const Duration _copiedHold = Duration(seconds: 2);
 
@@ -56,6 +64,9 @@ const Duration _tickInterval = Duration(seconds: 1);
 ///
 /// 1. `recoveryCode == null` —— 设主密码，点「创建并生成恢复码」；
 /// 2. `recoveryCode != null` —— 展示 24 词 + 抽查抄写。
+///
+/// 测试阶段的 debug 构建额外提供「跳过抽查」入口（带二次确认）；
+/// release 构建不渲染该入口，正式用户仍必须完成抄写校验。
 ///
 /// 为什么第二阶段必须自洽：父级 [VaultGate] 在 `recoveryCode != null` 时
 /// 也会渲染本页（见 `vault_gate.dart` ①），这时候页面是「重新构建」出来的，
@@ -395,6 +406,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           onVerify: () => _verify(code),
           onToggleReveal: () =>
               setState(() => _revealWordsWhileChecking = !_revealWordsWhileChecking),
+          onSkip: _allowSkipRecoveryCheck ? () => _skipCheck(code) : null,
         )
       else
         Wrap(
@@ -413,6 +425,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               tone: SketchTone.primary,
               onPressed: _beginCheck,
             ),
+            if (_allowSkipRecoveryCheck)
+              SketchButton(
+                label: '测试阶段：跳过抽查',
+                tone: SketchTone.ghost,
+                dense: true,
+                onPressed: () => _skipCheck(code),
+              ),
           ],
         ),
       const SizedBox(height: SketchSpace.md),
@@ -449,6 +468,36 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       _revealWordsWhileChecking = false;
       _checkError = null;
     });
+  }
+
+  /// 测试阶段跳过抽查：必须再确认一次「恢复码不再显示」。
+  ///
+  /// 走的是和正常校验成功完全相同的 [VaultSession.acknowledgeRecoveryCode]；
+  /// 不改写状态机、不绕过闸门，也不会把恢复码留到下一屏。
+  Future<void> _skipCheck(RecoveryCode code) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('跳过恢复码抽查？'),
+        content: Text(
+          '仅用于测试阶段。恢复码只显示这一屏，跳过并继续后'
+          '将无法再次查看这 ${code.words.length} 个词；'
+          '忘记主密码时数据会永久无法解密。',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('继续抽查'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('确认跳过'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    ref.read(vaultSessionProvider.notifier).acknowledgeRecoveryCode();
   }
 
   /// 逐个校验抽查的词。
@@ -1037,6 +1086,7 @@ class _CheckPanel extends StatelessWidget {
     required this.revealing,
     required this.onVerify,
     required this.onToggleReveal,
+    this.onSkip,
   });
 
   final List<int> positions;
@@ -1045,6 +1095,7 @@ class _CheckPanel extends StatelessWidget {
   final bool revealing;
   final VoidCallback onVerify;
   final VoidCallback onToggleReveal;
+  final VoidCallback? onSkip;
 
   @override
   Widget build(BuildContext context) {
@@ -1106,6 +1157,13 @@ class _CheckPanel extends StatelessWidget {
                 dense: true,
                 onPressed: onToggleReveal,
               ),
+              if (onSkip != null)
+                SketchButton(
+                  label: '测试阶段：跳过抽查',
+                  tone: SketchTone.ghost,
+                  dense: true,
+                  onPressed: onSkip,
+                ),
             ],
           ),
         ],

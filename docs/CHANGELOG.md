@@ -4,6 +4,26 @@
 
 ---
 
+## v2.9 · 2026-11-13
+
+### 测试阶段：恢复码抽查可显式跳过（仅 debug 构建）
+
+- `OnboardingPage` 在恢复码阶段与抽查面板都增加「测试阶段：跳过抽查」入口；
+  点击后仍需二次确认，明确告知「恢复码只显示这一屏、跳过后再也无法查看、
+  忘记主密码数据永久无法解密」。
+- 跳过走的是与校验成功相同的 `VaultSession.acknowledgeRecoveryCode()`：
+  不绕过闸门、不改状态机、不把恢复码留到下一屏。
+- 入口由 `kDebugMode` 常量控制，release 构建编译期不渲染；
+  正式用户仍必须完成 3 个词的抄写校验。
+- 新增 `test/onboarding_skip_check_test.dart` 2 条：入口与取消/确认流程、
+  进入抽查面板后仍可跳过。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1086/1086 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.8 · 2026-11-13
 
 ### 真实 Nextcloud 外部条件验证（§0 (C)）与服务端兼容修复
