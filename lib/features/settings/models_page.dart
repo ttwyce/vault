@@ -17,6 +17,7 @@ import '../../../data/search/embedding_manifest.dart';
 import '../../../data/search/http_model_downloader.dart';
 import '../../../data/search/model_downloader.dart';
 import '../../core/widgets/sketch_transitions.dart';
+import 'model_source_page.dart';
 
 class ModelsPage extends StatelessWidget {
   const ModelsPage({super.key, this.downloaderFactory});
@@ -147,6 +148,14 @@ class ModelsPage extends StatelessWidget {
                     '每源 3 次重试、全源失败才标记损坏；模型文件不进系统备份'
                     '（三端四标记需平台层落配置）。',
                     style: TextStyle(fontSize: 10.5, color: p.muted),
+                  ),
+                  const SizedBox(height: SketchSpace.sm),
+                  SketchButton(
+                    label: '配置 / 下载模型源',
+                    dense: true,
+                    onPressed: () => Navigator.of(context).push<void>(
+                      sketchPageRoute<void>(const ModelSourcePage()),
+                    ),
                   ),
                   const SizedBox(height: SketchSpace.sm),
                   SketchButton(

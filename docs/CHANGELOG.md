@@ -4,6 +4,26 @@
 
 ---
 
+## v2.20 · 2026-11-13
+
+### 端侧模型下载源可用（批次 2）
+
+- 内置 manifest 的 `sources` 全空且 sha256 为占位值；新增
+  `model_source_store.dart` / `model_source_provider.dart` / `ModelSourcePage`：
+  用户可为每个内置模型保存真实 URL / sha256 / 字节数，只进系统安全区。
+- `ModelSourcePage` 直接调用装配层的 `HttpModelDownloader` 下载、校验
+  sha256、写 `.gguf`；设置中心与模型管理页都加入口。
+  `ModelsPage` 旧的「下载首个模型」仍保留诚实拒绝空源的降级。
+- 新增 `model_source_test.dart` 3 条与 `model_source_download_test.dart`
+  1 条：配置校验/持久化、页面入口与表单、本地 HttpServer 真实下载写盘。
+  端侧模型推理仍需平台运行时，不假称可用。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1128/1128 passed**；
+`git diff --check` OK；未执行构建；`pubspec.yaml` / `pubspec.lock` 未改动。
+
+---
+
 ## v2.19 · 2026-11-13
 
 ### 可见 UI 缺陷修复（批次 1）

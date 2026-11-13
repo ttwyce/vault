@@ -20,6 +20,7 @@ import '../settings/export_backup_page.dart';
 import '../settings/fonts_page.dart';
 import '../settings/llm_settings_page.dart';
 import '../settings/models_page.dart';
+import '../settings/model_source_page.dart';
 import '../settings/pending_jobs_page.dart';
 import '../settings/security_settings_page.dart';
 import '../settings/sync_settings_page.dart';
@@ -116,6 +117,12 @@ class SettingsHubPage extends ConsumerWidget {
               title: '安全设置',
               subtitle: '改主密码、重置恢复码、二次确认',
               onTap: () => _push(context, const SecuritySettingsPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.type,
+              title: '模型下载源',
+              subtitle: '自定义 URL / sha256 / 字节数并真实下载校验',
+              onTap: () => _push(context, const ModelSourcePage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,
