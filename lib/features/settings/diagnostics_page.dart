@@ -18,6 +18,8 @@ import '../../core/widgets/sketch_frame.dart';
 import '../agent/widgets/privacy_authorization_sheet.dart';
 import '../agent/widgets/tool_confirmation_card.dart';
 import '../../data/audit/daily_calibration.dart';
+import '../../data/audit/local_perf_probe.dart';
+import '../../data/entry/entry_repository_provider.dart';
 import '../../data/audit/performance_baseline.dart';
 import '../../data/audit/release_audit.dart';
 import '../../data/audit/sync_regression_matrix.dart';
@@ -130,6 +132,8 @@ class DiagnosticsPage extends ConsumerWidget {
           ),
           children: <Widget>[
             const _CalibrationButton(),
+            const SizedBox(height: SketchSpace.sm),
+            const _LocalPerfProbeButton(),
             const SizedBox(height: SketchSpace.sm),
             SketchButton(
               label: '演示死链重检查判定',
@@ -576,6 +580,47 @@ class DiagnosticsPage extends ConsumerWidget {
     String two(int v) => v.toString().padLeft(2, '0');
     return '${date.year}-${two(date.month)}-${two(date.day)}';
   }
+}
+
+class _LocalPerfProbeButton extends ConsumerStatefulWidget {
+  const _LocalPerfProbeButton();
+
+  @override
+  ConsumerState<_LocalPerfProbeButton> createState() =>
+      _LocalPerfProbeButtonState();
+}
+
+class _LocalPerfProbeButtonState extends ConsumerState<_LocalPerfProbeButton> {
+  String _hint = '';
+  bool _busy = false;
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    try {
+      final result = await LocalPerfProbe(
+        repo: ref.read(entryRepositoryProvider),
+      ).run();
+      if (mounted) setState(() => _hint = result.hint);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SketchButton(
+            label: '运行本机性能探针',
+            dense: true,
+            onPressed: _busy ? null : _run,
+          ),
+          if (_hint.isNotEmpty) ...<Widget>[
+            const SizedBox(height: SketchSpace.xs),
+            Text(_hint, style: context.texts.bodySmall),
+          ],
+        ],
+      );
 }
 
 class _CalibrationButton extends ConsumerStatefulWidget {

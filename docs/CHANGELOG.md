@@ -4,6 +4,26 @@
 
 ---
 
+## v2.27 · 2026-11-13
+
+### MCP loopback transport 与本机性能探针
+
+- `mcp_http_transport.dart` 提供显式配置的 loopback HTTP transport；
+  `McpToolAdapter` 可注入，默认仍明确「未连接」，非本机地址直接拒绝，
+  远程工具继续受 L2 / dangerous 闸门约束。
+- `local_perf_probe.dart` 在诊断页提供本机 FTS / 列表构建耗时探针，
+  明确标注「不替代真机 5000 条基线」；发布审计 A7 仍只吃外部样本。
+- 新增 `mcp_http_transport_test.dart` 3 条与
+  `local_perf_probe_test.dart` 1 条。
+- 仍需外部：真实 MCP 服务、端侧模型推理、平台原生能力真机验收、
+  26 个真实同步用例、A5 坚果云侧、5000 条性能基线、商店审核。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1147/1147 passed**；
+`git diff --check` OK；未执行构建。
+
+---
+
 ## v2.26 · 2026-11-13
 
 ### 平台能力桥、RSS/整站计划、标签聚类

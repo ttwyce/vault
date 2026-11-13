@@ -6,6 +6,7 @@
 library;
 
 import 'agent_policy.dart';
+import 'mcp_http_transport.dart';
 import 'agent_tools.dart';
 
 /// 一轮计划。
@@ -97,16 +98,18 @@ Future<AgentLoopResult> runAgentLoop(
 
 /// MCP 适配器骨架（docs/07 §3.3）。
 ///
-/// 只把远程 server 的 tool 描述映射成本地 [AgentTool]，**不发网络请求**：
-/// `execute` 一律返回「未连接」，由二期平台层注入真实 transport。
+/// 把远程 server 的 tool 描述映射成本地 [AgentTool]；未注入 transport 时
+/// 明确返回「未连接」，注入后只允许 loopback HTTP bridge。
 /// 远程工具固定 L2 隐私、dangerous 风险，密码条目由闸门直接拒绝。
 class McpToolAdapter implements AgentTool {
   const McpToolAdapter({
     required this.remoteName,
     required this.description,
     required this.schema,
+    this.transport,
   });
 
+  final McpTransport? transport;
   final String remoteName;
   @override
   final String description;
@@ -123,6 +126,15 @@ class McpToolAdapter implements AgentTool {
   PrivacyLevel get maxPrivacy => PrivacyLevel.l2;
 
   @override
-  Future<ToolResult> execute(Map<String, Object?> args) async =>
-      const ToolResult('远程 MCP transport 尚未连接', isError: true);
+  Future<ToolResult> execute(Map<String, Object?> args) async {
+    final bridge = transport;
+    if (bridge == null) {
+      return const ToolResult('远程 MCP transport 尚未连接', isError: true);
+    }
+    final result = await bridge.callTool(
+      remoteName: remoteName,
+      args: args,
+    );
+    return mcpResultToToolResult(result);
+  }
 }
