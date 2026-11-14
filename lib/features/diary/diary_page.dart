@@ -269,34 +269,55 @@ class _DiaryPageState extends ConsumerState<DiaryPage> {
     ));
   }
 
+  Future<void> _showDiaryActions(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final selected = await showSketchDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => SimpleDialog(
+        title: const Text('日记操作'),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop('review'),
+            child: const Text('年度回顾'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop('template'),
+            child: Text('模板：${diaryTemplateById(_templateId).label}'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop('ai'),
+            child: const Text('生成 AI 日记'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop('voice'),
+            child: const Text('语音转日记'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || selected == null) return;
+    switch (selected) {
+      case 'review':
+        await navigator.push<void>(sketchPageRoute<void>(
+            DiaryYearReviewPage(year: _month.year)));
+      case 'template':
+        await _chooseTemplate();
+      case 'ai':
+        await _generateAiDiary();
+      case 'voice':
+        await _voiceDiary();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PageScaffold(
       title: '日记',
       actions: <Widget>[
-        SketchButton(
-          label: '年度回顾',
-          dense: true,
-          onPressed: () => Navigator.of(context).push<void>(
-            sketchPageRoute<void>(
-              DiaryYearReviewPage(year: _month.year),
-            ),
-          ),
-        ),
-        SketchButton(
-          label: '模板：${diaryTemplateById(_templateId).label}',
-          dense: true,
-          onPressed: _chooseTemplate,
-        ),
-        SketchButton(
-          label: '生成 AI 日记',
-          dense: true,
-          onPressed: _generateAiDiary,
-        ),
-        SketchButton(
-          label: '语音转日记',
-          dense: true,
-          onPressed: _voiceDiary,
+        SketchIconButton(
+          glyph: SketchGlyph.menu,
+          tooltip: '更多日记操作',
+          onPressed: () => _showDiaryActions(context),
         ),
         SketchButton(
           label: '补写',
@@ -923,5 +944,4 @@ class _DiaryTile extends StatelessWidget {
       ),
     );
   }
-
 }

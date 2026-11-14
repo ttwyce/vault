@@ -98,10 +98,17 @@ class PageScaffold extends StatelessWidget {
                   ),
                 ),
                 if (trailing.isNotEmpty)
-                  Wrap(
-                    spacing: SketchSpace.sm,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: trailing,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.5,
+                    ),
+                    child: Wrap(
+                      spacing: SketchSpace.sm,
+                      runSpacing: SketchSpace.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      alignment: WrapAlignment.end,
+                      children: trailing,
+                    ),
                   ),
               ],
             ),

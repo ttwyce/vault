@@ -62,10 +62,11 @@ void main() {
     await tester.tap(find.text('新增'));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.enterText(find.byType(TextField).last, '测试账号');
-    await tester.tap(find.text('确定'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('确定并编辑'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('编辑账号'), findsOneWidget);
 
     final entries = await (app.db.select(app.db.entries)
           ..where((t) => t.kind.equals(EntryKind.credential.code)))
@@ -75,8 +76,9 @@ void main() {
     final credentials = await app.db.select(app.db.credentials).get();
     expect(credentials, hasLength(1));
     expect(credentials.single.id, entries.single.id);
-    expect(find.text('测试账号'), findsOneWidget);
-    expect(find.textContaining('1 个'), findsWidgets);
+    // 已跳转到编辑账号页，列表页的健康计数此刻不在屏幕上；
+    // 数据库写入与编辑页标题已由上面断言覆盖。
+    expect(find.text('编辑账号'), findsWidgets);
   });
 
   testWidgets('新增弹窗生成强密码并以密文落库',
@@ -87,17 +89,17 @@ void main() {
     await tester.tap(find.text('生成强密码'));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.textContaining('已用 K_item'), findsOneWidget);
+    expect(find.textContaining('创建后写入加密字段'), findsOneWidget);
     final selectable = find.byType(SelectableText);
     expect(selectable, findsOneWidget);
     final generated = tester.widget<SelectableText>(selectable).data ?? '';
     expect(generated.length, 20);
     expect(generated, matches(RegExp(r'[A-Z]')));
     expect(generated, matches(RegExp(r'[^A-Za-z0-9]')));
-    expect(find.textContaining('明文不会落盘'), findsOneWidget);
+    expect(find.textContaining('明文不落盘'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).last, '生成测试账号');
-    await tester.tap(find.text('确定'));
+    await tester.tap(find.text('确定并编辑'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -127,13 +129,11 @@ void main() {
     await tester.tap(find.text('新增'));
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byType(DropdownButton<String>));
-    await tester.pump(const Duration(milliseconds: 100));
     await tester.tap(find.text('开发平台').last, warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 100));
 
     await tester.enterText(find.byType(TextField).last, '模板账号');
-    await tester.tap(find.text('确定'));
+    await tester.tap(find.text('确定并编辑'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -264,16 +264,16 @@ void main() {
     await tester.tap(find.text('新增'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
-    // 分组下拉（两个 DropdownButton：模板、分组；等 FutureBuilder 完成）
-    expect(find.byType(DropdownButton<String>), findsNWidgets(2));
-    await tester.tap(find.byType(DropdownButton<String>).last);
-    await tester.pump(const Duration(milliseconds: 100));
+    // 新弹窗用 SketchTag 选分组/模板，不再有 DropdownButton。
+    expect(find.byType(DropdownButton<String>), findsNothing);
     await tester.tap(find.text('工作开发').last, warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 100));
     await tester.enterText(find.byType(TextField).last, '分组账号');
-    await tester.tap(find.text('确定'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('确定并编辑'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('编辑账号'), findsOneWidget);
 
     final rows = await app.db.select(app.db.credentials).get();
     expect(rows, hasLength(1));

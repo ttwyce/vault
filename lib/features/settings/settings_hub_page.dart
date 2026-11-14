@@ -66,19 +66,21 @@ class SettingsHubPage extends ConsumerWidget {
             SketchSpace.xxl,
           ),
           children: <Widget>[
+            const _SettingsSection('外观与内容'),
             _SettingsTile(
               glyph: SketchGlyph.type,
               title: '字体',
               subtitle: '三角色排版、预设与导入字体',
               onTap: () => _push(context, const FontsPage()),
             ),
-            _AiDiarySearchTile(),
             _SettingsTile(
               glyph: SketchGlyph.menu,
               title: '分类与标签',
               subtitle: '两级分类树、标签云与同名合并',
               onTap: () => _push(context, const OrganizePage()),
             ),
+            const _SettingsSection('检索与 AI'),
+            _AiDiarySearchTile(),
             _SettingsTile(
               glyph: SketchGlyph.search,
               title: '全库搜索',
@@ -86,22 +88,30 @@ class SettingsHubPage extends ConsumerWidget {
               onTap: () => _push(context, const SearchPage()),
             ),
             _SettingsTile(
+              glyph: SketchGlyph.chat,
+              title: '云端模型',
+              subtitle: '多端点、模型列表与上下文预算',
+              onTap: () => _push(context, const LlmSettingsPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.type,
+              title: '模型下载源',
+              subtitle: '自定义 URL / sha256 / 字节数并真实下载校验',
+              onTap: () => _push(context, const ModelSourcePage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.type,
+              title: '模型管理',
+              subtitle: '端侧模型清单、下载源优先级与检索降级四态',
+              onTap: () => _push(
+                  context, ModelsPage(downloaderFactory: downloaderFactory)),
+            ),
+            const _SettingsSection('数据与备份'),
+            _SettingsTile(
               glyph: SketchGlyph.archive,
               title: '回收站',
               subtitle: '删除的内容保留 30 天，可恢复、可看历史版本',
               onTap: () => _push(context, const TrashPage()),
-            ),
-            _SettingsTile(
-              glyph: SketchGlyph.type,
-              title: '关于与隐私',
-              subtitle: '端侧加密、零遥测、开源许可与恢复码说明',
-              onTap: () => _push(context, const AboutPage()),
-            ),
-            _SettingsTile(
-              glyph: SketchGlyph.chat,
-              title: '云端模型',
-              subtitle: '自带 Key 只存系统安全区，未配置时不生成回复',
-              onTap: () => _push(context, const LlmSettingsPage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.archive,
@@ -111,18 +121,6 @@ class SettingsHubPage extends ConsumerWidget {
                     plaintextExportRunner: exportRunner,
                     markdownImportRunner: importRunner,
                   )),
-            ),
-            _SettingsTile(
-              glyph: SketchGlyph.vault,
-              title: '安全设置',
-              subtitle: '改主密码、重置恢复码、二次确认',
-              onTap: () => _push(context, const SecuritySettingsPage()),
-            ),
-            _SettingsTile(
-              glyph: SketchGlyph.type,
-              title: '模型下载源',
-              subtitle: '自定义 URL / sha256 / 字节数并真实下载校验',
-              onTap: () => _push(context, const ModelSourcePage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,
@@ -136,18 +134,24 @@ class SettingsHubPage extends ConsumerWidget {
               subtitle: '前台补偿队列、失败重试与状态聚合',
               onTap: () => _push(context, const PendingJobsPage()),
             ),
+            const _SettingsSection('安全与系统'),
             _SettingsTile(
-              glyph: SketchGlyph.type,
-              title: '模型管理',
-              subtitle: '端侧模型清单、下载源优先级与检索降级四态',
-              onTap: () => _push(
-                  context, ModelsPage(downloaderFactory: downloaderFactory)),
+              glyph: SketchGlyph.vault,
+              title: '安全设置',
+              subtitle: '改主密码、重置恢复码、二次确认',
+              onTap: () => _push(context, const SecuritySettingsPage()),
             ),
             _SettingsTile(
               glyph: SketchGlyph.settings,
               title: '诊断与备份',
-              subtitle: '六项发布前自检、加密备份包与 /backup/ 排期',
+              subtitle: '发布前自检、每日校准与本机性能探针',
               onTap: () => _push(context, const DiagnosticsPage()),
+            ),
+            _SettingsTile(
+              glyph: SketchGlyph.type,
+              title: '关于与隐私',
+              subtitle: '端侧加密、零遥测、开源许可与恢复码说明',
+              onTap: () => _push(context, const AboutPage()),
             ),
           ],
         ),
@@ -158,6 +162,39 @@ class SettingsHubPage extends ConsumerWidget {
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push<void>(
       sketchPageRoute<void>(page),
+    );
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sketch;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SketchSpace.sm,
+        SketchSpace.lg,
+        SketchSpace.sm,
+        SketchSpace.xs,
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(width: 14, height: 2, color: p.red),
+          const SizedBox(width: SketchSpace.sm),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: p.blue,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

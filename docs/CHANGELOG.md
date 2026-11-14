@@ -4,6 +4,34 @@
 
 ---
 
+## v2.30 · 2026-11-14
+
+### 日记/设置/动效/震动/新增账号流程修复
+
+- 日记页顶部从 5 个横向按钮收敛为「补写」+「更多日记操作」对话框；
+  `PageScaffold` 的 actions `Wrap` 增加最大宽度约束与右对齐，窄屏不再
+  把标题挤出屏幕。年度回顾 / 模板 / AI 日记 / 语音转日记全部保留在菜单里。
+- 设置中心按「外观与内容 / 检索与 AI / 数据与备份 / 安全与系统」分组，
+  增加小节标题；入口不减少。
+- `sketch_transitions.dart`：页面过渡统一 220ms 淡入+2% 位移，
+  对话框 200ms 淡入+4% 缩放；`SketchTheme` 全局挂
+  `kSketchPageTransitionsTheme`，覆盖未走 `sketchPageRoute` 的路由；
+  减少动效时全部退化。
+- `SketchButton` / `SketchIconButton` 点击时增加 `HapticFeedback.lightImpact`
+  （减少动效时关闭）。
+- 新增账号弹窗重做：名称、模板/分组用 SketchTag 选择、内联生成强密码；
+  确定后真实创建条目 + credential 行 + 模板/分组字段，并直接打开新
+  `CredentialEditPage`（用户名 / 密码 / 网址 / TOTP / 备注 / 自定义字段
+  一站式加密保存），补齐「点确定后没有编辑页」的残缺。
+- 新增 `credential_edit_page_test.dart`、`diary_settings_ui_test.dart`；
+  更新旧日记/设置/密码页测试到新菜单与弹窗流程。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1151/1151 passed**；
+`git diff --check` OK；未执行本地构建。
+
+---
+
 ## v2.29 · 2026-11-14
 
 ### CI 构建失败根因：Kotlin companion object 位置

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/theme/sketch_metrics.dart';
 import '../../app/theme/sketch_palette.dart';
@@ -31,6 +32,11 @@ class SketchButton extends StatefulWidget {
   State<SketchButton> createState() => _SketchButtonState();
 }
 
+void _haptic(BuildContext context) {
+  if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+  HapticFeedback.lightImpact();
+}
+
 class _SketchButtonState extends State<SketchButton> {
   bool _down = false;
 
@@ -56,6 +62,7 @@ class _SketchButtonState extends State<SketchButton> {
         onTap: enabled
             ? () {
                 setState(() => _down = false);
+                _haptic(context);
                 widget.onPressed!.call();
               }
             : null,
@@ -139,7 +146,12 @@ class _SketchIconButtonState extends State<SketchIconButton> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onPressed,
+        onTap: widget.onPressed == null
+            ? null
+            : () {
+                _haptic(context);
+                widget.onPressed!.call();
+              },
         child: AnimatedContainer(
           duration: SketchMotion.of(context, SketchMotion.hover),
           width: widget.size,

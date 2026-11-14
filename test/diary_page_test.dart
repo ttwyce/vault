@@ -82,11 +82,13 @@ void main() {
   testWidgets('生成 AI 日记按钮在无活动时不写空条目',
       (WidgetTester tester) async {
     await pumpDiary(tester);
+    await tester.tap(find.byTooltip('更多日记操作'));
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('生成 AI 日记'), findsOneWidget);
     await tester.tap(find.text('生成 AI 日记'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.byType(SnackBar), findsOneWidget);
     expect(
       await (app.db.select(app.db.entries)

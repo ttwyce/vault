@@ -35,7 +35,10 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: app.container,
-      child: MaterialApp(theme: SketchTheme.light, home: page),
+      child: MaterialApp(
+        theme: SketchTheme.light,
+        home: Scaffold(backgroundColor: SketchTheme.light.scaffoldBackgroundColor, body: page),
+      ),
     ));
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -45,13 +48,21 @@ void main() {
   testWidgets('选择复盘模板后补写日记预填正文', (WidgetTester tester) async {
     final month = DateTime(2026, 11);
     await pumpPage(tester, DiaryPage(initialMonth: month));
+    await tester.tap(find.byTooltip('更多日记操作'));
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.textContaining('模板：'), findsOneWidget);
     await tester.tap(find.textContaining('模板：'));
     await tester.pump(const Duration(milliseconds: 150));
     expect(find.text('复盘'), findsWidgets);
     await tester.tap(find.text('复盘').last);
     await tester.pump(const Duration(milliseconds: 150));
+    // 模板名已收敛在「更多」菜单里，选中后回列表不重复显示。
+    await tester.tap(find.byTooltip('更多日记操作'));
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.textContaining('模板：复盘'), findsOneWidget);
+    // 关掉操作菜单再补写，避免被对话框挡住。
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pump(const Duration(milliseconds: 200));
 
     await tester.tap(find.text('补写'));
     for (var i = 0; i < 4; i++) {

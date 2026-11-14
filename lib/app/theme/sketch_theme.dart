@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/fonts/font_state.dart';
+import '../../core/widgets/sketch_transitions.dart';
 import 'sketch_metrics.dart';
 import 'sketch_palette.dart';
 import 'sketch_typography.dart';
@@ -75,6 +76,7 @@ abstract final class SketchTheme {
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       hoverColor: Colors.transparent,
+      pageTransitionsTheme: kSketchPageTransitionsTheme,
       // 业务页里仍保留的原生 TextField / Switch / Checkbox / Dialog /
       // ListTile 不能落回 Material3 默认蓝色与标准圆角：一处统一到色板，
       // 避免「很多地方 UI 风格和主风格不一样」。

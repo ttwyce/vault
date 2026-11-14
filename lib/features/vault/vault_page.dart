@@ -6,6 +6,7 @@ import '../../app/theme/sketch_theme.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/sketch_controls.dart';
 import '../../core/widgets/sketch_frame.dart';
+import '../../core/widgets/sketch_field.dart';
 import '../../core/widgets/secure_card.dart';
 import '../../data/vault/credential_category_filter.dart';
 import '../../data/vault/credential_meta.dart';
@@ -27,6 +28,7 @@ import '../../data/vault/password_generator.dart';
 import '../../data/vault/sensitive_clipboard.dart';
 import '../../data/write/write_gateway.dart';
 import '../../core/widgets/sketch_transitions.dart';
+import 'credential_edit_page.dart';
 import 'credential_fields_page.dart';
 import 'totp_setup_page.dart';
 
@@ -105,124 +107,127 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     String? generated;
     String? templateId;
     String? groupId;
-    final groupRepo =
-        CredentialGroupRepository(db: ref.read(vaultDatabaseProvider), gateway: ref.read(writeGatewayProvider));
+    final repo = ref.read(credentialRepositoryProvider);
+    final groupRepo = CredentialGroupRepository(
+      db: ref.read(vaultDatabaseProvider),
+      gateway: ref.read(writeGatewayProvider),
+    );
     final groupsFuture = groupRepo.groups();
-    final title = await showSketchDialog<String>(
+    _name.clear();
+
+    final confirmed = await showSketchDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext dialogContext, StateSetter setDialogState) {
           return AlertDialog(
             title: const Text('新增账号'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                TextField(
-                  controller: _name,
-                  autofocus: true,
-                  decoration: const InputDecoration(hintText: '账号名称'),
-                  onSubmitted: (String value) =>
-                      Navigator.of(dialogContext).pop(value),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                DropdownButton<String>(
-                  isExpanded: true,
-                  hint: const Text('字段模板（可选）'),
-                  value: templateId,
-                  items: <DropdownMenuItem<String>>[
-                    for (final template in kDefaultFieldTemplates)
-                      DropdownMenuItem<String>(
-                        value: template.id,
-                        child: Text(template.label),
-                      ),
-                  ],
-                  onChanged: (String? value) =>
-                      setDialogState(() => templateId = value),
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                FutureBuilder<List<CategoryRow>>(
-                  future: groupsFuture,
-                  builder: (
-                    BuildContext context,
-                    AsyncSnapshot<List<CategoryRow>> groupSnap,
-                  ) {
-                    final groups = groupSnap.data ?? const <CategoryRow>[];
-                    if (groups.isEmpty) {
-                      return Text(
-                        '账号分组：暂无分组（可在设置里建）',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          color: Theme.of(dialogContext)
-                              .textTheme
-                              .bodySmall
-                              ?.color,
-                        ),
-                      );
-                    }
-                    return DropdownButton<String>(
-                      isExpanded: true,
-                      hint: const Text('账号分组（自动套用字段模板）'),
-                      value: groupId,
-                      items: <DropdownMenuItem<String>>[
-                        for (final group in groups)
-                          DropdownMenuItem<String>(
-                            value: group.id,
-                            child: Text(group.name),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  SketchFieldFrame(
+                    child: TextField(
+                      controller: _name,
+                      autofocus: true,
+                      decoration: sketchInputDecoration(dialogContext,
+                          hintText: '账号名称'),
+                      onSubmitted: (String value) =>
+                          Navigator.of(dialogContext).pop(value.trim().isNotEmpty),
+                    ),
+                  ),
+                  const SizedBox(height: SketchSpace.md),
+                  Text('字段模板', style: dialogContext.texts.bodySmall),
+                  const SizedBox(height: SketchSpace.xs),
+                  Wrap(
+                    spacing: SketchSpace.sm,
+                    runSpacing: SketchSpace.sm,
+                    children: <Widget>[
+                      for (final template in kDefaultFieldTemplates)
+                        GestureDetector(
+                          onTap: () => setDialogState(() => templateId =
+                              templateId == template.id ? null : template.id),
+                          child: SketchTag(
+                            template.label,
+                            tone: templateId == template.id
+                                ? SketchTone.primary
+                                : SketchTone.ghost,
+                            dense: true,
                           ),
-                      ],
-                      onChanged: (String? value) =>
-                          setDialogState(() => groupId = value),
-                    );
-                  },
-                ),
-                const SizedBox(height: SketchSpace.sm),
-                TextButton(
-                  onPressed: () => setDialogState(
-                    () => generated = generatePassword(
-                      const PasswordPolicy(),
-                    ),
+                        ),
+                    ],
                   ),
-                  child: const Text('生成强密码'),
-                ),
-                if (generated != null) ...<Widget>[
-                  SelectableText(
-                    generated!,
-                    style: const TextStyle(fontSize: 13),
+                  const SizedBox(height: SketchSpace.md),
+                  Text('账号分组', style: dialogContext.texts.bodySmall),
+                  const SizedBox(height: SketchSpace.xs),
+                  FutureBuilder<List<CategoryRow>>(
+                    future: groupsFuture,
+                    builder: (BuildContext context,
+                        AsyncSnapshot<List<CategoryRow>> snap) {
+                      final groups = snap.data ?? const <CategoryRow>[];
+                      if (groups.isEmpty) {
+                        return Text('暂无分组（可在分类与标签里建）',
+                            style: context.texts.bodySmall);
+                      }
+                      return Wrap(
+                        spacing: SketchSpace.sm,
+                        runSpacing: SketchSpace.sm,
+                        children: <Widget>[
+                          for (final group in groups)
+                            GestureDetector(
+                              onTap: () => setDialogState(() => groupId =
+                                  groupId == group.id ? null : group.id),
+                              child: SketchTag(
+                                group.name,
+                                tone: groupId == group.id
+                                    ? SketchTone.primary
+                                    : SketchTone.ghost,
+                                dense: true,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '已用 K_item 字段级加密写入本地库，明文不会落盘。',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Theme.of(dialogContext)
-                          .textTheme
-                          .bodySmall
-                          ?.color,
-                    ),
+                  const SizedBox(height: SketchSpace.md),
+                  SketchButton(
+                    label: generated == null ? '生成强密码' : '重新生成',
+                    dense: true,
+                    onPressed: () => setDialogState(() => generated =
+                        generatePassword(const PasswordPolicy())),
                   ),
+                  if (generated != null) ...<Widget>[
+                    const SizedBox(height: SketchSpace.sm),
+                    SelectableText(generated!,
+                        style: dialogContext.texts.bodySmall),
+                    Text('创建后写入加密字段，明文不落盘。',
+                        style: dialogContext.texts.bodySmall),
+                  ],
                 ],
-              ],
+              ),
             ),
             actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('取消'),
+              SketchButton(
+                label: '取消',
+                tone: SketchTone.ghost,
+                dense: true,
+                onPressed: () => Navigator.of(dialogContext).pop(false),
               ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(_name.text),
-                child: const Text('确定'),
+              SketchButton(
+                label: '确定并编辑',
+                tone: SketchTone.primary,
+                dense: true,
+                onPressed: () => Navigator.of(dialogContext).pop(true),
               ),
             ],
           );
         },
       ),
     );
-    final trimmed = title?.trim() ?? '';
-    if (trimmed.isEmpty || !mounted) return;
+    final trimmed = _name.text.trim();
+    if (confirmed != true || trimmed.isEmpty || !mounted) return;
+
     final gateway = ref.read(writeGatewayProvider);
-    // docs/13 §3：kind=6 meta 只放轻量标记（分类提示 / 是否有 TOTP），
-    // 用户名与网址等敏感业务字段仍在 credential 表加密。
     final groups = await groupsFuture;
     final categoryHint = groupId == null
         ? null
@@ -239,18 +244,17 @@ class _VaultPageState extends ConsumerState<VaultPage> {
     await db.into(db.credentials).insert(
           CredentialsCompanion.insert(id: created.snapshot.id),
         );
-    final repo = ref.read(credentialRepositoryProvider);
     if (generated != null) {
       await repo.setPassword(created.snapshot.id, generated!);
     }
     if (groupId != null) {
-      // 分组模板优先于固定模板：这正是 docs/11 §4.6 里分组的价值。
       await repo.setCustomFields(
         created.snapshot.id,
-        await CredentialGroupRepository(
-          db: ref.read(vaultDatabaseProvider),
-          gateway: ref.read(writeGatewayProvider),
-        ).instantiateForGroup(groupId!),
+        await groupRepo.instantiateForGroup(groupId!),
+      );
+      await gateway.setEntryTaxonomy(
+        entryId: created.snapshot.id,
+        categoryId: groupId,
       );
     } else if (templateId != null) {
       final template = templateById(templateId!);
@@ -262,7 +266,15 @@ class _VaultPageState extends ConsumerState<VaultPage> {
       }
     }
     _name.clear();
+    if (!mounted) return;
     setState(() {});
+    await Navigator.of(context).push<void>(sketchPageRoute<void>(
+      CredentialEditPage(
+        credentialId: created.snapshot.id,
+        title: trimmed,
+      ),
+    ));
+    if (mounted) setState(() {});
   }
 
   Future<void> _moveToCategory(String entryId, String? categoryId) async {
