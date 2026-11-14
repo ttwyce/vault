@@ -4,6 +4,24 @@
 
 ---
 
+## v2.29 · 2026-11-14
+
+### CI 构建失败根因：Kotlin companion object 位置
+
+- 自 `665f0a4` 起四次 CI 的 `Build debug APK` 连续失败；上一次成功是
+  `9b871e2`。根因是给 `MainActivity` 增加分享通道时，把
+  `companion object { kShareChannelName }` 追加到了类闭合大括号之外，
+  Kotlin 顶层 companion 语法非法。不是签名校验、不是 Dart 代码。
+- 把 companion object 移回 `MainActivity` 类内；静态核对类括号深度与
+  顶层声明，Dart `flutter analyze` 与全量测试通过。Android 编译需由
+  下一次 CI run 实际确认（本地无 Android SDK，按纪律不执行构建）。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1148/1148 passed**；
+`git diff --check` OK；未执行本地构建。
+
+---
+
 ## v2.28 · 2026-11-13
 
 ### 真实坚果云 WebDAV 验证与服务端兼容修复

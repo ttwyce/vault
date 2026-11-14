@@ -167,9 +167,8 @@ class MainActivity : FlutterActivity() {
             )
         }.onFailure { result.success(null) }
     }
-}
-
 
     companion object {
         private const val kShareChannelName = "vault/share"
     }
+}
