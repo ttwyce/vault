@@ -54,7 +54,7 @@ class MainActivity : FlutterActivity() {
                         if (dek == null || !available()) {
                             result.success(false)
                         } else {
-                            result.success(runCatching { encryptAndStore(dek) }.isSuccess)
+                            enrollWithBiometric(dek, result)
                         }
                     }
                     "disable" -> {
@@ -112,14 +112,56 @@ class MainActivity : FlutterActivity() {
         return generator.generateKey()
     }
 
-    private fun encryptAndStore(dekBase64: String) {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey())
-        val bytes = cipher.doFinal(Base64.decode(dekBase64, Base64.DEFAULT))
-        prefs().edit()
-            .putString(ivKey, Base64.encodeToString(cipher.iv, Base64.DEFAULT))
-            .putString(ciphertextKey, Base64.encodeToString(bytes, Base64.DEFAULT))
-            .apply()
+    /// 受 setUserAuthenticationRequired(true) 保护的密钥，ENCRYPT 也必须
+    /// 先经 BiometricPrompt 认证；直接 cipher.init 会抛
+    /// UserNotAuthenticatedException 并被 runCatching 悄悄吞掉，表现为
+    /// 「指纹怎么都开不了」。这里用 CryptoObject 把 cipher 交给系统认证器。
+    private fun enrollWithBiometric(dekBase64: String, result: MethodChannel.Result) {
+        runCatching {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey())
+            val iv = cipher.iv
+            val prompt = BiometricPrompt.Builder(this)
+                .setTitle("启用生物识别解锁")
+                .setSubtitle("验证指纹后保存本地密钥")
+                .setNegativeButton("取消", mainExecutor) { _, _ -> result.success(false) }
+                .build()
+            val plaintext = Base64.decode(dekBase64, Base64.DEFAULT)
+            prompt.authenticate(
+                BiometricPrompt.CryptoObject(cipher),
+                CancellationSignal(),
+                Executors.newSingleThreadExecutor(),
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(
+                        authResult: BiometricPrompt.AuthenticationResult,
+                    ) {
+                        val crypto = authResult.cryptoObject?.cipher
+                        if (crypto == null) {
+                            result.success(false)
+                            return
+                        }
+                        runCatching {
+                            val bytes = crypto.doFinal(plaintext)
+                            prefs().edit()
+                                .putString(
+                                    ivKey,
+                                    Base64.encodeToString(iv, Base64.DEFAULT),
+                                )
+                                .putString(
+                                    ciphertextKey,
+                                    Base64.encodeToString(bytes, Base64.DEFAULT),
+                                )
+                                .apply()
+                            runOnUiThread { result.success(true) }
+                        }.onFailure { runOnUiThread { result.success(false) } }
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                        runOnUiThread { result.success(false) }
+                    }
+                },
+            )
+        }.onFailure { result.success(false) }
     }
 
     private fun authenticate(result: MethodChannel.Result) {

@@ -4,6 +4,33 @@
 
 ---
 
+## v2.31 · 2026-11-14
+
+### 指纹启用 / 底部 tab / 对话框样式的最小修复
+
+- **安卓指纹**：解锁页 `notEnrolled` 时按钮不再置灰，改为
+  「输主密码解锁并启用指纹」并走主密码解锁 + enroll 路径；抽纯函数
+  `biometricActionLabel` / `biometricActionEnabled` 覆盖闸门。
+  原生 `enroll` 改为经 `BiometricPrompt.CryptoObject(cipher)` 认证后才
+  加密保存 DEK：受 `setUserAuthenticationRequired(true)` 保护的 Keystore
+  密钥直接 `cipher.init(ENCRYPT_MODE)` 会抛 `UserNotAuthenticatedException`
+  并被 runCatching 静默吞掉，这正是「开不了」的根因；回调统一回主线程。
+- **底部 tab**：`_NavItem` 增加按压背景/边框、`HapticFeedback.selectionClick`，
+  移动端底栏切换用 `AnimatedSwitcher` 淡入；桌面 rail / 快捷键保持
+  `IndexedStack` 立即切换，不被动画挡住。
+- **对话框样式**：`showSketchDialog` 局部覆盖 Theme，给内部 TextField、
+  TextButton / OutlinedButton / ElevatedButton 补手绘边框与圆角；
+  不改全局 ThemeData，避免其它页面回归。OutlineInputBorder 使用圆形
+  BorderRadius（椭圆半径会在 paint 阶段断言失败）。
+- 新增 `shell_dialog_style_test.dart` 2 条与指纹闸门纯函数测试；
+  修复 `widget_test.dart` 桌面 Ctrl+Tab 因页面带 key 重建导致的回归。
+
+**验证**：`flutter analyze` 无告警；
+`flutter test --reporter compact --concurrency=1` **1154/1154 passed**；
+`git diff --check` OK；Android 原生编译由下一次 CI 确认。
+
+---
+
 ## v2.30 · 2026-11-14
 
 ### 日记/设置/动效/震动/新增账号流程修复

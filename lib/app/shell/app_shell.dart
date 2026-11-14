@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart';
 
 import '../../core/icons/sketch_icons.dart';
 import '../../core/widgets/sketch_controls.dart';
@@ -13,7 +13,6 @@ import '../../features/settings/settings_hub_page.dart';
 import '../../features/vault/vault_page.dart';
 import '../chrome/app_actions.dart';
 import '../session/app_runtime.dart';
-import '../theme/bottom_nav_fit.dart';
 import 'desktop_shortcuts.dart';
 import '../theme/sketch_metrics.dart';
 import '../theme/sketch_palette.dart';
@@ -113,7 +112,22 @@ class _AppShellState extends State<AppShell> {
     final palette = SketchPalette.of(context);
     final breakpoint = SketchBreakpoints.of(MediaQuery.sizeOf(context).width);
 
-    final body = IndexedStack(index: _index, children: _buildPages());
+    final pages = _buildPages();
+    // 只有移动端底栏需要切换淡入；桌面 rail/快捷键保持 IndexedStack
+    // 立即切换（键盘操作不能被过渡动画挡住）。
+    final body = breakpoint.useRail || (MediaQuery.maybeDisableAnimationsOf(context) ?? false)
+        ? IndexedStack(index: _index, children: pages)
+        : AnimatedSwitcher(
+            duration: SketchMotion.page,
+            switchInCurve: SketchMotion.ease,
+            switchOutCurve: SketchMotion.ease,
+            transitionBuilder: (Widget child, Animation<double> animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: KeyedSubtree(
+              key: ValueKey<int>(_index),
+              child: IndexedStack(index: _index, children: pages),
+            ),
+          );
 
     // docs/08 §7：桌面快捷键。用 CallbackShortcuts 仅在 rail 布局启用，
     // 移动端不抢系统按键；动作表与 desktop_shortcuts.dart 同源。
@@ -434,7 +448,7 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
+class _NavItem extends StatefulWidget {
   const _NavItem({
     required this.section,
     required this.selected,
@@ -446,21 +460,38 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavItem> createState() => _NavItemState();
+}
+
+class _NavItemState extends State<_NavItem> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final palette = SketchPalette.of(context);
-
+    final highlight = widget.selected || _pressed;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: () {
+        if (!(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+          HapticFeedback.selectionClick();
+        }
+        widget.onTap();
+      },
       child: AnimatedContainer(
-        duration: SketchMotion.hover,
-        transform: Matrix4.rotationZ(selected ? -0.014 : 0),
+        duration: SketchMotion.of(context, SketchMotion.hover),
+        transform: Matrix4.rotationZ(widget.selected ? -0.014 : 0),
         padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
-          color: selected ? palette.note : Colors.transparent,
+          color: _pressed
+              ? palette.noteAlt
+              : (widget.selected ? palette.note : Colors.transparent),
           borderRadius: SketchRadii.pill,
           border: Border.all(
-            color: selected ? palette.lineSoft : Colors.transparent,
+            color: highlight ? palette.line : Colors.transparent,
             width: SketchStroke.hair,
           ),
         ),
@@ -468,31 +499,18 @@ class _NavItem extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             SketchIcon(
-              section.glyph,
-              size: 19,
-              color: selected ? palette.red : palette.muted,
+              widget.section.glyph,
+              size: 17,
+              color: highlight ? palette.red : palette.blue,
             ),
             const SizedBox(height: 2),
-            Builder(
-              builder: (BuildContext context) {
-                final fit = planBottomNavFit(
-                  availableWidth: MediaQuery.sizeOf(context).width,
-                  tabCount: AppSection.values.length,
-                );
-                return Text(
-                  fit.needsAbbreviate
-                      ? section.label.characters.first
-                      : section.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: fit.suggestedFontSize,
-                    height: 1.2,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                    color: selected ? palette.ink : palette.muted,
-                  ),
-                );
-              },
+            Text(
+              widget.section.label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: highlight ? palette.ink : palette.muted,
+              ),
             ),
           ],
         ),

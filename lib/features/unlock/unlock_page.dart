@@ -41,6 +41,18 @@ enum _UnlockMode { passphrase, recovery }
 ///   「已用 3 秒」。
 /// - 成功后本页不做任何导航（由 gate 换页），**不要断言 `Navigator`**。
 /// - 主密码框带 `autofocus`，`WidgetTester` 里会有焦点副作用；恢复码模式没有。
+String biometricActionLabel(BiometricGate gate) =>
+    gate == BiometricGate.notEnrolled
+        ? '输主密码解锁并启用指纹'
+        : '用指纹 / 面容解锁';
+
+bool biometricActionEnabled({
+  required BiometricGate gate,
+  required bool busy,
+}) =>
+    !busy &&
+    (gate == BiometricGate.available || gate == BiometricGate.notEnrolled);
+
 class UnlockPage extends ConsumerStatefulWidget {
   const UnlockPage({super.key});
 
@@ -264,15 +276,15 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         SketchButton(
-          label: decision.gate == BiometricGate.notEnrolled
-              ? '启用生物识别（先输入主密码解锁）'
-              : '用指纹 / 面容解锁',
+          label: biometricActionLabel(decision.gate),
           glyph: SketchGlyph.vault,
           tone: SketchTone.ghost,
           dense: true,
-          onPressed: busy || decision.gate != BiometricGate.available
-              ? null
-              : _unlockWithBiometric,
+          onPressed: biometricActionEnabled(gate: decision.gate, busy: busy)
+              ? decision.gate == BiometricGate.notEnrolled
+                  ? _unlockWithPassphrase
+                  : _unlockWithBiometric
+              : null,
         ),
         const SizedBox(height: SketchSpace.xs),
         Text(decision.hint,

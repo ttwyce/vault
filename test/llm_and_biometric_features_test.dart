@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vault/app/session/biometric_session_policy.dart';
+import 'package:vault/features/unlock/unlock_page.dart';
 import 'package:vault/app/session/biometric_unlock.dart';
 import 'package:vault/app/session/unlock_policy.dart';
 import 'package:vault/core/crypto/argon2_params.dart';
@@ -113,6 +114,23 @@ void main() {
     expect(ok.ok, isTrue);
     expect(ok.unlocked!.keys.fingerprint.isNotEmpty, isTrue);
     ok.unlocked!.dispose();
+  });
+
+  test('未注册指纹时解锁页按钮仍可点击，走主密码启用路径', () {
+    expect(biometricActionLabel(BiometricGate.notEnrolled),
+        '输主密码解锁并启用指纹');
+    expect(
+      biometricActionEnabled(gate: BiometricGate.notEnrolled, busy: false),
+      isTrue,
+    );
+    expect(biometricActionEnabled(gate: BiometricGate.available, busy: false),
+        isTrue);
+    expect(
+        biometricActionEnabled(
+            gate: BiometricGate.unavailable, busy: false),
+        isFalse);
+    expect(biometricActionEnabled(gate: BiometricGate.available, busy: true),
+        isFalse);
   });
 
   test('生物识别失败 5 次后强制主密码', () {
